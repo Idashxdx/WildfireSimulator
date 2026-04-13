@@ -108,11 +108,13 @@ public class ForestGraphGenerator : IForestGraphGenerator
             StepDurationSeconds = parameters.StepDurationSeconds
         };
 
+        var vegetationMap = BuildGridVegetationMap(width, height, parameters, random);
+
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
-                var vegetation = GetRandomVegetation(parameters.VegetationDistributions, random);
+                var vegetation = vegetationMap[x, y];
                 var moisture = GetRandomMoisture(parameters.InitialMoistureMin, parameters.InitialMoistureMax, random);
                 var elevation = GetRandomElevation(parameters.ElevationVariation, random);
 
@@ -127,6 +129,359 @@ public class ForestGraphGenerator : IForestGraphGenerator
             graph.Cells.Count, graph.Edges.Count);
 
         return await Task.FromResult(graph);
+    }
+
+    private VegetationType[,] BuildGridVegetationMap(
+        int width,
+        int height,
+        SimulationParameters parameters,
+        Random random)
+    {
+        var map = new VegetationType[width, height];
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                map[x, y] = GetRandomCombustibleVegetation(parameters.VegetationDistributions, random);
+            }
+        }
+
+        ApplyConnectedSurfaceZones(
+            map,
+            width,
+            height,
+            parameters.VegetationDistributions,
+            VegetationType.Water,
+            random);
+
+        ApplyConnectedSurfaceZones(
+            map,
+            width,
+            height,
+            parameters.VegetationDistributions,
+            VegetationType.Bare,
+            random);
+
+        return map;
+    }
+    private void ApplyConnectedSurfaceZones(
+        VegetationType[,] map,
+        int width,
+        int height,
+        List<VegetationDistribution> distributions,
+        VegetationType targetType,
+        Random random)
+    {
+        int totalCells = width * height;
+        if (totalCells <= 0)
+            return;
+
+        double targetProbability = GetVegetationProbability(distributions, targetType);
+        if (targetProbability <= 0.0)
+            return;
+
+        int targetCount = (int)Math.Round(totalCells * targetProbability);
+        if (targetCount <= 0)
+            return;
+
+        int painted = 0;
+
+        if (targetType == VegetationType.Water &&
+            width >= 12 &&
+            height >= 12 &&
+            targetCount >= Math.Max(8, totalCells / 18))
+        {
+            painted += TryPaintWaterBarrier(map, width, height, targetCount, random);
+        }
+
+        int remaining = targetCount - painted;
+        if (remaining <= 0)
+            return;
+
+        int zoneCount = EstimateGridSurfaceZoneCount(remaining, targetType);
+
+        var seeds = GetAllGridPoints(width, height)
+            .Where(p => map[p.X, p.Y] != VegetationType.Water && map[p.X, p.Y] != VegetationType.Bare)
+            .OrderBy(_ => random.Next())
+            .Take(zoneCount)
+            .ToList();
+
+        int zonesLeft = seeds.Count;
+
+        foreach (var seed in seeds)
+        {
+            if (remaining <= 0)
+                break;
+
+            int zoneTarget = Math.Max(1, (int)Math.Ceiling((double)remaining / Math.Max(1, zonesLeft)));
+
+            int zonePainted = PaintConnectedSurfaceZone(
+                map,
+                width,
+                height,
+                seed.X,
+                seed.Y,
+                zoneTarget,
+                targetType,
+                random);
+
+            painted += zonePainted;
+            remaining -= zonePainted;
+            zonesLeft--;
+        }
+
+        if (remaining > 0)
+        {
+            var fallback = GetAllGridPoints(width, height)
+                .Where(p => map[p.X, p.Y] != VegetationType.Water && map[p.X, p.Y] != VegetationType.Bare)
+                .OrderBy(_ => random.Next())
+                .Take(remaining)
+                .ToList();
+
+            foreach (var point in fallback)
+                map[point.X, point.Y] = targetType;
+        }
+    }
+    private int PaintConnectedSurfaceZone(
+        VegetationType[,] map,
+        int width,
+        int height,
+        int startX,
+        int startY,
+        int targetCount,
+        VegetationType targetType,
+        Random random)
+    {
+        if (targetCount <= 0)
+            return 0;
+
+        if (startX < 0 || startX >= width || startY < 0 || startY >= height)
+            return 0;
+
+        if (map[startX, startY] == VegetationType.Water || map[startX, startY] == VegetationType.Bare)
+            return 0;
+
+        int painted = 0;
+
+        var queue = new Queue<(int X, int Y)>();
+        var visited = new HashSet<(int X, int Y)>();
+
+        queue.Enqueue((startX, startY));
+        visited.Add((startX, startY));
+
+        double biasX = random.NextDouble() - random.NextDouble();
+        double biasY = random.NextDouble() - random.NextDouble();
+
+        while (queue.Count > 0 && painted < targetCount)
+        {
+            var current = queue.Dequeue();
+
+            if (map[current.X, current.Y] != VegetationType.Water &&
+                map[current.X, current.Y] != VegetationType.Bare)
+            {
+                map[current.X, current.Y] = targetType;
+                painted++;
+            }
+
+            if (painted >= targetCount)
+                break;
+
+            var neighbors = GetGridNeighbors8(current.X, current.Y, width, height)
+                .Where(n => !visited.Contains(n))
+                .Where(n => map[n.X, n.Y] != VegetationType.Water && map[n.X, n.Y] != VegetationType.Bare)
+                .Select(n =>
+                {
+                    double dx = n.X - current.X;
+                    double dy = n.Y - current.Y;
+                    double directionalBias = dx * biasX + dy * biasY;
+                    double score = random.NextDouble() + directionalBias * 0.20;
+                    return (n.X, n.Y, Score: score);
+                })
+                .OrderByDescending(n => n.Score)
+                .ToList();
+
+            foreach (var neighbor in neighbors)
+            {
+                if (!visited.Add((neighbor.X, neighbor.Y)))
+                    continue;
+
+                if (random.NextDouble() < 0.88 || queue.Count == 0)
+                    queue.Enqueue((neighbor.X, neighbor.Y));
+            }
+        }
+
+        return painted;
+    }
+    private int TryPaintWaterBarrier(
+        VegetationType[,] map,
+        int width,
+        int height,
+        int targetCount,
+        Random random)
+    {
+        bool vertical = width >= height;
+        int thickness = targetCount >= 24 ? 2 : 1;
+        int painted = 0;
+
+        if (vertical)
+        {
+            int x = random.Next(1, Math.Max(2, width - thickness));
+
+            for (int y = 0; y < height && painted < targetCount / 2; y++)
+            {
+                for (int dx = 0; dx < thickness && painted < targetCount / 2; dx++)
+                {
+                    int px = Math.Min(width - 1, x + dx);
+
+                    if (map[px, y] == VegetationType.Water || map[px, y] == VegetationType.Bare)
+                        continue;
+
+                    map[px, y] = VegetationType.Water;
+                    painted++;
+                }
+            }
+        }
+        else
+        {
+            int y = random.Next(1, Math.Max(2, height - thickness));
+
+            for (int x = 0; x < width && painted < targetCount / 2; x++)
+            {
+                for (int dy = 0; dy < thickness && painted < targetCount / 2; dy++)
+                {
+                    int py = Math.Min(height - 1, y + dy);
+
+                    if (map[x, py] == VegetationType.Water || map[x, py] == VegetationType.Bare)
+                        continue;
+
+                    map[x, py] = VegetationType.Water;
+                    painted++;
+                }
+            }
+        }
+
+        return painted;
+    }
+    private int EstimateGridSurfaceZoneCount(int targetCount, VegetationType targetType)
+    {
+        if (targetType == VegetationType.Water)
+        {
+            if (targetCount <= 8) return 1;
+            if (targetCount <= 24) return 2;
+            if (targetCount <= 60) return 3;
+            return 4;
+        }
+
+        if (targetCount <= 6) return 1;
+        if (targetCount <= 18) return 2;
+        if (targetCount <= 45) return 3;
+        return 4;
+    }
+    private VegetationType GetRandomCombustibleVegetation(
+        List<VegetationDistribution> distributions,
+        Random random)
+    {
+        var combustibleTypes = new[]
+        {
+        VegetationType.Grass,
+        VegetationType.Shrub,
+        VegetationType.Deciduous,
+        VegetationType.Coniferous,
+        VegetationType.Mixed
+    };
+
+        if (distributions == null || distributions.Count == 0)
+        {
+            return random.NextDouble() switch
+            {
+                < 0.30 => VegetationType.Coniferous,
+                < 0.50 => VegetationType.Deciduous,
+                < 0.70 => VegetationType.Mixed,
+                < 0.85 => VegetationType.Shrub,
+                _ => VegetationType.Grass
+            };
+        }
+
+        var weighted = combustibleTypes
+            .Select(type => new
+            {
+                Type = type,
+                Weight = Math.Max(0.0, GetVegetationProbability(distributions, type))
+            })
+            .ToList();
+
+        double totalWeight = weighted.Sum(x => x.Weight);
+
+        if (totalWeight <= 0.000001)
+        {
+            return random.NextDouble() switch
+            {
+                < 0.30 => VegetationType.Coniferous,
+                < 0.50 => VegetationType.Deciduous,
+                < 0.70 => VegetationType.Mixed,
+                < 0.85 => VegetationType.Shrub,
+                _ => VegetationType.Grass
+            };
+        }
+
+        double roll = random.NextDouble() * totalWeight;
+        double cumulative = 0.0;
+
+        foreach (var item in weighted)
+        {
+            cumulative += item.Weight;
+            if (roll <= cumulative)
+                return item.Type;
+        }
+
+        return weighted[^1].Type;
+    }
+    private double GetVegetationProbability(
+        List<VegetationDistribution> distributions,
+        VegetationType vegetationType)
+    {
+        if (distributions == null || distributions.Count == 0)
+            return 0.0;
+
+        var item = distributions.FirstOrDefault(v => v.VegetationType == vegetationType);
+        return item?.Probability ?? 0.0;
+    }
+
+    private List<(int X, int Y)> GetAllGridPoints(int width, int height)
+    {
+        var points = new List<(int X, int Y)>(width * height);
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+                points.Add((x, y));
+        }
+
+        return points;
+    }
+    private List<(int X, int Y)> GetGridNeighbors8(int x, int y, int width, int height)
+    {
+        var result = new List<(int X, int Y)>(8);
+
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                if (dx == 0 && dy == 0)
+                    continue;
+
+                int nx = x + dx;
+                int ny = y + dy;
+
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height)
+                    continue;
+
+                result.Add((nx, ny));
+            }
+        }
+
+        return result;
     }
 
     public async Task<ForestGraph> GenerateClusteredGraphAsync(int nodeCount, SimulationParameters parameters)
@@ -164,7 +519,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
 
             var vegetation = random.NextDouble() < 0.82
                 ? patch.DominantVegetation
-                : GetRandomVegetation(parameters.VegetationDistributions, random);
+                : GetRandomCombustibleVegetation(parameters.VegetationDistributions, random);
 
             var moisture = Math.Clamp(
                 patch.BaseMoisture + (random.NextDouble() * 0.18 - 0.09),
@@ -219,6 +574,14 @@ public class ForestGraphGenerator : IForestGraphGenerator
             supportRadius,
             extendedRadius);
 
+        ApplyConnectedGraphSurfaceZones(
+     graph,
+     parameters,
+     random,
+     groupSelector: cell => cell.ClusterId);
+
+        ApplySurfaceBarrierEdgeModifiers(graph);
+
         _logger.LogInformation(
             "Сгенерирован кластерный граф: {Cells} узлов, {Edges} ребер, поле {Width}x{Height}, avgDegree={AvgDegree:F2}, minDegree={MinDegree}, maxDegreeActual={MaxDegreeActual}, longEdges={LongEdges}, patches={PatchCount}",
             graph.Cells.Count,
@@ -260,6 +623,14 @@ public class ForestGraphGenerator : IForestGraphGenerator
 
         CreateRegionClusterBridges(graph, regions, random);
 
+        ApplyConnectedGraphSurfaceZones(
+     graph,
+     parameters,
+     random,
+     groupSelector: cell => cell.ClusterId);
+
+        ApplySurfaceBarrierEdgeModifiers(graph);
+
         _logger.LogInformation(
             "Региональный кластерный граф создан: {Cells} узлов, {Edges} ребер, областей {Regions}",
             graph.Cells.Count,
@@ -268,7 +639,82 @@ public class ForestGraphGenerator : IForestGraphGenerator
 
         return await Task.FromResult(graph);
     }
+    private void ApplySurfaceBarrierEdgeModifiers(ForestGraph graph)
+    {
+        if (graph.Edges.Count == 0 || graph.Cells.Count == 0)
+            return;
 
+        var cellMap = graph.Cells.ToDictionary(c => c.Id, c => c);
+
+        foreach (var edge in graph.Edges)
+        {
+            if (!cellMap.TryGetValue(edge.FromCellId, out var fromCell) ||
+                !cellMap.TryGetValue(edge.ToCellId, out var toCell))
+            {
+                continue;
+            }
+
+            double modifier = edge.FireSpreadModifier;
+            double adjustedModifier = modifier;
+
+            bool touchesWater =
+                fromCell.Vegetation == VegetationType.Water ||
+                toCell.Vegetation == VegetationType.Water;
+
+            bool touchesBare =
+                fromCell.Vegetation == VegetationType.Bare ||
+                toCell.Vegetation == VegetationType.Bare;
+
+            bool nearWater =
+                IsNearBarrierCell(graph, fromCell, VegetationType.Water) ||
+                IsNearBarrierCell(graph, toCell, VegetationType.Water);
+
+            bool nearBare =
+                IsNearBarrierCell(graph, fromCell, VegetationType.Bare) ||
+                IsNearBarrierCell(graph, toCell, VegetationType.Bare);
+
+            if (touchesWater)
+            {
+                adjustedModifier *= 0.08;
+            }
+            else if (touchesBare)
+            {
+                adjustedModifier *= 0.18;
+            }
+            else
+            {
+                if (nearWater)
+                    adjustedModifier *= 0.52;
+
+                if (nearBare)
+                    adjustedModifier *= 0.72;
+            }
+
+            adjustedModifier = Math.Clamp(adjustedModifier, 0.02, 1.35);
+
+            SetEdgeFireSpreadModifier(edge, adjustedModifier);
+        }
+    }
+    private bool IsNearBarrierCell(
+        ForestGraph graph,
+        ForestCell cell,
+        VegetationType barrierType)
+    {
+        foreach (var neighbor in graph.GetNeighbors(cell))
+        {
+            if (neighbor.Vegetation == barrierType)
+                return true;
+        }
+
+        return false;
+    }
+    private void SetEdgeFireSpreadModifier(ForestEdge edge, double value)
+    {
+        var modifierField = typeof(ForestEdge).GetField("<FireSpreadModifier>k__BackingField",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        modifierField?.SetValue(edge, value);
+    }
 
     private void CreateEdgesForGrid(ForestGraph graph, int width, int height)
     {
@@ -296,11 +742,11 @@ public class ForestGraphGenerator : IForestGraphGenerator
 
 
     private List<ClusteredPatch> CreateClusteredPatches(
-        int patchCount,
-        int width,
-        int height,
-        SimulationParameters parameters,
-        Random random)
+     int patchCount,
+     int width,
+     int height,
+     SimulationParameters parameters,
+     Random random)
     {
         var patches = new List<ClusteredPatch>();
         var minDistance = Math.Max(3.0, Math.Min(width, height) / 4.2);
@@ -316,7 +762,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                 if (!ok)
                     continue;
 
-                var dominantVegetation = GetRandomVegetation(parameters.VegetationDistributions, random);
+                var dominantVegetation = GetRandomCombustibleVegetation(parameters.VegetationDistributions, random);
 
                 var baseMoisture = GetRandomMoisture(parameters.InitialMoistureMin, parameters.InitialMoistureMax, random);
                 var baseElevation = GetRandomElevation(parameters.ElevationVariation, random);
@@ -345,7 +791,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                 height / 2.0,
                 Math.Max(2.6, Math.Min(width, height) / 3.0),
                 1.0,
-                GetRandomVegetation(parameters.VegetationDistributions, random),
+                GetRandomCombustibleVegetation(parameters.VegetationDistributions, random),
                 GetRandomMoisture(parameters.InitialMoistureMin, parameters.InitialMoistureMax, random),
                 GetRandomElevation(parameters.ElevationVariation, random)));
         }
@@ -828,7 +1274,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                 if (regions.Any(r => CalculateDistance(r.CenterX, r.CenterY, centerX, centerY) < minDistance))
                     continue;
 
-                var vegetation = GetRandomVegetation(parameters.VegetationDistributions, random);
+                var vegetation = GetRandomCombustibleVegetation(parameters.VegetationDistributions, random);
                 var moisture = GetRandomMoisture(parameters.InitialMoistureMin, parameters.InitialMoistureMax, random);
                 var elevation = GetRandomElevation(parameters.ElevationVariation, random);
                 var density = 0.60 + random.NextDouble() * 0.22;
@@ -852,7 +1298,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                 "region-0",
                 width / 2.0,
                 height / 2.0,
-                GetRandomVegetation(parameters.VegetationDistributions, random),
+                GetRandomCombustibleVegetation(parameters.VegetationDistributions, random),
                 GetRandomMoisture(parameters.InitialMoistureMin, parameters.InitialMoistureMax, random),
                 GetRandomElevation(parameters.ElevationVariation, random),
                 0.72));
@@ -861,6 +1307,241 @@ public class ForestGraphGenerator : IForestGraphGenerator
         AssignGeographicRegionIds(regions, width, height);
         return regions;
     }
+    private void ApplyConnectedGraphSurfaceZones(
+        ForestGraph graph,
+        SimulationParameters parameters,
+        Random random,
+        Func<ForestCell, string?> groupSelector)
+    {
+        if (graph.Cells.Count == 0)
+            return;
+
+        ApplyConnectedGraphSurfaceZone(
+            graph,
+            parameters,
+            random,
+            VegetationType.Water,
+            groupSelector);
+
+        ApplyConnectedGraphSurfaceZone(
+            graph,
+            parameters,
+            random,
+            VegetationType.Bare,
+            groupSelector);
+    }
+    private void ApplyConnectedGraphSurfaceZone(
+        ForestGraph graph,
+        SimulationParameters parameters,
+        Random random,
+        VegetationType targetType,
+        Func<ForestCell, string?> groupSelector)
+    {
+        double probability = GetVegetationProbability(parameters.VegetationDistributions, targetType);
+        if (probability <= 0.0)
+            return;
+
+        int totalCells = graph.Cells.Count;
+        int targetCount = (int)Math.Round(totalCells * probability);
+        if (targetCount <= 0)
+            return;
+
+        int maxAllowed = Math.Max(1, totalCells / 6);
+        targetCount = Math.Min(targetCount, maxAllowed);
+
+        var eligibleCells = graph.Cells
+            .Where(IsCombustibleVegetationCell)
+            .ToList();
+
+        if (eligibleCells.Count == 0)
+            return;
+
+        targetCount = Math.Min(targetCount, eligibleCells.Count);
+        if (targetCount <= 0)
+            return;
+
+        var grouped = eligibleCells
+            .GroupBy(cell => string.IsNullOrWhiteSpace(groupSelector(cell)) ? "__none__" : groupSelector(cell)!)
+            .OrderByDescending(g => g.Count())
+            .ToList();
+
+        int zoneCount = EstimateGraphSurfaceZoneCount(targetCount, targetType, totalCells);
+        var chosenSeeds = new List<ForestCell>();
+
+        foreach (var group in grouped)
+        {
+            if (chosenSeeds.Count >= zoneCount)
+                break;
+
+            var bestSeed = group
+                .OrderByDescending(c => graph.GetNeighbors(c).Count(n => n.ClusterId == c.ClusterId))
+                .ThenBy(_ => random.Next())
+                .FirstOrDefault();
+
+            if (bestSeed != null)
+                chosenSeeds.Add(bestSeed);
+        }
+
+        if (chosenSeeds.Count == 0)
+        {
+            var fallback = eligibleCells.OrderBy(_ => random.Next()).FirstOrDefault();
+            if (fallback != null)
+                chosenSeeds.Add(fallback);
+        }
+
+        int remaining = targetCount;
+        int zonesLeft = chosenSeeds.Count;
+
+        foreach (var seed in chosenSeeds)
+        {
+            if (remaining <= 0)
+                break;
+
+            int zoneTarget = Math.Max(1, (int)Math.Ceiling((double)remaining / Math.Max(1, zonesLeft)));
+
+            int painted = PaintConnectedGraphZone(
+                graph,
+                seed,
+                zoneTarget,
+                targetType,
+                random);
+
+            remaining -= painted;
+            zonesLeft--;
+        }
+
+        if (remaining > 0)
+        {
+            var fallbackCells = eligibleCells
+                .Where(IsCombustibleVegetationCell)
+                .OrderBy(c => GetCellReplacementPriority(graph, c))
+                .ThenBy(_ => random.Next())
+                .Take(remaining)
+                .ToList();
+
+            foreach (var cell in fallbackCells)
+                ReplaceCellVegetation(cell, targetType);
+        }
+    }
+    private int PaintConnectedGraphZone(
+    ForestGraph graph,
+    ForestCell start,
+    int targetCount,
+    VegetationType targetType,
+    Random random)
+    {
+        if (targetCount <= 0)
+            return 0;
+
+        if (!IsCombustibleVegetationCell(start))
+            return 0;
+
+        int painted = 0;
+
+        var queue = new Queue<ForestCell>();
+        var visited = new HashSet<Guid>();
+
+        queue.Enqueue(start);
+        visited.Add(start.Id);
+
+        string? preferredCluster = start.ClusterId;
+
+        while (queue.Count > 0 && painted < targetCount)
+        {
+            var current = queue.Dequeue();
+
+            if (IsCombustibleVegetationCell(current))
+            {
+                ReplaceCellVegetation(current, targetType);
+                painted++;
+            }
+
+            if (painted >= targetCount)
+                break;
+
+            var neighbors = graph.GetNeighbors(current)
+                .Where(n => !visited.Contains(n.Id))
+                .Where(IsCombustibleVegetationCell)
+                .Select(n => new
+                {
+                    Cell = n,
+                    SameCluster = string.Equals(n.ClusterId, preferredCluster, StringComparison.Ordinal),
+                    Degree = graph.GetNeighbors(n).Count(),
+                    Score = random.NextDouble()
+                })
+                .OrderByDescending(x => x.SameCluster)
+                .ThenByDescending(x => x.Degree)
+                .ThenByDescending(x => x.Score)
+                .ToList();
+
+            foreach (var neighbor in neighbors)
+            {
+                if (!visited.Add(neighbor.Cell.Id))
+                    continue;
+
+                if (random.NextDouble() < 0.90 || queue.Count == 0)
+                    queue.Enqueue(neighbor.Cell);
+            }
+        }
+
+        return painted;
+    }
+
+    private int EstimateGraphSurfaceZoneCount(int targetCount, VegetationType targetType, int totalCells)
+    {
+        if (targetType == VegetationType.Water)
+        {
+            if (targetCount <= 4) return 1;
+            if (targetCount <= 10) return 2;
+            if (targetCount <= 20) return 3;
+            return totalCells >= 180 ? 4 : 3;
+        }
+
+        if (targetCount <= 4) return 1;
+        if (targetCount <= 12) return 2;
+        if (targetCount <= 24) return 3;
+        return totalCells >= 180 ? 4 : 3;
+    }
+    private bool IsCombustibleVegetationCell(ForestCell cell)
+    {
+        return cell.Vegetation != VegetationType.Water &&
+               cell.Vegetation != VegetationType.Bare;
+    }
+    private int GetCellReplacementPriority(ForestGraph graph, ForestCell cell)
+    {
+        int sameClusterNeighbors = graph.GetNeighbors(cell).Count(n => n.ClusterId == cell.ClusterId);
+        int totalNeighbors = graph.GetNeighbors(cell).Count();
+
+        if (sameClusterNeighbors <= 1)
+            return 0;
+
+        if (sameClusterNeighbors == 2)
+            return 1;
+
+        if (totalNeighbors <= 2)
+            return 2;
+
+        return 3;
+    }
+    private void ReplaceCellVegetation(ForestCell cell, VegetationType vegetationType)
+    {
+        var vegetationField = typeof(ForestCell).GetField("<Vegetation>k__BackingField",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        vegetationField?.SetValue(cell, vegetationType);
+
+        if (vegetationType == VegetationType.Water || vegetationType == VegetationType.Bare)
+        {
+            var fuelLoadField = typeof(ForestCell).GetField("<FuelLoad>k__BackingField",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            fuelLoadField?.SetValue(cell, 0.0);
+
+            var currentFuelLoadField = typeof(ForestCell).GetField("<CurrentFuelLoad>k__BackingField",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            currentFuelLoadField?.SetValue(cell, 0.0);
+        }
+    }
+
     private void AssignGeographicRegionIds(
         List<VoronoiRegion> regions,
         int width,
