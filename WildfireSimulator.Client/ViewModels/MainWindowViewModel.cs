@@ -36,6 +36,19 @@ public partial class MainWindowViewModel : ObservableObject
     private SignalRService? _signalRService;
     private string? _subscribedSimulationId;
 
+    private System.Threading.CancellationTokenSource? _autoSimulationCts;
+    private bool _isStepInProgress;
+    private const int AutoStepDelayMs = 700;
+
+    [ObservableProperty]
+    private bool _isAutoSimulationRunning = false;
+
+    [ObservableProperty]
+    private bool _isAutoSimulationPaused = false;
+
+    [ObservableProperty]
+    private string _autoSimulationStatusText = "Авто-режим выключен";
+
     [ObservableProperty]
     private string _greeting = "🌲 Wildfire Simulator";
 
@@ -371,6 +384,26 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsClusteredGraphCreationMode => SelectedGraphCreationMode == GraphCreationMode.Clustered;
     public bool IsRegionClusterGraphCreationMode => SelectedGraphCreationMode == GraphCreationMode.RegionCluster;
 
+    public bool CanStartAutoSimulation =>
+        IsConnected &&
+        SelectedSimulation != null &&
+        IsSimulationRunning &&
+        SelectedSimulationStatus == 1 &&
+        !IsAutoSimulationRunning &&
+        !_isStepInProgress;
+
+    public bool CanPauseAutoSimulation =>
+        IsAutoSimulationRunning &&
+        !IsAutoSimulationPaused;
+
+    public bool CanResumeAutoSimulation =>
+        IsAutoSimulationRunning &&
+        IsAutoSimulationPaused;
+
+    public bool CanStopAutoSimulation =>
+        IsAutoSimulationRunning;
+    public bool CanManageSimulationActions =>
+        !IsAutoSimulationRunning && !_isStepInProgress;
     public bool CanStartSelectedSimulation
     {
         get
@@ -458,6 +491,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnSelectedSimulationChanged(SimulationDto? value)
     {
+        StopAutoSimulationInternal();
+
         if (value != null)
         {
             SelectedSimulationStatus = value.Status;
@@ -474,6 +509,10 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(GraphTypeText));
             OnPropertyChanged(nameof(CanStartSelectedSimulation));
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
+            OnPropertyChanged(nameof(CanStartAutoSimulation));
+            OnPropertyChanged(nameof(CanPauseAutoSimulation));
+            OnPropertyChanged(nameof(CanResumeAutoSimulation));
+            OnPropertyChanged(nameof(CanStopAutoSimulation));
             OnPropertyChanged(nameof(IsGridSelected));
             OnPropertyChanged(nameof(IsClusteredGraphSelected));
             OnPropertyChanged(nameof(IsRegionClusterGraphSelected));
@@ -485,7 +524,7 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(IgnitionModeText));
             OnPropertyChanged(nameof(IgnitionSelectionSummary));
 
-            CanResetSimulation = (value.Status == 2 || value.Status == 3 || value.Status == 1) && IsConnected;
+            CanResetSimulation = (value.Status == 2 || value.Status == 3 || value.Status == 1) && IsConnected && !IsAutoSimulationRunning;
 
             SimulationInfoText = $"Загрузка данных симуляции «{value.Name}»...";
 
@@ -534,6 +573,10 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(GraphTypeText));
             OnPropertyChanged(nameof(CanStartSelectedSimulation));
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
+            OnPropertyChanged(nameof(CanStartAutoSimulation));
+            OnPropertyChanged(nameof(CanPauseAutoSimulation));
+            OnPropertyChanged(nameof(CanResumeAutoSimulation));
+            OnPropertyChanged(nameof(CanStopAutoSimulation));
             OnPropertyChanged(nameof(IsGridSelected));
             OnPropertyChanged(nameof(IsClusteredGraphSelected));
             OnPropertyChanged(nameof(IsRegionClusterGraphSelected));
@@ -546,7 +589,160 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(IgnitionSelectionSummary));
         }
     }
+    private void StopAutoSimulationInternal(string? message = null)
+    {
+        try
+        {
+            _autoSimulationCts?.Cancel();
+        }
+        catch
+        {
+        }
 
+        _autoSimulationCts?.Dispose();
+        _autoSimulationCts = null;
+
+        var wasRunning = IsAutoSimulationRunning || IsAutoSimulationPaused;
+
+        IsAutoSimulationRunning = false;
+        IsAutoSimulationPaused = false;
+        AutoSimulationStatusText = "Авто-режим выключен";
+
+        OnPropertyChanged(nameof(CanStartSelectedSimulation));
+        OnPropertyChanged(nameof(CanExecuteStepSimulation));
+        OnPropertyChanged(nameof(CanStartAutoSimulation));
+        OnPropertyChanged(nameof(CanPauseAutoSimulation));
+        OnPropertyChanged(nameof(CanResumeAutoSimulation));
+        OnPropertyChanged(nameof(CanStopAutoSimulation));
+        OnPropertyChanged(nameof(CanManageSimulationActions));
+
+        if (SelectedSimulation != null)
+            CanResetSimulation = (SelectedSimulationStatus == 2 || SelectedSimulationStatus == 3 || SelectedSimulationStatus == 1) && IsConnected;
+
+        if (wasRunning && !string.IsNullOrWhiteSpace(message))
+            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⏹ {message}");
+    }
+    private async Task<bool> ExecuteSingleStepAsync(bool startedByAutoMode, System.Threading.CancellationToken cancellationToken = default)
+    {
+        if (SelectedSimulation == null || !IsConnected)
+            return false;
+
+        if (!IsSimulationRunning || SelectedSimulationStatus != 1)
+            return false;
+
+        if (_isStepInProgress)
+            return false;
+
+        _isStepInProgress = true;
+
+        OnPropertyChanged(nameof(CanStartSelectedSimulation));
+        OnPropertyChanged(nameof(CanExecuteStepSimulation));
+        OnPropertyChanged(nameof(CanStartAutoSimulation));
+        OnPropertyChanged(nameof(CanPauseAutoSimulation));
+        OnPropertyChanged(nameof(CanResumeAutoSimulation));
+        OnPropertyChanged(nameof(CanStopAutoSimulation));
+        OnPropertyChanged(nameof(CanManageSimulationActions));
+
+        try
+        {
+            StatusText = startedByAutoMode
+                ? "Автоматическое выполнение шага..."
+                : "Выполнение шага...";
+
+            var (success, message, cells, stepResult, isRunning, status) =
+                await _apiService.ExecuteStepAsync(SelectedSimulation.Id);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (success && stepResult != null)
+            {
+                IsSimulationRunning = isRunning;
+                FireArea = stepResult.FireArea;
+                CurrentStep = stepResult.Step;
+
+                if (status >= 0)
+                    SelectedSimulationStatus = status;
+
+                if (SelectedSimulation != null && status >= 0)
+                    SelectedSimulation.Status = status;
+
+                if (SelectedSimulationGraphType == GraphType.Grid && cells != null)
+                {
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        Cells = new ObservableCollection<GraphCellDto>(cells);
+
+                        var burning = cells.Count(c => c.IsBurning);
+                        var burned = cells.Count(c => c.IsBurned);
+
+                        if (!IsSimulationRunning)
+                        {
+                            SimulationInfoText = $"Симуляция завершена: клеток {Cells.Count}, горят {burning}, сгорело {burned}";
+                            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🏁 Симуляция завершена");
+                        }
+                        else
+                        {
+                            SimulationInfoText = $"Шаг {stepResult.Step}: клеток {Cells.Count}, горят {burning}, сгорело {burned}, новых очагов {stepResult.NewlyIgnitedCells}";
+
+                            if (startedByAutoMode)
+                                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🤖 Авто-шаг {stepResult.Step}, +{stepResult.NewlyIgnitedCells} новых");
+                            else
+                                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⚡ Шаг {stepResult.Step} выполнен, +{stepResult.NewlyIgnitedCells} новых");
+                        }
+                    });
+                }
+                else
+                {
+                    await LoadSimulationGraphAsync(SelectedSimulation!.Id);
+
+                    if (!IsSimulationRunning)
+                    {
+                        SimulationInfoText = $"Графовая симуляция завершена на шаге {stepResult.Step}";
+                        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🏁 Графовая симуляция завершена");
+                    }
+                    else
+                    {
+                        SimulationInfoText = $"Шаг {stepResult.Step}: площадь {stepResult.FireArea:F0} га, новых очагов {stepResult.NewlyIgnitedCells}";
+
+                        if (startedByAutoMode)
+                            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🤖 Авто-шаг {stepResult.Step}");
+                        else
+                            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⚡ Графовый шаг {stepResult.Step} выполнен");
+                    }
+                }
+
+                OnPropertyChanged(nameof(CanStartSelectedSimulation));
+                OnPropertyChanged(nameof(CanExecuteStepSimulation));
+                OnPropertyChanged(nameof(CanStartAutoSimulation));
+                OnPropertyChanged(nameof(CanPauseAutoSimulation));
+                OnPropertyChanged(nameof(CanResumeAutoSimulation));
+                OnPropertyChanged(nameof(CanStopAutoSimulation));
+                OnPropertyChanged(nameof(SimulationStatusText));
+                OnPropertyChanged(nameof(CanResetSimulation));
+                OnPropertyChanged(nameof(CanManageSimulationActions));
+
+                return true;
+            }
+
+            StatusText = $"❌ {message}";
+
+            if (SelectedSimulation != null)
+                await LoadSimulationStatusAsync(SelectedSimulation.Id);
+
+            return false;
+        }
+        finally
+        {
+            _isStepInProgress = false;
+
+            OnPropertyChanged(nameof(CanStartSelectedSimulation));
+            OnPropertyChanged(nameof(CanExecuteStepSimulation));
+            OnPropertyChanged(nameof(CanStartAutoSimulation));
+            OnPropertyChanged(nameof(CanPauseAutoSimulation));
+            OnPropertyChanged(nameof(CanResumeAutoSimulation));
+            OnPropertyChanged(nameof(CanStopAutoSimulation));
+        }
+    }
     partial void OnSelectedGraphNodeChanged(SimulationGraphNodeDto? value)
     {
         OnPropertyChanged(nameof(HasSelectedGraphNode));
@@ -575,6 +771,11 @@ public partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CanStartSelectedSimulation));
         OnPropertyChanged(nameof(CanExecuteStepSimulation));
+        OnPropertyChanged(nameof(CanStartAutoSimulation));
+        OnPropertyChanged(nameof(CanPauseAutoSimulation));
+        OnPropertyChanged(nameof(CanResumeAutoSimulation));
+        OnPropertyChanged(nameof(CanStopAutoSimulation));
+        OnPropertyChanged(nameof(CanManageSimulationActions));
 
         if (SelectedSimulation != null)
             CanResetSimulation = (SelectedSimulationStatus == 2 || SelectedSimulationStatus == 3 || SelectedSimulationStatus == 1) && value;
@@ -584,6 +785,14 @@ public partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CanExecuteStepSimulation));
         OnPropertyChanged(nameof(SimulationStatusText));
+        OnPropertyChanged(nameof(CanStartAutoSimulation));
+        OnPropertyChanged(nameof(CanPauseAutoSimulation));
+        OnPropertyChanged(nameof(CanResumeAutoSimulation));
+        OnPropertyChanged(nameof(CanStopAutoSimulation));
+        OnPropertyChanged(nameof(CanManageSimulationActions));
+
+        if (!value && IsAutoSimulationRunning)
+            StopAutoSimulationInternal("Авто-режим остановлен: симуляция завершилась");
     }
 
     partial void OnSelectedSimulationStatusChanged(int value)
@@ -591,8 +800,18 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(SimulationStatusText));
         OnPropertyChanged(nameof(CanStartSelectedSimulation));
         OnPropertyChanged(nameof(CanExecuteStepSimulation));
+        OnPropertyChanged(nameof(CanStartAutoSimulation));
+        OnPropertyChanged(nameof(CanPauseAutoSimulation));
+        OnPropertyChanged(nameof(CanResumeAutoSimulation));
+        OnPropertyChanged(nameof(CanStopAutoSimulation));
+        OnPropertyChanged(nameof(CanManageSimulationActions));
+
         CanResetSimulation = (value == 2 || value == 3 || value == 1) && IsConnected;
+
+        if (value != 1 && IsAutoSimulationRunning)
+            StopAutoSimulationInternal("Авто-режим остановлен: симуляция больше не в статусе Running");
     }
+
 
     [RelayCommand]
     private void SwitchToGridPage()
@@ -862,6 +1081,8 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task ResetSimulationAsync()
     {
+        StopAutoSimulationInternal();
+
         if (SelectedSimulation == null || !IsConnected)
             return;
 
@@ -912,8 +1133,14 @@ public partial class MainWindowViewModel : ObservableObject
                 EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ✅ Графовая симуляция перезапущена");
             }
 
+            AutoSimulationStatusText = "Авто-режим выключен";
+
             OnPropertyChanged(nameof(CanStartSelectedSimulation));
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
+            OnPropertyChanged(nameof(CanStartAutoSimulation));
+            OnPropertyChanged(nameof(CanPauseAutoSimulation));
+            OnPropertyChanged(nameof(CanResumeAutoSimulation));
+            OnPropertyChanged(nameof(CanStopAutoSimulation));
             OnPropertyChanged(nameof(CanResetSimulation));
             OnPropertyChanged(nameof(SimulationStatusText));
             OnPropertyChanged(nameof(IsRandomIgnitionMode));
@@ -973,6 +1200,8 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task DeleteSimulationAsync()
     {
+        StopAutoSimulationInternal();
+
         if (SelectedSimulation == null || !IsConnected)
             return;
 
@@ -1001,6 +1230,8 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task StartSimulationAsync()
     {
+        StopAutoSimulationInternal();
+
         if (SelectedSimulation == null || !IsConnected)
             return;
 
@@ -1075,8 +1306,14 @@ public partial class MainWindowViewModel : ObservableObject
                 EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ▶ Графовая симуляция запущена");
             }
 
+            AutoSimulationStatusText = "Авто-режим выключен";
+
             OnPropertyChanged(nameof(CanStartSelectedSimulation));
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
+            OnPropertyChanged(nameof(CanStartAutoSimulation));
+            OnPropertyChanged(nameof(CanPauseAutoSimulation));
+            OnPropertyChanged(nameof(CanResumeAutoSimulation));
+            OnPropertyChanged(nameof(CanStopAutoSimulation));
             OnPropertyChanged(nameof(SimulationStatusText));
             OnPropertyChanged(nameof(CanResetSimulation));
             OnPropertyChanged(nameof(IgnitionSelectionSummary));
@@ -1087,9 +1324,13 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+
     [RelayCommand]
     private async Task ExecuteStepAsync()
     {
+        if (IsAutoSimulationRunning)
+            return;
+
         if (SelectedSimulation == null || !IsConnected)
             return;
 
@@ -1099,73 +1340,102 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        StatusText = "Выполнение шага...";
+        await ExecuteSingleStepAsync(startedByAutoMode: false);
+    }
+    [RelayCommand]
+    private async Task StartAutoSimulationAsync()
+    {
+        if (!CanStartAutoSimulation || SelectedSimulation == null)
+            return;
 
-        var (success, message, cells, stepResult, isRunning, status) =
-            await _apiService.ExecuteStepAsync(SelectedSimulation.Id);
+        StopAutoSimulationInternal();
 
-        if (success && stepResult != null)
+        _autoSimulationCts = new System.Threading.CancellationTokenSource();
+
+        IsAutoSimulationRunning = true;
+        IsAutoSimulationPaused = false;
+        AutoSimulationStatusText = "Авто-режим: моделирование идёт";
+
+        OnPropertyChanged(nameof(CanStartSelectedSimulation));
+        OnPropertyChanged(nameof(CanExecuteStepSimulation));
+        OnPropertyChanged(nameof(CanStartAutoSimulation));
+        OnPropertyChanged(nameof(CanPauseAutoSimulation));
+        OnPropertyChanged(nameof(CanResumeAutoSimulation));
+        OnPropertyChanged(nameof(CanStopAutoSimulation));
+
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ▶ Запущен авто-режим");
+
+        try
         {
-            IsSimulationRunning = isRunning;
-            FireArea = stepResult.FireArea;
-            CurrentStep = stepResult.Step;
-
-            if (status >= 0)
-                SelectedSimulationStatus = status;
-
-            if (SelectedSimulation != null && status >= 0)
-                SelectedSimulation.Status = status;
-
-            if (SelectedSimulationGraphType == GraphType.Grid && cells != null)
+            while (!_autoSimulationCts.IsCancellationRequested)
             {
-                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                if (SelectedSimulation == null || !IsSimulationRunning || SelectedSimulationStatus != 1)
+                    break;
+
+                if (IsAutoSimulationPaused)
                 {
-                    Cells = new ObservableCollection<GraphCellDto>(cells);
-
-                    var burning = cells.Count(c => c.IsBurning);
-                    var burned = cells.Count(c => c.IsBurned);
-
-                    if (!IsSimulationRunning)
-                    {
-                        SimulationInfoText = $"Симуляция завершена: клеток {Cells.Count}, горят {burning}, сгорело {burned}";
-                        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🏁 Симуляция завершена");
-                    }
-                    else
-                    {
-                        SimulationInfoText = $"Шаг {stepResult.Step}: клеток {Cells.Count}, горят {burning}, сгорело {burned}, новых очагов {stepResult.NewlyIgnitedCells}";
-                        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⚡ Шаг {stepResult.Step} выполнен, +{stepResult.NewlyIgnitedCells} новых");
-                    }
-                });
-            }
-            else
-            {
-                await LoadSimulationGraphAsync(SelectedSimulation!.Id);
-
-                if (!IsSimulationRunning)
-                {
-                    SimulationInfoText = $"Графовая симуляция завершена на шаге {stepResult.Step}";
-                    EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🏁 Графовая симуляция завершена");
+                    await Task.Delay(150, _autoSimulationCts.Token);
+                    continue;
                 }
-                else
-                {
-                    SimulationInfoText = $"Шаг {stepResult.Step}: площадь {stepResult.FireArea:F0} га, новых очагов {stepResult.NewlyIgnitedCells}";
-                    EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⚡ Графовый шаг {stepResult.Step} выполнен");
-                }
-            }
 
-            OnPropertyChanged(nameof(CanStartSelectedSimulation));
-            OnPropertyChanged(nameof(CanExecuteStepSimulation));
-            OnPropertyChanged(nameof(SimulationStatusText));
-            OnPropertyChanged(nameof(CanResetSimulation));
+                var executed = await ExecuteSingleStepAsync(startedByAutoMode: true, _autoSimulationCts.Token);
+                if (!executed)
+                    break;
+
+                if (!IsSimulationRunning || SelectedSimulationStatus != 1)
+                    break;
+
+                await Task.Delay(AutoStepDelayMs, _autoSimulationCts.Token);
+            }
         }
-        else
+        catch (OperationCanceledException)
         {
-            StatusText = $"❌ {message}";
-
-            if (SelectedSimulation != null)
-                await LoadSimulationStatusAsync(SelectedSimulation.Id);
+        }
+        finally
+        {
+            StopAutoSimulationInternal("Авто-режим завершён");
         }
     }
+
+    [RelayCommand]
+    private void PauseAutoSimulation()
+    {
+        if (!CanPauseAutoSimulation)
+            return;
+
+        IsAutoSimulationPaused = true;
+        AutoSimulationStatusText = "Авто-режим: пауза";
+
+        OnPropertyChanged(nameof(CanPauseAutoSimulation));
+        OnPropertyChanged(nameof(CanResumeAutoSimulation));
+
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⏸ Авто-режим поставлен на паузу");
+    }
+
+    [RelayCommand]
+    private void ResumeAutoSimulation()
+    {
+        if (!CanResumeAutoSimulation)
+            return;
+
+        IsAutoSimulationPaused = false;
+        AutoSimulationStatusText = "Авто-режим: моделирование идёт";
+
+        OnPropertyChanged(nameof(CanPauseAutoSimulation));
+        OnPropertyChanged(nameof(CanResumeAutoSimulation));
+
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⏵ Авто-режим продолжен");
+    }
+
+    [RelayCommand]
+    private void StopAutoSimulation()
+    {
+        if (!CanStopAutoSimulation)
+            return;
+
+        StopAutoSimulationInternal("Авто-режим остановлен пользователем");
+    }
+
 
     [RelayCommand]
     private async Task RefreshStatusAsync()
@@ -1381,23 +1651,23 @@ public partial class MainWindowViewModel : ObservableObject
         return "СЗ";
     }
 
-   private void ClearSelectedIgnitionCells()
-{
-    foreach (var cell in Cells)
-        cell.IsSelectedIgnition = false;
+    private void ClearSelectedIgnitionCells()
+    {
+        foreach (var cell in Cells)
+            cell.IsSelectedIgnition = false;
 
-    SelectedIgnitionCells.Clear();
-    Cells = new ObservableCollection<GraphCellDto>(Cells);
-}
+        SelectedIgnitionCells.Clear();
+        Cells = new ObservableCollection<GraphCellDto>(Cells);
+    }
 
-  private void ClearSelectedIgnitionNodes()
-{
-    foreach (var node in GraphNodes)
-        node.IsSelectedIgnition = false;
+    private void ClearSelectedIgnitionNodes()
+    {
+        foreach (var node in GraphNodes)
+            node.IsSelectedIgnition = false;
 
-    SelectedIgnitionNodes.Clear();
-    GraphNodes = new ObservableCollection<SimulationGraphNodeDto>(GraphNodes);
-}
+        SelectedIgnitionNodes.Clear();
+        GraphNodes = new ObservableCollection<SimulationGraphNodeDto>(GraphNodes);
+    }
 
     private bool IsIgnitableGraphNode(SimulationGraphNodeDto node)
     {
@@ -1405,60 +1675,60 @@ public partial class MainWindowViewModel : ObservableObject
         return vegetation != "water" && vegetation != "bare";
     }
 
-  public void ToggleIgnitionCellSelection(GraphCellDto? cell)
-{
-    if (cell == null)
-        return;
-
-    if (!IsIgnitionSelectionEnabled || !IsManualIgnitionMode || SelectedSimulationGraphType != GraphType.Grid)
-        return;
-
-    if (!cell.IsIgnitable)
-        return;
-
-    if (cell.IsSelectedIgnition)
+    public void ToggleIgnitionCellSelection(GraphCellDto? cell)
     {
-        cell.IsSelectedIgnition = false;
-        SelectedIgnitionCells.Remove(cell);
+        if (cell == null)
+            return;
+
+        if (!IsIgnitionSelectionEnabled || !IsManualIgnitionMode || SelectedSimulationGraphType != GraphType.Grid)
+            return;
+
+        if (!cell.IsIgnitable)
+            return;
+
+        if (cell.IsSelectedIgnition)
+        {
+            cell.IsSelectedIgnition = false;
+            SelectedIgnitionCells.Remove(cell);
+        }
+        else
+        {
+            cell.IsSelectedIgnition = true;
+            SelectedIgnitionCells.Add(cell);
+        }
+
+        Cells = new ObservableCollection<GraphCellDto>(Cells);
+
+        OnPropertyChanged(nameof(IgnitionSelectionSummary));
+        OnPropertyChanged(nameof(CanStartSelectedSimulation));
     }
-    else
+    public void ToggleIgnitionNodeSelection(SimulationGraphNodeDto? node)
     {
-        cell.IsSelectedIgnition = true;
-        SelectedIgnitionCells.Add(cell);
+        if (node == null)
+            return;
+
+        if (!IsIgnitionSelectionEnabled || !IsManualIgnitionMode || SelectedSimulationGraphType == GraphType.Grid)
+            return;
+
+        if (!IsIgnitableGraphNode(node))
+            return;
+
+        if (node.IsSelectedIgnition)
+        {
+            node.IsSelectedIgnition = false;
+            SelectedIgnitionNodes.Remove(node);
+        }
+        else
+        {
+            node.IsSelectedIgnition = true;
+            SelectedIgnitionNodes.Add(node);
+        }
+
+        GraphNodes = new ObservableCollection<SimulationGraphNodeDto>(GraphNodes);
+
+        OnPropertyChanged(nameof(IgnitionSelectionSummary));
+        OnPropertyChanged(nameof(CanStartSelectedSimulation));
     }
-
-    Cells = new ObservableCollection<GraphCellDto>(Cells);
-
-    OnPropertyChanged(nameof(IgnitionSelectionSummary));
-    OnPropertyChanged(nameof(CanStartSelectedSimulation));
-}
-   public void ToggleIgnitionNodeSelection(SimulationGraphNodeDto? node)
-{
-    if (node == null)
-        return;
-
-    if (!IsIgnitionSelectionEnabled || !IsManualIgnitionMode || SelectedSimulationGraphType == GraphType.Grid)
-        return;
-
-    if (!IsIgnitableGraphNode(node))
-        return;
-
-    if (node.IsSelectedIgnition)
-    {
-        node.IsSelectedIgnition = false;
-        SelectedIgnitionNodes.Remove(node);
-    }
-    else
-    {
-        node.IsSelectedIgnition = true;
-        SelectedIgnitionNodes.Add(node);
-    }
-
-    GraphNodes = new ObservableCollection<SimulationGraphNodeDto>(GraphNodes);
-
-    OnPropertyChanged(nameof(IgnitionSelectionSummary));
-    OnPropertyChanged(nameof(CanStartSelectedSimulation));
-}
     private Window? GetMainWindow()
     {
         var app = Avalonia.Application.Current;

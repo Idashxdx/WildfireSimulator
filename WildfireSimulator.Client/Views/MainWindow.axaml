@@ -323,11 +323,11 @@
                                         IsVisible="{Binding IsManualIgnitionMode}" />
                                 </StackPanel>
                             </Border>
-
                             <Grid ColumnDefinitions="*,*"
-                                RowDefinitions="Auto,Auto"
+                                RowDefinitions="Auto,Auto,Auto"
                                 ColumnSpacing="8"
                                 RowSpacing="8">
+
                                 <Button Grid.Row="0"
                                     Grid.Column="0"
                                     Content="▶ Старт"
@@ -350,6 +350,63 @@
 
                                 <Button Grid.Row="1"
                                     Grid.Column="0"
+                                    Content="▶ Авто"
+                                    Command="{Binding StartAutoSimulationCommand}"
+                                    Background="#CDECBF"
+                                    Foreground="#2F2A3A"
+                                    Padding="10"
+                                    FontWeight="SemiBold"
+                                    IsEnabled="{Binding CanStartAutoSimulation}" />
+
+                                <Button Grid.Row="1"
+                                    Grid.Column="1"
+                                    Content="⏸ Пауза"
+                                    Command="{Binding PauseAutoSimulationCommand}"
+                                    Background="#F5D97B"
+                                    Foreground="#2F2A3A"
+                                    Padding="10"
+                                    FontWeight="SemiBold"
+                                    IsEnabled="{Binding CanPauseAutoSimulation}" />
+
+                                <Button Grid.Row="2"
+                                    Grid.Column="0"
+                                    Content="⏵ Продолжить"
+                                    Command="{Binding ResumeAutoSimulationCommand}"
+                                    Background="#D8E8FF"
+                                    Foreground="#2F2A3A"
+                                    Padding="10"
+                                    FontWeight="SemiBold"
+                                    IsEnabled="{Binding CanResumeAutoSimulation}" />
+
+                                <Button Grid.Row="2"
+                                    Grid.Column="1"
+                                    Content="⏹ Стоп авто"
+                                    Command="{Binding StopAutoSimulationCommand}"
+                                    Background="#EEC8C3"
+                                    Foreground="#2F2A3A"
+                                    Padding="10"
+                                    FontWeight="SemiBold"
+                                    IsEnabled="{Binding CanStopAutoSimulation}" />
+
+                            </Grid>
+                            <Border Background="#FFFDF8"
+                                BorderBrush="#ECE4F6"
+                                BorderThickness="1"
+                                Padding="10"
+                                CornerRadius="8">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Автоматическое моделирование"
+                                        Foreground="#7A7486"
+                                        FontSize="12" />
+                                    <TextBlock Text="{Binding AutoSimulationStatusText}"
+                                        Foreground="#2F2A3A"
+                                        FontWeight="SemiBold"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Grid ColumnDefinitions="*,*"
+                                ColumnSpacing="8">
+                                <Button Grid.Column="0"
                                     Content="🔄 Перезапуск"
                                     Command="{Binding ResetSimulationCommand}"
                                     Background="#F5D97B"
@@ -358,16 +415,15 @@
                                     FontWeight="SemiBold"
                                     IsEnabled="{Binding CanResetSimulation}" />
 
-                                <Button Grid.Row="1"
-                                    Grid.Column="1"
+                                <Button Grid.Column="1"
                                     Content="🗑 Удалить"
                                     Command="{Binding DeleteSimulationCommand}"
                                     Background="#E58A84"
                                     Foreground="White"
                                     Padding="10"
-                                    FontWeight="SemiBold" />
+                                    FontWeight="SemiBold"
+                                    IsEnabled="{Binding CanManageSimulationActions}" />
                             </Grid>
-
                             <Border Background="#F8F5FF"
                                 BorderBrush="#E6DFF1"
                                 BorderThickness="1"
