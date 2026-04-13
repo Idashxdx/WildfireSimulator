@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="WildfireSimulator.Client.Views.Controls.NodeGraphVisualization">
+    <Border Background="#FBF9F4"
+            BorderBrush="#E8E1EF"
+            BorderThickness="1"
+            CornerRadius="12"
+            Padding="8">
+
+        <DockPanel LastChildFill="True">
+
+            <Border DockPanel.Dock="Top"
+                    Background="#FFFDF8"
+                    BorderBrush="#E6DFEE"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="8"
+                    Margin="0,0,0,8">
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Spacing="8">
+                    <Button x:Name="ZoomOutButton"
+                            Content="-"
+                            Width="38"
+                            Height="32"
+                            Background="#D9D5CF"
+                            Foreground="#2F2A3A"
+                            FontWeight="Bold"/>
+
+                    <Button x:Name="ResetZoomButton"
+                            Content="Сброс"
+                            Height="32"
+                            Padding="14,0"
+                            Background="#E7E1D8"
+                            Foreground="#2F2A3A"/>
+
+                    <Button x:Name="ZoomInButton"
+                            Content="+"
+                            Width="38"
+                            Height="32"
+                            Background="#D9D5CF"
+                            Foreground="#2F2A3A"
+                            FontWeight="Bold"/>
+                </StackPanel>
+            </Border>
+
+            <ScrollViewer x:Name="ScrollHost"
+                          HorizontalScrollBarVisibility="Visible"
+                          VerticalScrollBarVisibility="Visible"
+                          AllowAutoHide="False"
+                          Background="Transparent">
+                <Canvas x:Name="GraphCanvas"
+                        Background="#FBF9F4"
+                        MinWidth="420"
+                        MinHeight="420"/>
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</UserControl>

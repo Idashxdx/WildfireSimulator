@@ -1,0 +1,461 @@
+<Window xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d" d:DesignWidth="620" d:DesignHeight="980"
+    x:Class="WildfireSimulator.Client.Views.CreateSimulationDialog"
+    Title="Создание новой симуляции"
+    Width="620"
+    Height="980"
+    Background="#FAF8F2"
+    CanResize="False">
+
+    <Grid RowDefinitions="*,Auto" Margin="20">
+
+        <ScrollViewer Grid.Row="0">
+            <StackPanel Spacing="14">
+
+                <TextBlock Text="Создание симуляции"
+                    Foreground="#2F2A3A"
+                    FontSize="24"
+                    FontWeight="Bold" />
+
+                <Border Background="#F3F7FF"
+                    BorderBrush="#D7E4FF"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="12">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Тип модели"
+                            Foreground="#6E6A78"
+                            FontSize="12" />
+                        <TextBlock x:Name="TypeInfoTextBlock"
+                            Text="Сеточная симуляция"
+                            Foreground="#2F2A3A"
+                            FontSize="16"
+                            FontWeight="Bold" />
+                        <TextBlock x:Name="TypeHintTextBlock"
+                            Text="Введите параметры и создайте модель."
+                            Foreground="#6E6A78"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#FFF4F1"
+                    BorderBrush="#F1C4BA"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="12"
+                    IsVisible="True">
+                    <TextBlock x:Name="ErrorTextBlock"
+                        Text=""
+                        Foreground="#B5473E"
+                        FontWeight="SemiBold"
+                        TextWrapping="Wrap" />
+                </Border>
+
+                <Border Background="#FFFDF8"
+                    BorderBrush="#E7E0F2"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="14">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Основные параметры"
+                            Foreground="#2F2A3A"
+                            FontSize="16"
+                            FontWeight="Bold" />
+
+                        <StackPanel>
+                            <TextBlock Text="Название симуляции"
+                                Foreground="#6E6A78"
+                                Margin="0,0,0,6" />
+                            <TextBox x:Name="NameBox"
+                                Text="Моя симуляция"
+                                Background="#FAF8F2"
+                                Foreground="#2F2A3A" />
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="*,*"
+                            ColumnSpacing="12">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock x:Name="WidthLabelTextBlock"
+                                    Text="Ширина"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="WidthBox"
+                                    Text="20"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                                <TextBlock x:Name="WidthHintTextBlock"
+                                    Text="Минимум 5, максимум 100."
+                                    Foreground="#9A96A3"
+                                    FontSize="11"
+                                    Margin="0,4,0,0"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1">
+                                <TextBlock x:Name="HeightLabelTextBlock"
+                                    Text="Высота"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="HeightBox"
+                                    Text="20"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                                <TextBlock x:Name="HeightHintTextBlock"
+                                    Text="Минимум 5, максимум 100."
+                                    Foreground="#9A96A3"
+                                    FontSize="11"
+                                    Margin="0,4,0,0"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Background="#F8F5FF"
+                            BorderBrush="#E6DFF1"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Структура модели"
+                                    Foreground="#2F2A3A"
+                                    FontWeight="Bold" />
+                                <TextBlock x:Name="StructureSummaryTextBlock"
+                                    Text="Сетка 20×20 = 400 клеток."
+                                    Foreground="#5E5870"
+                                    TextWrapping="Wrap" />
+                                <TextBlock x:Name="StructureDetailTextBlock"
+                                    Text="Параметры автоматически учитываются при построении модели."
+                                    Foreground="#8B8596"
+                                    FontSize="11"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel>
+                            <TextBlock Text="Количество начальных очагов"
+                                Foreground="#6E6A78"
+                                Margin="0,0,0,6" />
+                            <TextBox x:Name="FireCellsBox"
+                                Text="3"
+                                Background="#FAF8F2"
+                                Foreground="#2F2A3A" />
+                            <TextBlock x:Name="FireCellsHintTextBlock"
+                                Text="Минимум 1."
+                                Foreground="#9A96A3"
+                                FontSize="11"
+                                Margin="0,4,0,0"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#F2FAEA"
+                    BorderBrush="#D7E8C8"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="14">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Параметры среды"
+                            Foreground="#2F2A3A"
+                            FontSize="16"
+                            FontWeight="Bold" />
+
+                        <Grid ColumnDefinitions="*,*"
+                            ColumnSpacing="12">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Минимальная влажность топлива"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="MoistureMinBox"
+                                    Text="0.3"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                                <TextBlock Text="От 0.0 до 1.0"
+                                    Foreground="#9A96A3"
+                                    FontSize="11"
+                                    Margin="0,4,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Максимальная влажность топлива"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="MoistureMaxBox"
+                                    Text="0.7"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                                <TextBlock Text="От 0.0 до 1.0"
+                                    Foreground="#9A96A3"
+                                    FontSize="11"
+                                    Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel>
+                            <TextBlock Text="Перепад высот"
+                                Foreground="#6E6A78"
+                                Margin="0,0,0,6" />
+                            <TextBox x:Name="ElevationBox"
+                                Text="50"
+                                Background="#FAF8F2"
+                                Foreground="#2F2A3A" />
+                            <TextBlock Text="От 0 до 500"
+                                Foreground="#9A96A3"
+                                FontSize="11"
+                                Margin="0,4,0,0" />
+                        </StackPanel>
+
+                        <StackPanel>
+                            <TextBlock Text="Количество шагов симуляции"
+                                Foreground="#6E6A78"
+                                Margin="0,0,0,6" />
+                            <TextBox x:Name="StepsBox"
+                                Text="100"
+                                Background="#FAF8F2"
+                                Foreground="#2F2A3A" />
+                            <TextBlock Text="От 1 до 500"
+                                Foreground="#9A96A3"
+                                FontSize="11"
+                                Margin="0,4,0,0" />
+                        </StackPanel>
+
+                        <StackPanel>
+                            <TextBlock Text="Длительность одного шага (сек)"
+                                Foreground="#6E6A78"
+                                Margin="0,0,0,6" />
+                            <TextBox x:Name="StepDurationBox"
+                                Text="900"
+                                Background="#FAF8F2"
+                                Foreground="#2F2A3A" />
+                            <TextBlock Text="От 1 до 5400"
+                                Foreground="#9A96A3"
+                                FontSize="11"
+                                Margin="0,4,0,0"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#FFF9DE"
+                    BorderBrush="#F0E3A4"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="14">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Погодные параметры"
+                            Foreground="#2F2A3A"
+                            FontSize="16"
+                            FontWeight="Bold" />
+
+                        <Grid ColumnDefinitions="*,*"
+                            ColumnSpacing="12">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Температура воздуха (°C)"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="TempBox"
+                                    Text="25"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                                <TextBlock Text="От -50 до 60"
+                                    Foreground="#9A96A3"
+                                    FontSize="11"
+                                    Margin="0,4,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Влажность воздуха (%)"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="HumidityBox"
+                                    Text="40"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                                <TextBlock Text="От 0 до 100"
+                                    Foreground="#9A96A3"
+                                    FontSize="11"
+                                    Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid ColumnDefinitions="*,*"
+                            ColumnSpacing="12">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Скорость ветра (м/с)"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="WindSpeedBox"
+                                    Text="5"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                                <TextBlock Text="От 0 до 30"
+                                    Foreground="#9A96A3"
+                                    FontSize="11"
+                                    Margin="0,4,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Направление ветра"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <ComboBox x:Name="WindDirBox"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A"
+                                    SelectedIndex="1">
+                                    <ComboBoxItem Content="0° (Север)" />
+                                    <ComboBoxItem Content="45° (Северо-восток)" />
+                                    <ComboBoxItem Content="90° (Восток)" />
+                                    <ComboBoxItem Content="135° (Юго-восток)" />
+                                    <ComboBoxItem Content="180° (Юг)" />
+                                    <ComboBoxItem Content="225° (Юго-запад)" />
+                                    <ComboBoxItem Content="270° (Запад)" />
+                                    <ComboBoxItem Content="315° (Северо-запад)" />
+                                    <ComboBoxItem Content="360° (Полный круг)" />
+                                </ComboBox>
+                                <TextBlock Text="От 0 до 360 градусов"
+                                    Foreground="#9A96A3"
+                                    FontSize="11"
+                                    Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid ColumnDefinitions="*,*"
+                            ColumnSpacing="12">
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Осадки (мм/ч)"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="PrecipitationBox"
+                                    Text="0"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                                <TextBlock Text="От 0 до 100"
+                                    Foreground="#9A96A3"
+                                    FontSize="11"
+                                    Margin="0,4,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Random seed"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="RandomSeedBox"
+                                    Text=""
+                                    Watermark="Пусто = случайная генерация"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                                <TextBlock
+                                    Text="Необязательно. Одинаковый seed даёт воспроизводимую генерацию."
+                                    Foreground="#9A96A3"
+                                    FontSize="11"
+                                    Margin="0,4,0,0"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#F7F4EC"
+                    BorderBrush="#E7DFC9"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="14">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Состав растительности (%)"
+                            Foreground="#2F2A3A"
+                            FontSize="16"
+                            FontWeight="Bold" />
+
+                        <TextBlock
+                            Text="Сумма должна быть 100%. Эти значения задают вероятности генерации типов леса."
+                            Foreground="#6E6A78"
+                            TextWrapping="Wrap" />
+
+                        <Grid ColumnDefinitions="*,*"
+                            ColumnSpacing="12"
+                            RowDefinitions="Auto,Auto,Auto">
+
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                <TextBlock Text="Хвойный лес"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="ConiferousBox"
+                                    Text="30"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="0" Grid.Column="1">
+                                <TextBlock Text="Лиственный лес"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="DeciduousBox"
+                                    Text="20"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1" Grid.Column="0">
+                                <TextBlock Text="Смешанный лес"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="MixedBox"
+                                    Text="25"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="1" Grid.Column="1">
+                                <TextBlock Text="Трава"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="GrassBox"
+                                    Text="15"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.Column="0">
+                                <TextBlock Text="Кустарник"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="ShrubBox"
+                                    Text="10"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="1"
+            Background="#FFFDF8"
+            BorderBrush="#E7E0F2"
+            BorderThickness="1"
+            CornerRadius="12"
+            Padding="12"
+            Margin="0,14,0,0">
+            <StackPanel Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="10">
+                <Button x:Name="CancelButton"
+                    Content="Отмена"
+                    Background="#ECE6FA"
+                    Foreground="#2F2A3A"
+                    Padding="18,10"
+                    FontWeight="SemiBold" />
+
+                <Button x:Name="CreateButton"
+                    Content="Создать симуляцию"
+                    Background="#B7E4A8"
+                    Foreground="#2F2A3A"
+                    Padding="18,10"
+                    FontWeight="Bold" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

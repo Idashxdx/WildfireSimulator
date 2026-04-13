@@ -1,0 +1,283 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using WildfireSimulator.Application.Features.Simulations.DTOs;
+using WildfireSimulator.Application.Interfaces;
+using WildfireSimulator.Domain.Models;
+using WildfireSimulator.Infrastructure.Data;
+
+namespace WildfireSimulator.API.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class SimulationsController : ControllerBase
+{
+    private readonly ISimulationRepository _simulationRepository;
+    private readonly ApplicationDbContext _context;
+    private readonly ILogger<SimulationsController> _logger;
+    private readonly IFireMetricsRepository _fireMetricsRepository;
+    public SimulationsController(
+     ISimulationRepository simulationRepository,
+     IFireMetricsRepository fireMetricsRepository,
+     ApplicationDbContext context,
+     ILogger<SimulationsController> logger)
+    {
+        _simulationRepository = simulationRepository;
+        _fireMetricsRepository = fireMetricsRepository;
+        _context = context;
+        _logger = logger;
+    }
+
+    [HttpGet("{id}/metrics")]
+    public async Task<IActionResult> GetMetrics(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var simulation = await _simulationRepository.GetByIdAsync(id, cancellationToken);
+            if (simulation == null)
+                return NotFound($"Симуляция с ID {id} не найдена");
+
+            var metrics = await _fireMetricsRepository.GetBySimulationIdAsync(id, cancellationToken);
+
+            var result = metrics.Select(m => new
+            {
+                id = m.Id,
+                simulationId = m.SimulationId,
+                step = m.Step,
+                timestamp = m.Timestamp,
+                burningCellsCount = m.BurningCellsCount,
+                burnedCellsCount = m.BurnedCellsCount,
+                totalCellsAffected = m.TotalCellsAffected,
+                fireSpreadSpeed = m.FireSpreadSpeed,
+                averageTemperature = m.AverageTemperature,
+                averageWindSpeed = m.AverageWindSpeed,
+                fireArea = m.GetFireArea(1.0)
+            });
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при получении метрик симуляции с ID {Id}", id);
+            return StatusCode(500, "Внутренняя ошибка сервера");
+        }
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var simulations = await _simulationRepository.GetAllAsync(cancellationToken);
+            var dtos = simulations.Select(SimulationDto.FromEntity);
+            return Ok(dtos);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при получении списка симуляций");
+            return StatusCode(500, "Внутренняя ошибка сервера");
+        }
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var simulation = await _simulationRepository.GetByIdAsync(id, cancellationToken);
+            if (simulation == null)
+                return NotFound($"Симуляция с ID {id} не найдена");
+
+            return Ok(SimulationDto.FromEntity(simulation));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при получении симуляции с ID {Id}", id);
+            return StatusCode(500, "Внутренняя ошибка сервера");
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateSimulationWithWeatherRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var parameters = new SimulationParameters
+            {
+                GridWidth = request.GridWidth,
+                GridHeight = request.GridHeight,
+                GraphType = request.GraphType,
+                InitialMoistureMin = request.InitialMoistureMin,
+                InitialMoistureMax = request.InitialMoistureMax,
+                ElevationVariation = request.ElevationVariation,
+                InitialFireCellsCount = request.InitialFireCellsCount,
+                SimulationSteps = request.SimulationSteps,
+                StepDurationSeconds = request.StepDurationSeconds,
+                RandomSeed = request.RandomSeed
+            };
+
+            if (request.VegetationDistributions != null && request.VegetationDistributions.Any())
+            {
+                parameters.VegetationDistributions = request.VegetationDistributions
+                    .Select(v => new VegetationDistribution
+                    {
+                        VegetationType = v.VegetationType,
+                        Probability = v.Probability
+                    })
+                    .ToList();
+            }
+
+            var simulation = new Simulation(request.Name, request.Description, parameters);
+
+            if (request.InitialFirePositions != null && request.InitialFirePositions.Any())
+            {
+                var fixedPositions = request.InitialFirePositions
+                    .Select(p => (p.X, p.Y))
+                    .ToList();
+
+                simulation.SaveInitialFirePositions(fixedPositions);
+            }
+
+            var weather = new WeatherCondition(
+                DateTime.UtcNow,
+                request.Temperature,
+                request.Humidity,
+                request.WindSpeed,
+                request.WindDirection,
+                request.Precipitation
+            );
+
+            await _context.WeatherConditions.AddAsync(weather, cancellationToken);
+            simulation.SetWeatherCondition(weather);
+
+            await _simulationRepository.AddAsync(simulation, cancellationToken);
+
+            _logger.LogInformation(
+                "Создана симуляция {Id} со статусом {Status}",
+                simulation.Id,
+                simulation.Status);
+
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = simulation.Id },
+                SimulationDto.FromEntity(simulation));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при создании симуляции");
+            return StatusCode(500, "Внутренняя ошибка сервера");
+        }
+    }
+    
+    [HttpGet("status/{status}")]
+    public async Task<IActionResult> GetByStatus(SimulationStatus status, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var simulations = await _simulationRepository.GetByStatusAsync(status, cancellationToken);
+            var dtos = simulations.Select(SimulationDto.FromEntity);
+            return Ok(dtos);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при получении симуляций по статусу {Status}", status);
+            return StatusCode(500, "Внутренняя ошибка сервера");
+        }
+    }
+
+    [HttpPost("{id}/finish")]
+    public async Task<IActionResult> FinishSimulation(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var simulation = await _simulationRepository.GetByIdAsync(id, cancellationToken);
+            if (simulation == null)
+                return NotFound($"Симуляция с ID {id} не найдена");
+
+            if (simulation.Status != SimulationStatus.Running)
+                return BadRequest("Симуляция не запущена");
+
+            simulation.Finish();
+            await _simulationRepository.UpdateAsync(simulation, cancellationToken);
+
+            return Ok(SimulationDto.FromEntity(simulation));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при завершении симуляции с ID {Id}", id);
+            return StatusCode(500, "Внутренняя ошибка сервера");
+        }
+    }
+
+    [HttpGet("{id}/weather")]
+    public async Task<IActionResult> GetSimulationWeather(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var simulation = await _simulationRepository.GetByIdAsync(id, cancellationToken);
+            if (simulation == null)
+                return NotFound($"Симуляция с ID {id} не найдена");
+
+            var weather = await _context.WeatherConditions
+                .FirstOrDefaultAsync(w => w.Id == simulation.WeatherConditionId, cancellationToken);
+
+            if (weather == null)
+                return NotFound($"Погодные условия для симуляции {id} не найдены");
+
+            return Ok(new
+            {
+                temperature = weather.Temperature,
+                humidity = weather.Humidity,
+                windSpeed = weather.WindSpeedMps,
+                windDirectionDegrees = weather.WindDirectionDegrees,
+                windDirection = weather.WindDirection.ToString(),
+                precipitation = weather.Precipitation,
+                timestamp = weather.Timestamp
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при получении погоды для симуляции с ID {Id}", id);
+            return StatusCode(500, "Внутренняя ошибка сервера");
+        }
+    }
+}
+
+public class CreateSimulationWithWeatherRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public int GridWidth { get; set; } = 20;
+    public int GridHeight { get; set; } = 20;
+    public GraphType GraphType { get; set; } = GraphType.Grid;
+    public double InitialMoistureMin { get; set; } = 0.3;
+    public double InitialMoistureMax { get; set; } = 0.7;
+    public double ElevationVariation { get; set; } = 50.0;
+    public int InitialFireCellsCount { get; set; } = 3;
+    public int SimulationSteps { get; set; } = 100;
+    public int StepDurationSeconds { get; set; } = 60;
+    public int? RandomSeed { get; set; }
+
+    public List<InitialFirePositionDto> InitialFirePositions { get; set; } = new();
+
+    public double Temperature { get; set; } = 25.0;
+    public double Humidity { get; set; } = 40.0;
+    public double WindSpeed { get; set; } = 5.0;
+    public double WindDirection { get; set; } = 45.0;
+    public double Precipitation { get; set; } = 0.0;
+
+    public List<VegetationDistributionRequest> VegetationDistributions { get; set; } = new();
+}
+
+public class InitialFirePositionDto
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+}
+public class VegetationDistributionRequest
+{
+    public VegetationType VegetationType { get; set; }
+    public double Probability { get; set; }
+}
