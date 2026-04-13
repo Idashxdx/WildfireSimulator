@@ -33,6 +33,8 @@ public partial class CreateSimulationDialog : Window
     private TextBox? _mixedBox;
     private TextBox? _grassBox;
     private TextBox? _shrubBox;
+    private TextBox? _waterBox;
+    private TextBox? _bareBox;
 
     private readonly AppPage _page;
     private readonly GraphCreationMode _mode;
@@ -121,6 +123,8 @@ public partial class CreateSimulationDialog : Window
         _mixedBox = this.FindControl<TextBox>("MixedBox");
         _grassBox = this.FindControl<TextBox>("GrassBox");
         _shrubBox = this.FindControl<TextBox>("ShrubBox");
+        _waterBox = this.FindControl<TextBox>("WaterBox");
+        _bareBox = this.FindControl<TextBox>("BareBox");
     }
 
     private void AttachEvents()
@@ -207,6 +211,8 @@ public partial class CreateSimulationDialog : Window
         if (_mixedBox != null) _mixedBox.Text = "25";
         if (_grassBox != null) _grassBox.Text = "15";
         if (_shrubBox != null) _shrubBox.Text = "10";
+        if (_waterBox != null) _waterBox.Text = "0";
+        if (_bareBox != null) _bareBox.Text = "0";
     }
     private void ApplyModeTexts()
     {
@@ -384,11 +390,14 @@ public partial class CreateSimulationDialog : Window
         var humidity = ParseDouble(_humidityBox?.Text, "Влажность воздуха", errors);
         var windSpeed = ParseDouble(_windSpeedBox?.Text, "Скорость ветра", errors);
         var precipitation = ParseDouble(_precipitationBox?.Text, "Осадки", errors);
+
         var coniferousPercent = ParseDouble(_coniferousBox?.Text, "Хвойный лес", errors);
         var deciduousPercent = ParseDouble(_deciduousBox?.Text, "Лиственный лес", errors);
         var mixedPercent = ParseDouble(_mixedBox?.Text, "Смешанный лес", errors);
         var grassPercent = ParseDouble(_grassBox?.Text, "Трава", errors);
         var shrubPercent = ParseDouble(_shrubBox?.Text, "Кустарник", errors);
+        var waterPercent = ParseDouble(_waterBox?.Text, "Вода", errors);
+        var barePercent = ParseDouble(_bareBox?.Text, "Пустая поверхность", errors);
 
         if (width.HasValue && (width.Value < 5 || width.Value > 100))
             errors.Add("Ширина должна быть в диапазоне от 5 до 100.");
@@ -436,6 +445,7 @@ public partial class CreateSimulationDialog : Window
 
         if (WindDirection < 0 || WindDirection > 360)
             errors.Add("Направление ветра должно быть в диапазоне от 0 до 360 градусов.");
+
         if (precipitation.HasValue && (precipitation.Value < 0 || precipitation.Value > 100))
             errors.Add("Осадки должны быть в диапазоне от 0 до 100 мм/ч.");
 
@@ -449,13 +459,15 @@ public partial class CreateSimulationDialog : Window
         }
 
         var vegetationPercents = new[]
-{
-    ("Хвойный лес", coniferousPercent),
-    ("Лиственный лес", deciduousPercent),
-    ("Смешанный лес", mixedPercent),
-    ("Трава", grassPercent),
-    ("Кустарник", shrubPercent)
-};
+        {
+        ("Хвойный лес", coniferousPercent),
+        ("Лиственный лес", deciduousPercent),
+        ("Смешанный лес", mixedPercent),
+        ("Трава", grassPercent),
+        ("Кустарник", shrubPercent),
+        ("Вода", waterPercent),
+        ("Пустая поверхность", barePercent)
+    };
 
         foreach (var (name, value) in vegetationPercents)
         {
@@ -467,17 +479,21 @@ public partial class CreateSimulationDialog : Window
             deciduousPercent.HasValue &&
             mixedPercent.HasValue &&
             grassPercent.HasValue &&
-            shrubPercent.HasValue)
+            shrubPercent.HasValue &&
+            waterPercent.HasValue &&
+            barePercent.HasValue)
         {
             var totalVegetationPercent =
                 coniferousPercent.Value +
                 deciduousPercent.Value +
                 mixedPercent.Value +
                 grassPercent.Value +
-                shrubPercent.Value;
+                shrubPercent.Value +
+                waterPercent.Value +
+                barePercent.Value;
 
             if (Math.Abs(totalVegetationPercent - 100.0) > 0.001)
-                errors.Add("Сумма процентов растительности должна быть равна 100.");
+                errors.Add("Сумма процентов растительности и поверхности должна быть равна 100.");
         }
 
         if (errors.Count > 0)
@@ -501,14 +517,18 @@ public partial class CreateSimulationDialog : Window
         WindSpeed = windSpeed!.Value;
         Precipitation = precipitation!.Value;
         RandomSeed = randomSeed;
+
         VegetationDistributions = new List<(int VegetationType, double Probability)>
-{
-    ((int)3, coniferousPercent!.Value / 100.0),
-    ((int)2, deciduousPercent!.Value / 100.0),
-    ((int)4, mixedPercent!.Value / 100.0),
-    ((int)0, grassPercent!.Value / 100.0),
-    ((int)1, shrubPercent!.Value / 100.0)
-};
+    {
+        ((int)3, coniferousPercent!.Value / 100.0),
+        ((int)2, deciduousPercent!.Value / 100.0),
+        ((int)4, mixedPercent!.Value / 100.0),
+        ((int)0, grassPercent!.Value / 100.0),
+        ((int)1, shrubPercent!.Value / 100.0),
+        ((int)5, waterPercent!.Value / 100.0),
+        ((int)6, barePercent!.Value / 100.0)
+    };
+
         Close(true);
     }
 

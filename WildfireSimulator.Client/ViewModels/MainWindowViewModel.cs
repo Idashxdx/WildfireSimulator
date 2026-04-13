@@ -44,9 +44,6 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _hasSavedIgnitionPreview;
 
     [ObservableProperty]
-    private bool _isIgnitionPanelVisible = true;
-
-    [ObservableProperty]
     private bool _isAutoSimulationRunning = false;
 
     [ObservableProperty]
@@ -1253,29 +1250,6 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanStartSelectedSimulation));
     }
 
-
-    [RelayCommand]
-    private async Task PrepareIgnitionMapAsync()
-    {
-        if (SelectedSimulation == null || !IsConnected)
-            return;
-
-        if (SelectedSimulation.GraphType == GraphType.Grid)
-            await LoadSimulationCellsAsync(SelectedSimulation.Id);
-        else
-            await LoadSimulationGraphAsync(SelectedSimulation.Id);
-
-        IsPreparedMapLoaded = true;
-        IsIgnitionSelectionEnabled = IsManualIgnitionMode && SelectedSimulationStatus == 0;
-
-        StatusText = "✅ Карта уже готова для выбора очагов";
-        SimulationInfoText = SelectedSimulation.GraphType == GraphType.Grid
-            ? "Сетка загружена. Можно выбирать стартовые клетки."
-            : "Граф загружен. Можно выбирать стартовые вершины.";
-
-        OnPropertyChanged(nameof(CanStartSelectedSimulation));
-        OnPropertyChanged(nameof(IgnitionSelectionSummary));
-    }
 
     [RelayCommand]
     private async Task DeleteSimulationAsync()

@@ -369,13 +369,13 @@
                             FontWeight="Bold" />
 
                         <TextBlock
-                            Text="Сумма должна быть 100%. Эти значения задают вероятности генерации типов леса."
+                            Text="Сумма должна быть 100%. Эти значения задают вероятности генерации типов поверхности и растительности."
                             Foreground="#6E6A78"
                             TextWrapping="Wrap" />
 
                         <Grid ColumnDefinitions="*,*"
                             ColumnSpacing="12"
-                            RowDefinitions="Auto,Auto,Auto">
+                            RowDefinitions="Auto,Auto,Auto,Auto">
 
                             <StackPanel Grid.Row="0" Grid.Column="0">
                                 <TextBlock Text="Хвойный лес"
@@ -423,6 +423,26 @@
                                     Margin="0,0,0,6" />
                                 <TextBox x:Name="ShrubBox"
                                     Text="10"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.Column="1">
+                                <TextBlock Text="Вода"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="WaterBox"
+                                    Text="0"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="3" Grid.Column="0">
+                                <TextBlock Text="Пустая поверхность"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="BareBox"
+                                    Text="0"
                                     Background="#FAF8F2"
                                     Foreground="#2F2A3A" />
                             </StackPanel>
