@@ -278,12 +278,22 @@
                                 BorderBrush="#E6DFF1"
                                 BorderThickness="1"
                                 Padding="10"
-                                CornerRadius="10">
+                                CornerRadius="10"
+                                IsVisible="{Binding ShowIgnitionControls}">
                                 <StackPanel Spacing="8">
                                     <TextBlock Text="Режим задания очагов"
                                         Foreground="#2F2A3A"
                                         FontSize="14"
                                         FontWeight="Bold" />
+
+                                    <Button Content="🔁 Обновить очаги"
+                                        Command="{Binding RefreshIgnitionSetupCommand}"
+                                        Background="#D8E8FF"
+                                        Foreground="#2F2A3A"
+                                        Padding="10"
+                                        FontWeight="SemiBold"
+                                        IsVisible="{Binding CanRefreshIgnitionSetup}"
+                                        IsEnabled="{Binding CanRefreshIgnitionSetup}" />
 
                                     <Grid ColumnDefinitions="*,*"
                                         ColumnSpacing="8">
@@ -293,7 +303,8 @@
                                             Background="{Binding IsRandomIgnitionMode, Converter={StaticResource BoolToBrushConverter}, ConverterParameter='#DDEFD5;#ECE6FA'}"
                                             Foreground="#2F2A3A"
                                             Padding="10"
-                                            FontWeight="SemiBold" />
+                                            FontWeight="SemiBold"
+                                            IsEnabled="{Binding CanEditIgnitionSetup}" />
 
                                         <Button Grid.Column="1"
                                             Content="🖱 Вручную"
@@ -301,7 +312,8 @@
                                             Background="{Binding IsManualIgnitionMode, Converter={StaticResource BoolToBrushConverter}, ConverterParameter='#DDEFD5;#ECE6FA'}"
                                             Foreground="#2F2A3A"
                                             Padding="10"
-                                            FontWeight="SemiBold" />
+                                            FontWeight="SemiBold"
+                                            IsEnabled="{Binding CanEditIgnitionSetup}" />
                                     </Grid>
 
                                     <TextBlock
@@ -313,7 +325,8 @@
                                         Text="{Binding IgnitionSelectionSummary}"
                                         Foreground="#8E7CC3"
                                         FontWeight="SemiBold"
-                                        TextWrapping="Wrap" />
+                                        TextWrapping="Wrap"
+                                        IsVisible="{Binding CanEditIgnitionSetup}" />
 
                                     <TextBlock
                                         Text="В ручном режиме выбирайте стартовые клетки или вершины прямо на визуализации."
@@ -321,6 +334,14 @@
                                         FontSize="11"
                                         TextWrapping="Wrap"
                                         IsVisible="{Binding IsManualIgnitionMode}" />
+
+                                    <TextBlock
+                                        Text="Сейчас на карте показаны сохранённые стартовые очаги. Чтобы задать новые, сначала нажмите «Обновить очаги»."
+                                        Foreground="#B26A42"
+                                        FontSize="11"
+                                        FontWeight="SemiBold"
+                                        TextWrapping="Wrap"
+                                        IsVisible="{Binding CanRefreshIgnitionSetup}" />
                                 </StackPanel>
                             </Border>
                             <Grid ColumnDefinitions="*,*"

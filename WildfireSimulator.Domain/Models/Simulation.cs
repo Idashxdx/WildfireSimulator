@@ -28,6 +28,11 @@ public class Simulation
 
     private Simulation() { }
 
+
+    public void ClearInitialFirePositions()
+    {
+        InitialFirePositions = null;
+    }
     public void SetWeatherCondition(WeatherCondition weatherCondition)
     {
         WeatherCondition = Guard.Against.Null(weatherCondition, nameof(weatherCondition));

@@ -194,43 +194,6 @@ public class ApiService
             return (false, ex.Message, null, false, 0, 0, -1);
         }
     }
-    public async Task<(bool Success, string Message, List<GraphCellDto>? Cells)> PrepareSimulationMapAsync(Guid simulationId)
-    {
-        try
-        {
-            var response = await _httpClient.PostAsync($"{_baseUrl}/api/SimulationManager/{simulationId}/prepare-map", null);
-            var responseText = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"Prepare-map response: {responseText}");
-
-            using JsonDocument doc = JsonDocument.Parse(responseText);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorMessage = doc.RootElement.TryGetProperty("message", out var msgElement)
-                    ? msgElement.GetString() ?? "Ошибка подготовки карты"
-                    : "Ошибка подготовки карты";
-
-                return (false, errorMessage, null);
-            }
-
-            List<GraphCellDto>? cells = null;
-            if (doc.RootElement.TryGetProperty("cells", out var cellsElement))
-            {
-                cells = JsonSerializer.Deserialize<List<GraphCellDto>>(cellsElement.GetRawText(), _jsonOptions);
-            }
-
-            var message = doc.RootElement.TryGetProperty("message", out var okMsg)
-                ? okMsg.GetString() ?? "Карта подготовлена"
-                : "Карта подготовлена";
-
-            return (true, message, cells);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error preparing simulation map: {ex.Message}");
-            return (false, ex.Message, null);
-        }
-    }
 
     public async Task<(bool Success, string Message, List<GraphCellDto>? Cells, StepResultDto? StepResult, bool IsRunning, int Status)> ExecuteStepAsync(Guid simulationId)
     {
@@ -465,6 +428,43 @@ public class ApiService
         {
             Console.WriteLine($"Error resetting simulation: {ex.Message}");
             return (false, ex.Message, null, false, 0, 0, -1);
+        }
+    }
+    public async Task<(bool Success, string Message, List<GraphCellDto>? Cells)> RefreshIgnitionSetupAsync(Guid simulationId)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync($"{_baseUrl}/api/SimulationManager/{simulationId}/refresh-ignitions", null);
+            var responseText = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"Refresh-ignitions response: {responseText}");
+
+            using JsonDocument doc = JsonDocument.Parse(responseText);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorMessage = doc.RootElement.TryGetProperty("message", out var msgElement)
+                    ? msgElement.GetString() ?? "Ошибка обновления очагов"
+                    : "Ошибка обновления очагов";
+
+                return (false, errorMessage, null);
+            }
+
+            List<GraphCellDto>? cells = null;
+            if (doc.RootElement.TryGetProperty("cells", out var cellsElement))
+            {
+                cells = JsonSerializer.Deserialize<List<GraphCellDto>>(cellsElement.GetRawText(), _jsonOptions);
+            }
+
+            var message = doc.RootElement.TryGetProperty("message", out var okMsg)
+                ? okMsg.GetString() ?? "Очаги обновлены"
+                : "Очаги обновлены";
+
+            return (true, message, cells);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error refreshing ignition setup: {ex.Message}");
+            return (false, ex.Message, null);
         }
     }
 }

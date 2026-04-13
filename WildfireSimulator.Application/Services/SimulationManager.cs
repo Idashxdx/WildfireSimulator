@@ -906,6 +906,58 @@ public partial class SimulationManager
             stepResult.SimulationId,
             stepResult.Step);
     }
+    public async Task<ForestGraph> RefreshIgnitionSetupAsync(Guid simulationId)
+    {
+        await EnsureInitializedAsync();
+
+        _logger.LogInformation("🔁 Обновление стартовых очагов для симуляции {SimulationId}", simulationId);
+
+        using var scope = _scopeFactory.CreateScope();
+        var simulationRepo = scope.ServiceProvider.GetRequiredService<ISimulationRepository>();
+        var graphGenerator = scope.ServiceProvider.GetRequiredService<IForestGraphGenerator>();
+        var activeRepo = scope.ServiceProvider.GetRequiredService<IActiveSimulationRepository>();
+
+        var simulation = await simulationRepo.GetByIdAsync(simulationId);
+        if (simulation == null)
+            throw new InvalidOperationException($"Симуляция {simulationId} не найдена");
+
+        if (simulation.Status != SimulationStatus.Created)
+            throw new InvalidOperationException("Обновить очаги можно только для симуляции в статусе Created.");
+
+        ForestGraph graph;
+
+        if (simulation.HasSavedGraph())
+        {
+            graph = simulation.LoadGraph()
+                ?? throw new InvalidOperationException($"Не удалось загрузить граф для симуляции {simulationId}");
+        }
+        else
+        {
+            graph = await CreateBaseGraphAsync(simulation, graphGenerator);
+        }
+
+        graph.StepDurationSeconds = simulation.Parameters.StepDurationSeconds > 0
+            ? simulation.Parameters.StepDurationSeconds
+            : 60;
+
+        ResetGraphForReplay(graph);
+
+        simulation.ClearInitialFirePositions();
+        simulation.SaveGraph(graph);
+        simulation.CachedGraph = graph;
+
+        await simulationRepo.UpdateAsync(simulation);
+        await activeRepo.DeleteBySimulationIdAsync(simulationId);
+
+        if (_activeSimulations.ContainsKey(simulationId))
+            _activeSimulations.Remove(simulationId);
+
+        _logger.LogInformation(
+            "✅ Стартовые очаги для симуляции {SimulationId} очищены, карта снова чистая",
+            simulationId);
+
+        return graph;
+    }
 }
 
 public class ActiveSimulation

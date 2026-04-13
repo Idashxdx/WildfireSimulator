@@ -180,72 +180,6 @@ public class SimulationManagerController : ControllerBase
         }
     }
 
-    [HttpPost("{simulationId}/prepare-map")]
-    public async Task<IActionResult> PrepareSimulationGraph(Guid simulationId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            _logger.LogInformation("Запрос на подготовку карты симуляции {SimulationId}", simulationId);
-
-            var simulation = await _context.Simulations
-                .Include(s => s.Parameters)
-                .FirstOrDefaultAsync(s => s.Id == simulationId, cancellationToken);
-
-            if (simulation == null)
-            {
-                return NotFound(new
-                {
-                    success = false,
-                    message = $"Симуляция {simulationId} не найдена"
-                });
-            }
-
-            if (simulation.Status == SimulationStatus.Running)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = "Нельзя подготавливать карту для уже запущенной симуляции."
-                });
-            }
-
-            var graph = await _simulationManager.PrepareSimulationGraphAsync(simulationId);
-
-            var cells = graph.Cells
-                .Select(BuildPreparedCellDto)
-                .ToList();
-
-            return Ok(new
-            {
-                success = true,
-                message = "Карта симуляции подготовлена. Можно выбрать очаги вручную или использовать случайную генерацию.",
-                simulationId = simulation.Id,
-                graphType = simulation.Parameters.GraphType,
-                width = graph.Width,
-                height = graph.Height,
-                cells = cells
-            });
-        }
-        catch (InvalidOperationException ex)
-        {
-            _logger.LogWarning(ex, "Ошибка подготовки карты симуляции {SimulationId}", simulationId);
-            return BadRequest(new
-            {
-                success = false,
-                message = ex.Message
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Ошибка подготовки карты симуляции {SimulationId}", simulationId);
-            return StatusCode(500, new
-            {
-                success = false,
-                message = "Ошибка подготовки карты симуляции",
-                error = ex.Message
-            });
-        }
-    }
 
     [HttpPost("{simulationId}/step")]
     public async Task<IActionResult> ExecuteStep(Guid simulationId, CancellationToken cancellationToken)
@@ -994,25 +928,85 @@ public class SimulationManagerController : ControllerBase
             });
         }
     }
-    private async Task RebuildFreshGraphAsync(Simulation simulation, CancellationToken cancellationToken)
+    [HttpPost("{simulationId}/refresh-ignitions")]
+    public async Task<IActionResult> RefreshIgnitions(Guid simulationId, CancellationToken cancellationToken)
     {
-        simulation.ResetForRestart();
-        simulation.CachedGraph = null;
+        try
+        {
+            _logger.LogInformation("🔁 Запрос на обновление стартовых очагов для симуляции {SimulationId}", simulationId);
 
-        var freshGraph = await GenerateFreshGraphAsync(simulation);
-        freshGraph.StepDurationSeconds = simulation.Parameters.StepDurationSeconds > 0
-            ? simulation.Parameters.StepDurationSeconds
-            : 60;
+            var simulation = await _context.Simulations
+                .Include(s => s.Parameters)
+                .FirstOrDefaultAsync(s => s.Id == simulationId, cancellationToken);
 
-        simulation.SaveGraph(freshGraph);
+            if (simulation == null)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = $"Симуляция {simulationId} не найдена"
+                });
+            }
 
-        await _context.SaveChangesAsync(cancellationToken);
+            if (simulation.Status != SimulationStatus.Created)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Обновить очаги можно только у симуляции в статусе Created."
+                });
+            }
 
-        _logger.LogInformation(
-            "♻️ Для симуляции {SimulationId} пересобран чистый граф: {Cells} клеток/узлов, {Edges} рёбер",
-            simulation.Id,
-            freshGraph.Cells.Count,
-            freshGraph.Edges.Count);
+            var graph = await _simulationManager.RefreshIgnitionSetupAsync(simulationId);
+
+            if (simulation.Parameters.GraphType == GraphType.Grid)
+            {
+                var cells = graph.Cells
+                    .Select(BuildPreparedCellDto)
+                    .ToList();
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Сохранённые очаги очищены. Можно выбрать новые.",
+                    simulationId = simulation.Id,
+                    graphType = simulation.Parameters.GraphType,
+                    width = graph.Width,
+                    height = graph.Height,
+                    cells = cells
+                });
+            }
+
+            var graphDto = BuildGraphDto(simulation, graph);
+
+            return Ok(new
+            {
+                success = true,
+                message = "Сохранённые очаги очищены. Можно выбрать новые.",
+                simulationId = simulation.Id,
+                graphType = simulation.Parameters.GraphType,
+                graph = graphDto
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Ошибка обновления стартовых очагов для симуляции {SimulationId}", simulationId);
+            return BadRequest(new
+            {
+                success = false,
+                message = ex.Message
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при обновлении стартовых очагов симуляции {SimulationId}", simulationId);
+            return StatusCode(500, new
+            {
+                success = false,
+                message = "Ошибка при обновлении стартовых очагов",
+                error = ex.Message
+            });
+        }
     }
 
     private async Task<ForestGraph> GenerateFreshGraphAsync(Simulation simulation)
@@ -1145,7 +1139,7 @@ public class SimulationManagerController : ControllerBase
                 FuelLoad = Math.Round(c.FuelLoad, 6),
                 BurningElapsedSeconds = Math.Round(c.BurningElapsedSeconds, 3),
                 AccumulatedHeatJ = Math.Round(c.AccumulatedHeatJ, 3),
-IsIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != VegetationType.Bare
+                IsIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != VegetationType.Bare
             })
             .ToList();
     }
@@ -1176,7 +1170,7 @@ IsIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != Vegetation
                 FuelLoad = Math.Round(c.FuelLoad, 6),
                 BurningElapsedSeconds = Math.Round(c.BurningElapsedSeconds, 3),
                 AccumulatedHeatJ = Math.Round(c.AccumulatedHeatJ, 3),
-IsIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != VegetationType.Bare,
+                IsIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != VegetationType.Bare,
             })
             .ToList();
     }

@@ -41,6 +41,12 @@ public partial class MainWindowViewModel : ObservableObject
     private const int AutoStepDelayMs = 700;
 
     [ObservableProperty]
+    private bool _hasSavedIgnitionPreview;
+
+    [ObservableProperty]
+    private bool _isIgnitionPanelVisible = true;
+
+    [ObservableProperty]
     private bool _isAutoSimulationRunning = false;
 
     [ObservableProperty]
@@ -196,6 +202,24 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsRandomIgnitionMode => SelectedIgnitionMode == IgnitionMode.Random;
     public bool IsManualIgnitionMode => SelectedIgnitionMode == IgnitionMode.Manual;
 
+    public bool CanRefreshIgnitionSetup =>
+        IsConnected &&
+        SelectedSimulation != null &&
+        SelectedSimulationStatus == 0 &&
+        !IsSimulationRunning &&
+        HasSavedIgnitionPreview;
+
+    public bool CanEditIgnitionSetup =>
+        IsConnected &&
+        SelectedSimulation != null &&
+        SelectedSimulationStatus == 0 &&
+        !IsSimulationRunning &&
+        !HasSavedIgnitionPreview;
+
+    public bool ShowIgnitionControls =>
+        SelectedSimulation != null &&
+        SelectedSimulationStatus == 0 &&
+        !IsSimulationRunning;
     public string IgnitionModeText => SelectedIgnitionMode switch
     {
         IgnitionMode.Random => "Случайные или сохранённые очаги",
@@ -439,8 +463,7 @@ public partial class MainWindowViewModel : ObservableObject
         IsIgnitionSelectionEnabled =
             value == IgnitionMode.Manual &&
             IsPreparedMapLoaded &&
-            SelectedSimulation != null &&
-            SelectedSimulationStatus == 0;
+            CanEditIgnitionSetup;
 
         if (value == IgnitionMode.Random)
         {
@@ -453,6 +476,9 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IgnitionModeText));
         OnPropertyChanged(nameof(IgnitionSelectionSummary));
         OnPropertyChanged(nameof(CanStartSelectedSimulation));
+        OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
+        OnPropertyChanged(nameof(CanEditIgnitionSetup));
+        OnPropertyChanged(nameof(ShowIgnitionControls));
     }
 
     partial void OnApiUrlChanged(string value)
@@ -491,8 +517,6 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnSelectedSimulationChanged(SimulationDto? value)
     {
-        StopAutoSimulationInternal();
-
         if (value != null)
         {
             SelectedSimulationStatus = value.Status;
@@ -501,6 +525,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             IsPreparedMapLoaded = false;
             IsIgnitionSelectionEnabled = false;
+            HasSavedIgnitionPreview = false;
             SelectedIgnitionMode = IgnitionMode.Random;
             ClearSelectedIgnitionCells();
             ClearSelectedIgnitionNodes();
@@ -509,10 +534,6 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(GraphTypeText));
             OnPropertyChanged(nameof(CanStartSelectedSimulation));
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
-            OnPropertyChanged(nameof(CanStartAutoSimulation));
-            OnPropertyChanged(nameof(CanPauseAutoSimulation));
-            OnPropertyChanged(nameof(CanResumeAutoSimulation));
-            OnPropertyChanged(nameof(CanStopAutoSimulation));
             OnPropertyChanged(nameof(IsGridSelected));
             OnPropertyChanged(nameof(IsClusteredGraphSelected));
             OnPropertyChanged(nameof(IsRegionClusterGraphSelected));
@@ -523,8 +544,11 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(IsManualIgnitionMode));
             OnPropertyChanged(nameof(IgnitionModeText));
             OnPropertyChanged(nameof(IgnitionSelectionSummary));
+            OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
+            OnPropertyChanged(nameof(CanEditIgnitionSetup));
+            OnPropertyChanged(nameof(ShowIgnitionControls));
 
-            CanResetSimulation = (value.Status == 2 || value.Status == 3 || value.Status == 1) && IsConnected && !IsAutoSimulationRunning;
+            CanResetSimulation = (value.Status == 2 || value.Status == 3 || value.Status == 1) && IsConnected;
 
             SimulationInfoText = $"Загрузка данных симуляции «{value.Name}»...";
 
@@ -556,6 +580,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             IsPreparedMapLoaded = false;
             IsIgnitionSelectionEnabled = false;
+            HasSavedIgnitionPreview = false;
             SelectedIgnitionMode = IgnitionMode.Random;
             ClearSelectedIgnitionCells();
             ClearSelectedIgnitionNodes();
@@ -573,10 +598,6 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(GraphTypeText));
             OnPropertyChanged(nameof(CanStartSelectedSimulation));
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
-            OnPropertyChanged(nameof(CanStartAutoSimulation));
-            OnPropertyChanged(nameof(CanPauseAutoSimulation));
-            OnPropertyChanged(nameof(CanResumeAutoSimulation));
-            OnPropertyChanged(nameof(CanStopAutoSimulation));
             OnPropertyChanged(nameof(IsGridSelected));
             OnPropertyChanged(nameof(IsClusteredGraphSelected));
             OnPropertyChanged(nameof(IsRegionClusterGraphSelected));
@@ -587,6 +608,9 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(IsManualIgnitionMode));
             OnPropertyChanged(nameof(IgnitionModeText));
             OnPropertyChanged(nameof(IgnitionSelectionSummary));
+            OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
+            OnPropertyChanged(nameof(CanEditIgnitionSetup));
+            OnPropertyChanged(nameof(ShowIgnitionControls));
         }
     }
     private void StopAutoSimulationInternal(string? message = null)
@@ -812,6 +836,52 @@ public partial class MainWindowViewModel : ObservableObject
             StopAutoSimulationInternal("Авто-режим остановлен: симуляция больше не в статусе Running");
     }
 
+    [RelayCommand]
+    private async Task RefreshIgnitionSetupAsync()
+    {
+        if (SelectedSimulation == null || !IsConnected)
+            return;
+
+        StatusText = "Обновление стартовых очагов...";
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🔁 Очистка сохранённых очагов...");
+
+        var result = await _apiService.RefreshIgnitionSetupAsync(SelectedSimulation.Id);
+
+        if (!result.Success)
+        {
+            StatusText = $"❌ {result.Message}";
+            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ❌ Ошибка обновления очагов: {result.Message}");
+            return;
+        }
+
+        HasSavedIgnitionPreview = false;
+        IsPreparedMapLoaded = false;
+        IsIgnitionSelectionEnabled = false;
+        SelectedIgnitionMode = IgnitionMode.Random;
+        ClearSelectedIgnitionCells();
+        ClearSelectedIgnitionNodes();
+
+        if (SelectedSimulationGraphType == GraphType.Grid)
+            await LoadSimulationCellsAsync(SelectedSimulation.Id);
+        else
+            await LoadSimulationGraphAsync(SelectedSimulation.Id);
+
+        IsPreparedMapLoaded = true;
+        IsIgnitionSelectionEnabled = IsManualIgnitionMode && CanEditIgnitionSetup;
+
+        StatusText = "✅ Старые очаги очищены";
+        SimulationInfoText = SelectedSimulationGraphType == GraphType.Grid
+            ? "Старые очаги удалены. Карта очищена, можно задать новый старт."
+            : "Старые очаги удалены. Граф очищен, можно задать новый старт.";
+
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ✅ Сохранённые очаги очищены");
+
+        OnPropertyChanged(nameof(CanStartSelectedSimulation));
+        OnPropertyChanged(nameof(IgnitionSelectionSummary));
+        OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
+        OnPropertyChanged(nameof(CanEditIgnitionSetup));
+        OnPropertyChanged(nameof(ShowIgnitionControls));
+    }
 
     [RelayCommand]
     private void SwitchToGridPage()
@@ -1077,12 +1147,9 @@ public partial class MainWindowViewModel : ObservableObject
             StatusText = "❌ Ошибка создания";
         }
     }
-
     [RelayCommand]
     private async Task ResetSimulationAsync()
     {
-        StopAutoSimulationInternal();
-
         if (SelectedSimulation == null || !IsConnected)
             return;
 
@@ -1112,13 +1179,17 @@ public partial class MainWindowViewModel : ObservableObject
                 {
                     Cells = new ObservableCollection<GraphCellDto>(cells);
 
-                    IsPreparedMapLoaded = Cells.Count > 0;
-                    IsIgnitionSelectionEnabled = IsManualIgnitionMode && IsPreparedMapLoaded;
-
                     var burning = cells.Count(c => c.IsBurning);
                     var burned = cells.Count(c => c.IsBurned);
 
-                    SimulationInfoText = $"Сетка восстановлена: клеток {Cells.Count}, горят {burning}, сгорело {burned}. Можно запускать заново.";
+                    HasSavedIgnitionPreview = burning > 0;
+                    IsPreparedMapLoaded = Cells.Count > 0;
+                    IsIgnitionSelectionEnabled = false;
+
+                    SimulationInfoText = HasSavedIgnitionPreview
+                        ? $"Симуляция сброшена. Показаны сохранённые стартовые очаги: {burning}. Чтобы задать новые, нажмите «Обновить очаги»."
+                        : $"Сетка восстановлена: клеток {Cells.Count}, горят {burning}, сгорело {burned}. Можно запускать заново.";
+
                     EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ✅ Симуляция перезапущена");
                 });
             }
@@ -1126,27 +1197,28 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 await LoadSimulationGraphAsync(SelectedSimulation!.Id);
 
-                IsPreparedMapLoaded = GraphNodes.Count > 0;
-                IsIgnitionSelectionEnabled = IsManualIgnitionMode && IsPreparedMapLoaded;
+                IsIgnitionSelectionEnabled = false;
 
-                SimulationInfoText = "Графовая симуляция восстановлена. Можно запускать заново.";
+                SimulationInfoText = HasSavedIgnitionPreview
+                    ? "Графовая симуляция сброшена. Показаны сохранённые стартовые очаги. Чтобы задать новые, нажмите «Обновить очаги»."
+                    : "Графовая симуляция восстановлена. Можно запускать заново.";
+
                 EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ✅ Графовая симуляция перезапущена");
             }
 
-            AutoSimulationStatusText = "Авто-режим выключен";
+            SelectedIgnitionMode = IgnitionMode.Random;
 
             OnPropertyChanged(nameof(CanStartSelectedSimulation));
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
-            OnPropertyChanged(nameof(CanStartAutoSimulation));
-            OnPropertyChanged(nameof(CanPauseAutoSimulation));
-            OnPropertyChanged(nameof(CanResumeAutoSimulation));
-            OnPropertyChanged(nameof(CanStopAutoSimulation));
             OnPropertyChanged(nameof(CanResetSimulation));
             OnPropertyChanged(nameof(SimulationStatusText));
             OnPropertyChanged(nameof(IsRandomIgnitionMode));
             OnPropertyChanged(nameof(IsManualIgnitionMode));
             OnPropertyChanged(nameof(IgnitionModeText));
             OnPropertyChanged(nameof(IgnitionSelectionSummary));
+            OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
+            OnPropertyChanged(nameof(CanEditIgnitionSetup));
+            OnPropertyChanged(nameof(ShowIgnitionControls));
         }
         else
         {
@@ -1158,21 +1230,29 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void SetRandomIgnitionMode()
     {
+        if (!CanEditIgnitionSetup)
+            return;
+
         SelectedIgnitionMode = IgnitionMode.Random;
     }
 
     [RelayCommand]
     private void SetManualIgnitionMode()
     {
+        if (!CanEditIgnitionSetup)
+            return;
+
         SelectedIgnitionMode = IgnitionMode.Manual;
 
         IsIgnitionSelectionEnabled =
             SelectedSimulation != null &&
             SelectedSimulationStatus == 0 &&
-            IsPreparedMapLoaded;
+            IsPreparedMapLoaded &&
+            CanEditIgnitionSetup;
 
         OnPropertyChanged(nameof(CanStartSelectedSimulation));
     }
+
 
     [RelayCommand]
     private async Task PrepareIgnitionMapAsync()
@@ -1230,8 +1310,6 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task StartSimulationAsync()
     {
-        StopAutoSimulationInternal();
-
         if (SelectedSimulation == null || !IsConnected)
             return;
 
@@ -1280,6 +1358,7 @@ public partial class MainWindowViewModel : ObservableObject
 
             IsPreparedMapLoaded = false;
             IsIgnitionSelectionEnabled = false;
+            HasSavedIgnitionPreview = false;
             ClearSelectedIgnitionCells();
             ClearSelectedIgnitionNodes();
 
@@ -1306,24 +1385,20 @@ public partial class MainWindowViewModel : ObservableObject
                 EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ▶ Графовая симуляция запущена");
             }
 
-            AutoSimulationStatusText = "Авто-режим выключен";
-
             OnPropertyChanged(nameof(CanStartSelectedSimulation));
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
-            OnPropertyChanged(nameof(CanStartAutoSimulation));
-            OnPropertyChanged(nameof(CanPauseAutoSimulation));
-            OnPropertyChanged(nameof(CanResumeAutoSimulation));
-            OnPropertyChanged(nameof(CanStopAutoSimulation));
             OnPropertyChanged(nameof(SimulationStatusText));
             OnPropertyChanged(nameof(CanResetSimulation));
             OnPropertyChanged(nameof(IgnitionSelectionSummary));
+            OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
+            OnPropertyChanged(nameof(CanEditIgnitionSetup));
+            OnPropertyChanged(nameof(ShowIgnitionControls));
         }
         else
         {
             StatusText = $"❌ {message}";
         }
     }
-
 
     [RelayCommand]
     private async Task ExecuteStepAsync()
@@ -1553,7 +1628,13 @@ public partial class MainWindowViewModel : ObservableObject
             var burning = cells.Count(c => c.IsBurning);
             var burned = cells.Count(c => c.IsBurned);
 
-            SimulationInfoText = $"Загружено {cells.Count} клеток. Горят: {burning}. Сгорело: {burned}.";
+            HasSavedIgnitionPreview =
+                SelectedSimulationStatus == 0 &&
+                burning > 0;
+
+            SimulationInfoText = HasSavedIgnitionPreview
+                ? $"Загружено {cells.Count} клеток. Показаны сохранённые стартовые очаги: {burning}. Чтобы задать новые, нажмите «Обновить очаги»."
+                : $"Загружено {cells.Count} клеток. Горят: {burning}. Сгорело: {burned}.";
 
             var stats = cells
                 .GroupBy(c => c.Vegetation)
@@ -1564,11 +1645,10 @@ public partial class MainWindowViewModel : ObservableObject
                 ? string.Join(", ", stats)
                 : "Нет данных";
 
-            IsPreparedMapLoaded = cells.Count > 0 && SelectedSimulationStatus == 0;
-            IsIgnitionSelectionEnabled = IsManualIgnitionMode && IsPreparedMapLoaded;
+            IsPreparedMapLoaded = cells.Count > 0;
+            IsIgnitionSelectionEnabled = IsManualIgnitionMode && CanEditIgnitionSetup;
         });
     }
-
     private async Task LoadSimulationGraphAsync(Guid simulationId)
     {
         var graph = await _apiService.GetSimulationGraphAsync(simulationId);
@@ -1582,6 +1662,7 @@ public partial class MainWindowViewModel : ObservableObject
                 SelectedGraphNode = null;
                 IsPreparedMapLoaded = false;
                 IsIgnitionSelectionEnabled = false;
+                HasSavedIgnitionPreview = false;
                 SimulationInfoText = "Не удалось загрузить граф симуляции";
                 return;
             }
@@ -1598,7 +1679,13 @@ public partial class MainWindowViewModel : ObservableObject
             var burning = graph.Nodes.Count(n => n.IsBurning);
             var burned = graph.Nodes.Count(n => n.IsBurned);
 
-            SimulationInfoText = $"Граф загружен: узлов {graph.Nodes.Count}, рёбер {graph.Edges.Count}, горят {burning}, сгорело {burned}";
+            HasSavedIgnitionPreview =
+                SelectedSimulationStatus == 0 &&
+                burning > 0;
+
+            SimulationInfoText = HasSavedIgnitionPreview
+                ? $"Граф загружен: узлов {graph.Nodes.Count}, рёбер {graph.Edges.Count}. Показаны сохранённые стартовые очаги: {burning}. Чтобы задать новые, нажмите «Обновить очаги»."
+                : $"Граф загружен: узлов {graph.Nodes.Count}, рёбер {graph.Edges.Count}, горят {burning}, сгорело {burned}";
 
             var stats = graph.Nodes
                 .GroupBy(n => n.Vegetation)
@@ -1609,8 +1696,8 @@ public partial class MainWindowViewModel : ObservableObject
                 ? string.Join(", ", stats)
                 : "Нет данных";
 
-            IsPreparedMapLoaded = graph.Nodes.Count > 0 && SelectedSimulationStatus == 0;
-            IsIgnitionSelectionEnabled = IsManualIgnitionMode && IsPreparedMapLoaded;
+            IsPreparedMapLoaded = graph.Nodes.Count > 0;
+            IsIgnitionSelectionEnabled = IsManualIgnitionMode && CanEditIgnitionSetup;
 
             if (previousSelectedId.HasValue)
                 SelectedGraphNode = graph.Nodes.FirstOrDefault(n => n.Id == previousSelectedId.Value);
@@ -1623,7 +1710,6 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(SelectedGraphNodeWeakEdgesText));
         });
     }
-
     private int GetNeighborCount(Guid nodeId)
     {
         return GraphEdges.Count(e => e.FromCellId == nodeId || e.ToCellId == nodeId);
