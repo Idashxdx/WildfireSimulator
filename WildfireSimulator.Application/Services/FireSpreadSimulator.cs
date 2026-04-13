@@ -218,7 +218,6 @@ public class FireSpreadSimulator : IFireSpreadSimulator
             weather,
             stepDurationSeconds);
     }
-
     private double ApplyEdgeAwareTransferAdjustment(
        ForestGraph graph,
        ForestCell source,
@@ -288,27 +287,68 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
         if (sameCluster)
         {
+            int sameClusterNeighborsSource = graph.GetNeighbors(source).Count(n => n.ClusterId == source.ClusterId);
+            int sameClusterNeighborsTarget = graph.GetNeighbors(target).Count(n => n.ClusterId == target.ClusterId);
+
+            int interClusterNeighborsSource = graph.GetNeighbors(source).Count(n => n.ClusterId != source.ClusterId);
+            int interClusterNeighborsTarget = graph.GetNeighbors(target).Count(n => n.ClusterId != target.ClusterId);
+
             double intraClusterSupport = edge.Distance switch
             {
-                <= 1.45 => 1.28,
-                <= 2.20 => 1.95,
-                <= 3.00 => 2.45,
-                _ => 2.85
+                <= 1.05 => 1.95,
+                <= 1.45 => 2.45,
+                <= 2.20 => 3.05,
+                <= 3.00 => 3.30,
+                _ => 3.35
             };
 
-            double sparseConnectivityFactor = 1.0 + 0.18 / Math.Sqrt(minDegree);
-            sparseConnectivityFactor = Math.Clamp(sparseConnectivityFactor, 1.0, 1.18);
+            double sparseConnectivityFactor = 1.0 + 0.24 / Math.Sqrt(minDegree);
+            sparseConnectivityFactor = Math.Clamp(sparseConnectivityFactor, 1.0, 1.24);
 
-            double similarityFactor = source.Vegetation == target.Vegetation ? 1.10 : 1.00;
+            double similarityFactor = 1.0;
+
+            if (source.Vegetation == target.Vegetation)
+                similarityFactor += 0.10;
+
+            double moistureGap = Math.Abs(source.Moisture - target.Moisture);
+            if (moistureGap <= 0.08)
+                similarityFactor += 0.05;
+            else if (moistureGap <= 0.16)
+                similarityFactor += 0.02;
+
+            similarityFactor = Math.Clamp(similarityFactor, 1.0, 1.15);
+
+            double neighborhoodSupport =
+                1.0 +
+                Math.Max(0, Math.Min(sameClusterNeighborsSource, sameClusterNeighborsTarget) - 2) * 0.08;
+
+            neighborhoodSupport = Math.Clamp(neighborhoodSupport, 1.0, 1.28);
+
+            double interiorBonus = 1.0;
+
+            if (interClusterNeighborsSource == 0)
+                interiorBonus += 0.12;
+
+            if (interClusterNeighborsTarget == 0)
+                interiorBonus += 0.12;
+
+            if (sameClusterNeighborsSource >= 4 && sameClusterNeighborsTarget >= 4)
+                interiorBonus += 0.10;
+            else if (sameClusterNeighborsSource >= 3 && sameClusterNeighborsTarget >= 3)
+                interiorBonus += 0.06;
+
+            interiorBonus = Math.Clamp(interiorBonus, 1.0, 1.34);
 
             double adjusted =
                 baseHeatFlow *
                 edgeModifier *
                 intraClusterSupport *
                 sparseConnectivityFactor *
-                similarityFactor;
+                similarityFactor *
+                neighborhoodSupport *
+                interiorBonus;
 
-            return Math.Min(adjusted, baseHeatFlow * 5.0);
+            return Math.Min(adjusted, baseHeatFlow * 7.2);
         }
         else
         {
@@ -318,46 +358,84 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                     ? Math.Clamp(source.BurningElapsedSeconds / sourceBurnDuration, 0.0, 1.0)
                     : 0.0;
 
+            var sourceNeighbors = graph.GetNeighbors(source);
+
+            int sameClusterAffectedNeighbors = sourceNeighbors.Count(n =>
+                n.ClusterId == source.ClusterId &&
+                (n.State == CellState.Burning || n.State == CellState.Burned));
+
+            int sameClusterBurningNeighbors = sourceNeighbors.Count(n =>
+                n.ClusterId == source.ClusterId &&
+                n.State == CellState.Burning);
+
+            int sameClusterSupportNeighbors = sourceNeighbors.Count(n =>
+                n.ClusterId == source.ClusterId);
+
             double maturityFactor = sourceBurnProgress switch
             {
-                < 0.08 => 0.72,
-                < 0.15 => 0.88,
-                < 0.25 => 1.02,
-                < 0.40 => 1.18,
-                < 0.60 => 1.30,
-                _ => 1.38
+                < 0.08 => 0.62,
+                < 0.15 => 0.78,
+                < 0.25 => 0.94,
+                < 0.40 => 1.08,
+                < 0.60 => 1.24,
+                _ => 1.34
             };
 
             double bridgeDistanceFactor = edge.Distance switch
             {
-                <= 1.60 => 1.95,
-                <= 2.00 => 1.72,
-                <= 2.40 => 1.52,
-                <= 2.80 => 1.34,
-                <= 3.20 => 1.18,
-                _ => 1.02
+                <= 1.60 => 1.20,
+                <= 2.00 => 1.10,
+                <= 2.40 => 1.00,
+                <= 2.80 => 0.92,
+                <= 3.20 => 0.86,
+                _ => 0.78
             };
 
-            double bridgeQualityFactor = 1.0 + 0.28 / Math.Sqrt(minDegree);
-            bridgeQualityFactor = Math.Clamp(bridgeQualityFactor, 1.0, 1.24);
+            double bridgeQualityFactor = 1.0 + 0.16 / Math.Sqrt(minDegree);
+            bridgeQualityFactor = Math.Clamp(bridgeQualityFactor, 1.0, 1.14);
 
             double similarityFactor = 1.0;
 
             if (source.Vegetation == target.Vegetation)
-                similarityFactor += 0.06;
+                similarityFactor += 0.04;
 
             double moistureGap = Math.Abs(source.Moisture - target.Moisture);
             if (moistureGap <= 0.10)
-                similarityFactor += 0.05;
+                similarityFactor += 0.03;
             else if (moistureGap <= 0.18)
-                similarityFactor += 0.02;
+                similarityFactor += 0.01;
 
-            similarityFactor = Math.Clamp(similarityFactor, 1.0, 1.10);
+            similarityFactor = Math.Clamp(similarityFactor, 1.0, 1.08);
 
             double sourceBridgeExposureFactor =
-                sourceDegree <= 3 ? 1.12 :
-                sourceDegree <= 4 ? 1.08 :
-                sourceDegree <= 5 ? 1.04 : 1.00;
+                sourceDegree <= 3 ? 1.05 :
+                sourceDegree <= 4 ? 1.03 :
+                sourceDegree <= 5 ? 1.01 : 1.00;
+
+            double frontierPressureFactor = 1.0;
+
+            if (sameClusterAffectedNeighbors >= 2)
+                frontierPressureFactor += 0.10;
+
+            if (sameClusterAffectedNeighbors >= 3)
+                frontierPressureFactor += 0.10;
+
+            if (sameClusterAffectedNeighbors >= 4)
+                frontierPressureFactor += 0.08;
+
+            if (sameClusterBurningNeighbors >= 2)
+                frontierPressureFactor += 0.08;
+
+            if (sameClusterSupportNeighbors >= 4)
+                frontierPressureFactor += 0.04;
+
+            if (sourceBurnProgress >= 0.35 && sameClusterAffectedNeighbors >= 2)
+                frontierPressureFactor += 0.10;
+
+            if (sourceBurnProgress >= 0.50 && sameClusterAffectedNeighbors >= 3)
+                frontierPressureFactor += 0.08;
+
+            frontierPressureFactor = Math.Clamp(frontierPressureFactor, 1.0, 1.42);
 
             double adjusted =
                 baseHeatFlow *
@@ -366,11 +444,13 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                 bridgeQualityFactor *
                 similarityFactor *
                 maturityFactor *
-                sourceBridgeExposureFactor;
+                sourceBridgeExposureFactor *
+                frontierPressureFactor;
 
-            return Math.Min(adjusted, baseHeatFlow * 3.60);
+            return Math.Min(adjusted, baseHeatFlow * 2.85);
         }
     }
+
     private SpreadTopology DetectTopology(ForestGraph graph)
     {
         bool hasRegionClusters = graph.Cells.Any(IsRegionClusterCell);
@@ -705,26 +785,35 @@ public class FireSpreadSimulator : IFireSpreadSimulator
     }
 
     private bool ShouldIgniteDeterministically(
-        ForestCell cell,
-        double probability,
-        double ratio)
+      ForestCell cell,
+      double probability,
+      double ratio)
     {
         if (probability <= 0.0 || ratio <= 0.0)
             return false;
 
         if (ratio >= 1.0)
             return true;
-        if (ratio >= 0.85 && probability >= 0.2)
-            return true;
 
         if (probability >= 0.995)
+            return true;
+
+        if (ratio >= 0.85 && probability >= 0.20)
+            return true;
+
+        if (ratio >= 0.70 && probability >= 0.10)
+            return true;
+
+        if (ratio >= 0.58 && probability >= 0.16)
+            return true;
+
+        if (ratio >= 0.48 && probability >= 0.24)
             return true;
 
         double ignitionRoll = GetDeterministicRoll(cell.X, cell.Y);
 
         return probability >= ignitionRoll;
     }
-
     private double GetDeterministicRoll(int x, int y)
     {
         ulong hash = 1469598103934665603UL;
@@ -825,242 +914,242 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
         return await Task.FromResult(graph);
     }
-   private List<ForestCell> RankInitialIgnitionCandidates(
-    ForestGraph graph,
-    List<ForestCell> normalCells,
-    WeatherCondition weather)
-{
-    if (normalCells.Count == 0)
-        return new List<ForestCell>();
+    private List<ForestCell> RankInitialIgnitionCandidates(
+     ForestGraph graph,
+     List<ForestCell> normalCells,
+     WeatherCondition weather)
+    {
+        if (normalCells.Count == 0)
+            return new List<ForestCell>();
 
-    double centerX = graph.Width / 2.0;
-    double centerY = graph.Height / 2.0;
-    double evaluationStepSeconds = graph.StepDurationSeconds > 0
-        ? graph.StepDurationSeconds
-        : 900.0;
+        double centerX = graph.Width / 2.0;
+        double centerY = graph.Height / 2.0;
+        double evaluationStepSeconds = graph.StepDurationSeconds > 0
+            ? graph.StepDurationSeconds
+            : 900.0;
 
-    var topology = DetectTopology(graph);
+        var topology = DetectTopology(graph);
 
-    var clusterMap = graph.Cells
-        .Where(c => !string.IsNullOrWhiteSpace(c.ClusterId))
-        .GroupBy(c => c.ClusterId!)
-        .ToDictionary(g => g.Key, g => g.ToList());
+        var clusterMap = graph.Cells
+            .Where(c => !string.IsNullOrWhiteSpace(c.ClusterId))
+            .GroupBy(c => c.ClusterId!)
+            .ToDictionary(g => g.Key, g => g.ToList());
 
-    return normalCells
-        .Select(cell =>
-        {
-            var neighbors = graph.GetNeighbors(cell)
-                .Where(n => n.State == CellState.Normal)
-                .ToList();
-
-            int degree = neighbors.Count;
-
-            double dx = cell.X - centerX;
-            double dy = cell.Y - centerY;
-            double distanceToCenter = Math.Sqrt(dx * dx + dy * dy);
-            double centerScore = 1.0 / (1.0 + distanceToCenter);
-
-            double vegetationScore = cell.Vegetation switch
+        return normalCells
+            .Select(cell =>
             {
-                VegetationType.Grass => 1.00,
-                VegetationType.Shrub => 0.95,
-                VegetationType.Coniferous => 0.90,
-                VegetationType.Mixed => 0.85,
-                VegetationType.Deciduous => 0.60,
-                VegetationType.Bare => 0.10,
-                VegetationType.Water => 0.00,
-                _ => 0.50
-            };
+                var neighbors = graph.GetNeighbors(cell)
+                    .Where(n => n.State == CellState.Normal)
+                    .ToList();
 
-            double moisturePenalty = cell.Moisture;
+                int degree = neighbors.Count;
 
-            double bestNeighborRatio = 0.0;
-            double averageNeighborRatio = 0.0;
-            double totalNeighborRatio = 0.0;
-            double ignitionReadyNeighbors = 0.0;
-            double nearNeighborBonus = 0.0;
+                double dx = cell.X - centerX;
+                double dy = cell.Y - centerY;
+                double distanceToCenter = Math.Sqrt(dx * dx + dy * dy);
+                double centerScore = 1.0 / (1.0 + distanceToCenter);
 
-            int sameVegetationNeighbors = 0;
-            int closeNeighbors = 0;
-            int veryCloseNeighbors = 0;
-            int longOnlyPenalty = 0;
-
-            var virtualSource = CreateVirtualInitialSource(cell);
-
-            foreach (var neighbor in neighbors)
-            {
-                double heat = _calculator.CalculateHeatFlow(
-                    virtualSource,
-                    neighbor,
-                    weather,
-                    evaluationStepSeconds);
-
-                var edge = graph.GetIncidentEdges(cell)
-                    .FirstOrDefault(e => e.FromCellId == neighbor.Id || e.ToCellId == neighbor.Id);
-
-                if (edge != null)
+                double vegetationScore = cell.Vegetation switch
                 {
-                    heat = ApplyEdgeAwareTransferAdjustment(graph, virtualSource, neighbor, edge, heat);
+                    VegetationType.Grass => 1.00,
+                    VegetationType.Shrub => 0.95,
+                    VegetationType.Coniferous => 0.90,
+                    VegetationType.Mixed => 0.85,
+                    VegetationType.Deciduous => 0.60,
+                    VegetationType.Bare => 0.10,
+                    VegetationType.Water => 0.00,
+                    _ => 0.50
+                };
 
-                    if (edge.Distance <= 2.20)
-                        closeNeighbors++;
+                double moisturePenalty = cell.Moisture;
 
-                    if (edge.Distance <= 1.50)
-                        veryCloseNeighbors++;
+                double bestNeighborRatio = 0.0;
+                double averageNeighborRatio = 0.0;
+                double totalNeighborRatio = 0.0;
+                double ignitionReadyNeighbors = 0.0;
+                double nearNeighborBonus = 0.0;
 
-                    if (edge.Distance > 3.20)
-                        longOnlyPenalty++;
+                int sameVegetationNeighbors = 0;
+                int closeNeighbors = 0;
+                int veryCloseNeighbors = 0;
+                int longOnlyPenalty = 0;
+
+                var virtualSource = CreateVirtualInitialSource(cell);
+
+                foreach (var neighbor in neighbors)
+                {
+                    double heat = _calculator.CalculateHeatFlow(
+                        virtualSource,
+                        neighbor,
+                        weather,
+                        evaluationStepSeconds);
+
+                    var edge = graph.GetIncidentEdges(cell)
+                        .FirstOrDefault(e => e.FromCellId == neighbor.Id || e.ToCellId == neighbor.Id);
+
+                    if (edge != null)
+                    {
+                        heat = ApplyEdgeAwareTransferAdjustment(graph, virtualSource, neighbor, edge, heat);
+
+                        if (edge.Distance <= 2.20)
+                            closeNeighbors++;
+
+                        if (edge.Distance <= 1.50)
+                            veryCloseNeighbors++;
+
+                        if (edge.Distance > 3.20)
+                            longOnlyPenalty++;
+                    }
+
+                    if (neighbor.Vegetation == cell.Vegetation)
+                        sameVegetationNeighbors++;
+
+                    double threshold = _calculator.CalculateIgnitionThreshold(neighbor, weather);
+                    double ratio = threshold > 0.0 ? heat / threshold : 0.0;
+
+                    totalNeighborRatio += ratio;
+                    if (ratio > bestNeighborRatio)
+                        bestNeighborRatio = ratio;
+
+                    if (ratio >= 0.85)
+                        ignitionReadyNeighbors += 1.0;
+                    else if (ratio >= 0.60)
+                        ignitionReadyNeighbors += 0.5;
+
+                    double distance = CalculateDistance(cell.X, cell.Y, neighbor.X, neighbor.Y);
+                    nearNeighborBonus += 1.0 / Math.Max(1.0, distance);
                 }
 
-                if (neighbor.Vegetation == cell.Vegetation)
-                    sameVegetationNeighbors++;
+                if (neighbors.Count > 0)
+                    averageNeighborRatio = totalNeighborRatio / neighbors.Count;
 
-                double threshold = _calculator.CalculateIgnitionThreshold(neighbor, weather);
-                double ratio = threshold > 0.0 ? heat / threshold : 0.0;
+                double secondRingReach = neighbors
+                    .SelectMany(n => graph.GetNeighbors(n))
+                    .Where(n => n.State == CellState.Normal && n.Id != cell.Id)
+                    .Select(n => n.Id)
+                    .Distinct()
+                    .Count();
 
-                totalNeighborRatio += ratio;
-                if (ratio > bestNeighborRatio)
-                    bestNeighborRatio = ratio;
+                double regionClusterInteriorBonus = 0.0;
+                double regionClusterBoundaryPenalty = 0.0;
+                double regionClusterBridgeCorridorBonus = 0.0;
+                double clusteredInteriorBonus = 0.0;
 
-                if (ratio >= 0.85)
-                    ignitionReadyNeighbors += 1.0;
-                else if (ratio >= 0.60)
-                    ignitionReadyNeighbors += 0.5;
-
-                double distance = CalculateDistance(cell.X, cell.Y, neighbor.X, neighbor.Y);
-                nearNeighborBonus += 1.0 / Math.Max(1.0, distance);
-            }
-
-            if (neighbors.Count > 0)
-                averageNeighborRatio = totalNeighborRatio / neighbors.Count;
-
-            double secondRingReach = neighbors
-                .SelectMany(n => graph.GetNeighbors(n))
-                .Where(n => n.State == CellState.Normal && n.Id != cell.Id)
-                .Select(n => n.Id)
-                .Distinct()
-                .Count();
-
-            double regionClusterInteriorBonus = 0.0;
-            double regionClusterBoundaryPenalty = 0.0;
-            double regionClusterBridgeCorridorBonus = 0.0;
-            double clusteredInteriorBonus = 0.0;
-
-            if (topology == SpreadTopology.ClusteredArea)
-            {
-                clusteredInteriorBonus =
-                    closeNeighbors * 9.0 +
-                    veryCloseNeighbors * 8.0 +
-                    sameVegetationNeighbors * 4.0 -
-                    longOnlyPenalty * 3.5;
-            }
-
-            if (!string.IsNullOrWhiteSpace(cell.ClusterId) &&
-                clusterMap.TryGetValue(cell.ClusterId!, out var clusterCells))
-            {
-                int interClusterNeighborCount = CountInterClusterNeighbors(graph, cell);
-                int sameClusterNeighborCount = neighbors.Count(n => n.ClusterId == cell.ClusterId);
-
-                double clusterCenterX = clusterCells.Average(c => c.X);
-                double clusterCenterY = clusterCells.Average(c => c.Y);
-
-                double distanceToClusterCenter = CalculateDistance(
-                    cell.X,
-                    cell.Y,
-                    clusterCenterX,
-                    clusterCenterY);
-
-                double clusterRadius = Math.Sqrt(clusterCells.Count) * 0.85;
-                double normalizedClusterDistance = clusterRadius > 0.0
-                    ? distanceToClusterCenter / clusterRadius
-                    : 0.0;
-
-                normalizedClusterDistance = Math.Clamp(normalizedClusterDistance, 0.0, 2.0);
-
-                regionClusterInteriorBonus = (1.05 - normalizedClusterDistance) * 4.0;
-
-                regionClusterBoundaryPenalty =
-                    interClusterNeighborCount * 14.0 +
-                    Math.Max(0, 2 - sameClusterNeighborCount) * 6.0;
-
-                if (topology == SpreadTopology.RegionClusterAreas)
+                if (topology == SpreadTopology.ClusteredArea)
                 {
-                    int bridgeHopDistance = FindNearestBridgeHopDistance(graph, cell);
-                    int clusterSize = clusterCells.Count;
+                    clusteredInteriorBonus =
+                        closeNeighbors * 9.0 +
+                        veryCloseNeighbors * 8.0 +
+                        sameVegetationNeighbors * 4.0 -
+                        longOnlyPenalty * 3.5;
+                }
 
-                    double bridgeHopBonus = bridgeHopDistance switch
+                if (!string.IsNullOrWhiteSpace(cell.ClusterId) &&
+                    clusterMap.TryGetValue(cell.ClusterId!, out var clusterCells))
+                {
+                    int interClusterNeighborCount = CountInterClusterNeighbors(graph, cell);
+                    int sameClusterNeighborCount = neighbors.Count(n => n.ClusterId == cell.ClusterId);
+
+                    double clusterCenterX = clusterCells.Average(c => c.X);
+                    double clusterCenterY = clusterCells.Average(c => c.Y);
+
+                    double distanceToClusterCenter = CalculateDistance(
+                        cell.X,
+                        cell.Y,
+                        clusterCenterX,
+                        clusterCenterY);
+
+                    double clusterRadius = Math.Sqrt(clusterCells.Count) * 0.85;
+                    double normalizedClusterDistance = clusterRadius > 0.0
+                        ? distanceToClusterCenter / clusterRadius
+                        : 0.0;
+
+                    normalizedClusterDistance = Math.Clamp(normalizedClusterDistance, 0.0, 2.0);
+
+                    regionClusterInteriorBonus = (1.05 - normalizedClusterDistance) * 4.0;
+
+                    regionClusterBoundaryPenalty =
+                        interClusterNeighborCount * 14.0 +
+                        Math.Max(0, 2 - sameClusterNeighborCount) * 6.0;
+
+                    if (topology == SpreadTopology.RegionClusterAreas)
                     {
-                        int.MaxValue => -18.0,
-                        0 => -28.0,
-                        1 => 10.0,
-                        2 => 34.0,
-                        3 => 30.0,
-                        4 => 18.0,
-                        5 => 8.0,
-                        6 => 2.0,
-                        _ => -8.0
-                    };
+                        int bridgeHopDistance = FindNearestBridgeHopDistance(graph, cell);
+                        int clusterSize = clusterCells.Count;
 
-                    double sameClusterSupportBonus =
-                        sameClusterNeighborCount * 2.5 +
-                        closeNeighbors * 2.0 +
-                        veryCloseNeighbors * 2.0;
-
-                    double deepInteriorPenalty =
-                        bridgeHopDistance >= 7 && bridgeHopDistance != int.MaxValue
-                            ? (bridgeHopDistance - 6) * 4.0
-                            : 0.0;
-
-                    double oversizedClusterPenalty =
-                        clusterSize switch
+                        double bridgeHopBonus = bridgeHopDistance switch
                         {
-                            >= 55 => 10.0,
-                            >= 45 => 6.0,
-                            >= 35 => 3.0,
-                            _ => 0.0
+                            int.MaxValue => -18.0,
+                            0 => -28.0,
+                            1 => 10.0,
+                            2 => 34.0,
+                            3 => 30.0,
+                            4 => 18.0,
+                            5 => 8.0,
+                            6 => 2.0,
+                            _ => -8.0
                         };
 
-                    regionClusterBridgeCorridorBonus =
-                        bridgeHopBonus +
-                        sameClusterSupportBonus -
-                        deepInteriorPenalty -
-                        oversizedClusterPenalty;
+                        double sameClusterSupportBonus =
+                            sameClusterNeighborCount * 2.5 +
+                            closeNeighbors * 2.0 +
+                            veryCloseNeighbors * 2.0;
 
-                    if (interClusterNeighborCount > 0)
-                        regionClusterBridgeCorridorBonus -= 18.0;
+                        double deepInteriorPenalty =
+                            bridgeHopDistance >= 7 && bridgeHopDistance != int.MaxValue
+                                ? (bridgeHopDistance - 6) * 4.0
+                                : 0.0;
 
-                    if (sameClusterNeighborCount < 3)
-                        regionClusterBridgeCorridorBonus -= 8.0;
+                        double oversizedClusterPenalty =
+                            clusterSize switch
+                            {
+                                >= 55 => 10.0,
+                                >= 45 => 6.0,
+                                >= 35 => 3.0,
+                                _ => 0.0
+                            };
+
+                        regionClusterBridgeCorridorBonus =
+                            bridgeHopBonus +
+                            sameClusterSupportBonus -
+                            deepInteriorPenalty -
+                            oversizedClusterPenalty;
+
+                        if (interClusterNeighborCount > 0)
+                            regionClusterBridgeCorridorBonus -= 18.0;
+
+                        if (sameClusterNeighborCount < 3)
+                            regionClusterBridgeCorridorBonus -= 8.0;
+                    }
                 }
-            }
 
-            double score =
-                degree * 2.5 +
-                centerScore * 1.5 +
-                vegetationScore * 1.5 -
-                moisturePenalty * 1.5 +
-                nearNeighborBonus * 2.0 +
-                bestNeighborRatio * 30.0 +
-                averageNeighborRatio * 18.0 +
-                ignitionReadyNeighbors * 20.0 +
-                secondRingReach * 3.0 +
-                clusteredInteriorBonus +
-                regionClusterInteriorBonus +
-                regionClusterBridgeCorridorBonus -
-                regionClusterBoundaryPenalty;
+                double score =
+                    degree * 2.5 +
+                    centerScore * 1.5 +
+                    vegetationScore * 1.5 -
+                    moisturePenalty * 1.5 +
+                    nearNeighborBonus * 2.0 +
+                    bestNeighborRatio * 30.0 +
+                    averageNeighborRatio * 18.0 +
+                    ignitionReadyNeighbors * 20.0 +
+                    secondRingReach * 3.0 +
+                    clusteredInteriorBonus +
+                    regionClusterInteriorBonus +
+                    regionClusterBridgeCorridorBonus -
+                    regionClusterBoundaryPenalty;
 
-            return new
-            {
-                Cell = cell,
-                Score = score,
-                TieBreaker = GetDeterministicSelectionOrder(cell.X, cell.Y)
-            };
-        })
-        .OrderByDescending(x => x.Score)
-        .ThenBy(x => x.TieBreaker)
-        .Select(x => x.Cell)
-        .ToList();
-}
+                return new
+                {
+                    Cell = cell,
+                    Score = score,
+                    TieBreaker = GetDeterministicSelectionOrder(cell.X, cell.Y)
+                };
+            })
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.TieBreaker)
+            .Select(x => x.Cell)
+            .ToList();
+    }
     private int FindNearestBridgeHopDistance(ForestGraph graph, ForestCell start)
     {
         if (string.IsNullOrWhiteSpace(start.ClusterId))

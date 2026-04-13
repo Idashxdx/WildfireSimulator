@@ -46,6 +46,14 @@ TESTS=(
     "test_slope_physics.sh"
     "test_water_bare_do_not_ignite.sh"
     "test_wind_direction_bias.sh"
+    "37_region_bridge_required_for_cross_cluster_spread.sh"
+    "38_region_bridge_later_than_local_growth.sh"
+    "39_graph_edge_strength_order.sh"
+    "40_region_bridge_weaker_than_local.sh"
+    "41_region_internal_start_diagnostics.sh"
+    "42_region_internal_growth_rate.sh"
+    "43_region_runtime_step_audit.sh"
+
 )
 
 cd tests

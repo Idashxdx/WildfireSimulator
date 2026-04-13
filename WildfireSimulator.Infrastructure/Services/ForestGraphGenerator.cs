@@ -1290,25 +1290,22 @@ public class ForestGraphGenerator : IForestGraphGenerator
             }
         }
     }
-  private bool TryAddRegionBridgeEdge(ForestGraph graph, ForestCell from, ForestCell to)
-{
-    if (from.Id == to.Id || EdgeExists(graph, from, to))
-        return false;
+    private bool TryAddRegionBridgeEdge(ForestGraph graph, ForestCell from, ForestCell to)
+    {
+        if (from.Id == to.Id || EdgeExists(graph, from, to))
+            return false;
 
-    var geometricDistance = CalculateDistance(from.X, from.Y, to.X, to.Y);
+        var geometricDistance = CalculateDistance(from.X, from.Y, to.X, to.Y);
 
-    var effectiveDistance = Math.Clamp(geometricDistance * 0.78, 1.0, 1.45);
+        var effectiveDistance = Math.Max(geometricDistance * 1.08, 1.80);
 
-    var slope = CalculateSlope(from.Elevation, to.Elevation, geometricDistance);
+        var slope = CalculateSlope(from.Elevation, to.Elevation, geometricDistance);
 
-    var edge = new ForestEdge(from, to, effectiveDistance, slope);
+        var edge = new ForestEdge(from, to, effectiveDistance, slope);
 
-    edge.ApplyBridgeSpreadBonus(1.55);
-
-    graph.Edges.Add(edge);
-    return true;
-}
-
+        graph.Edges.Add(edge);
+        return true;
+    }
 
     private List<BoundaryBridgeCandidate> BuildBoundaryBridgeCandidates(
       ForestGraph graph,
