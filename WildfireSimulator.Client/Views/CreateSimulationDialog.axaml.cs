@@ -31,6 +31,9 @@ public partial class CreateSimulationDialog : Window
     public MapCreationMode SelectedMapCreationMode { get; private set; } = MapCreationMode.Random;
     public MapScenarioType? SelectedScenarioType { get; private set; }
     public double MapNoiseStrength { get; private set; } = 0.08;
+    public double MapDrynessFactor { get; private set; } = 1.0;
+    public double ReliefStrengthFactor { get; private set; } = 1.0;
+    public double FuelDensityFactor { get; private set; } = 1.0;
     public List<MapRegionObjectDto> MapRegionObjects { get; private set; } = new();
 
     public List<(int VegetationType, double Probability)> VegetationDistributions { get; private set; } = new();
@@ -69,7 +72,9 @@ public partial class CreateSimulationDialog : Window
     private ComboBox? _mapCreationModeBox;
     private ComboBox? _scenarioTypeBox;
     private TextBox? _mapNoiseBox;
-
+    private TextBox? _mapDrynessBox;
+    private TextBox? _reliefStrengthBox;
+    private TextBox? _fuelDensityBox;
     private TextBlock? _mapModeDescriptionTextBlock;
     private TextBlock? _scenarioDescriptionTextBlock;
     private TextBlock? _semiManualDescriptionTextBlock;
@@ -140,6 +145,9 @@ public partial class CreateSimulationDialog : Window
         _mapCreationModeBox = this.FindControl<ComboBox>("MapCreationModeBox");
         _scenarioTypeBox = this.FindControl<ComboBox>("ScenarioTypeBox");
         _mapNoiseBox = this.FindControl<TextBox>("MapNoiseBox");
+        _mapDrynessBox = this.FindControl<TextBox>("MapDrynessBox");
+        _reliefStrengthBox = this.FindControl<TextBox>("ReliefStrengthBox");
+        _fuelDensityBox = this.FindControl<TextBox>("FuelDensityBox");
 
         _mapModeDescriptionTextBlock = this.FindControl<TextBlock>("MapModeDescriptionTextBlock");
         _scenarioDescriptionTextBlock = this.FindControl<TextBlock>("ScenarioDescriptionTextBlock");
@@ -297,6 +305,15 @@ public partial class CreateSimulationDialog : Window
 
         if (_mapNoiseBox != null)
             _mapNoiseBox.Text = "0.08";
+
+        if (_mapDrynessBox != null)
+            _mapDrynessBox.Text = "1.0";
+
+        if (_reliefStrengthBox != null)
+            _reliefStrengthBox.Text = "1.0";
+
+        if (_fuelDensityBox != null)
+            _fuelDensityBox.Text = "1.0";
 
         if (_coniferousBox != null) _coniferousBox.Text = "30";
         if (_deciduousBox != null) _deciduousBox.Text = "20";
@@ -458,6 +475,9 @@ public partial class CreateSimulationDialog : Window
 
         var width = ParseInt(_widthBox?.Text, 20);
         var height = ParseInt(_heightBox?.Text, 20);
+        var dryness = ParseDouble(_mapDrynessBox?.Text, 1.0);
+        var relief = ParseDouble(_reliefStrengthBox?.Text, 1.0);
+        var fuel = ParseDouble(_fuelDensityBox?.Text, 1.0);
 
         if (_page == AppPage.Grid)
         {
@@ -466,11 +486,11 @@ public partial class CreateSimulationDialog : Window
             _structureDetailTextBlock.Text = SelectedMapCreationMode switch
             {
                 MapCreationMode.Random =>
-                    "Карта будет сгенерирована автоматически на основе распределений и диапазонов параметров.",
+                    $"Автогенерация по диапазонам параметров. Сухость: {dryness:F2}, рельеф: {relief:F2}, горючий покров: {fuel:F2}.",
                 MapCreationMode.Scenario =>
-                    "Карта будет построена по выбранному сценарию, который задаёт структуру, профиль влажности и рельеф.",
+                    $"Сценарная карта с учётом выбранного шаблона. Сухость: {dryness:F2}, рельеф: {relief:F2}, горючий покров: {fuel:F2}.",
                 MapCreationMode.SemiManual =>
-                    "Карта будет собрана из крупных объектов и областей, а вторичные параметры будут рассчитаны автоматически.",
+                    $"Карта собирается из областей и автоматически дополняется фоном. Сухость: {dryness:F2}, рельеф: {relief:F2}, горючий покров: {fuel:F2}.",
                 _ =>
                     "Параметры автоматически учитываются при построении модели."
             };
@@ -553,6 +573,9 @@ public partial class CreateSimulationDialog : Window
         };
 
         MapNoiseStrength = ParseDouble(_mapNoiseBox?.Text, 0.08);
+        MapDrynessFactor = ParseDouble(_mapDrynessBox?.Text, 1.0);
+        ReliefStrengthFactor = ParseDouble(_reliefStrengthBox?.Text, 1.0);
+        FuelDensityFactor = ParseDouble(_fuelDensityBox?.Text, 1.0);
 
         var randomSeedText = (_randomSeedBox?.Text ?? string.Empty).Trim();
         RandomSeed = int.TryParse(randomSeedText, out var seed) ? seed : null;
@@ -617,6 +640,24 @@ public partial class CreateSimulationDialog : Window
             return false;
         }
 
+        if (MapDrynessFactor < 0.5 || MapDrynessFactor > 1.5)
+        {
+            error = "Общая сухость карты должна быть в диапазоне от 0.5 до 1.5.";
+            return false;
+        }
+
+        if (ReliefStrengthFactor < 0.5 || ReliefStrengthFactor > 1.5)
+        {
+            error = "Сила рельефа должна быть в диапазоне от 0.5 до 1.5.";
+            return false;
+        }
+
+        if (FuelDensityFactor < 0.5 || FuelDensityFactor > 1.5)
+        {
+            error = "Плотность горючего покрова должна быть в диапазоне от 0.5 до 1.5.";
+            return false;
+        }
+
         SelectedMapCreationMode = _mapCreationModeBox?.SelectedIndex switch
         {
             1 => MapCreationMode.Scenario,
@@ -643,6 +684,7 @@ public partial class CreateSimulationDialog : Window
         }
 
         VegetationDistributions = ReadVegetationDistributions();
+
         var totalProbability = 0.0;
         foreach (var item in VegetationDistributions)
             totalProbability += item.Probability;

@@ -182,21 +182,88 @@
                             </Border>
                         </StackPanel>
 
-                        <StackPanel>
-                            <TextBlock Text="Сила локальной неоднородности"
-                                Foreground="#6E6A78"
-                                Margin="0,0,0,6" />
-                            <TextBox x:Name="MapNoiseBox"
-                                Text="0.08"
-                                Background="#FAF8F2"
-                                Foreground="#2F2A3A" />
-                            <TextBlock
-                                Text="Обычно от 0.00 до 0.20. Чем больше значение, тем сильнее локальный шум."
-                                Foreground="#9A96A3"
-                                FontSize="11"
-                                Margin="0,4,0,0"
-                                TextWrapping="Wrap" />
+                        <StackPanel Spacing="10">
+                            <StackPanel>
+                                <TextBlock Text="Сила локальной неоднородности"
+                                    Foreground="#6E6A78"
+                                    Margin="0,0,0,6" />
+                                <TextBox x:Name="MapNoiseBox"
+                                    Text="0.08"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A" />
+                                <TextBlock
+                                    Text="Обычно от 0.00 до 0.20. Чем больше значение, тем сильнее локальный шум."
+                                    Foreground="#9A96A3"
+                                    FontSize="11"
+                                    Margin="0,4,0,0"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <Border Background="#F8FCF5"
+                                BorderBrush="#D7E8C8"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="10">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Макропараметры карты"
+                                        Foreground="#2F2A3A"
+                                        FontWeight="Bold" />
+
+                                    <Grid ColumnDefinitions="*,*"
+                                        ColumnSpacing="12">
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="Общая сухость карты"
+                                                Foreground="#6E6A78"
+                                                Margin="0,0,0,6" />
+                                            <TextBox x:Name="MapDrynessBox"
+                                                Text="1.0"
+                                                Background="#FAF8F2"
+                                                Foreground="#2F2A3A" />
+                                            <TextBlock
+                                                Text="0.5–1.5. Больше — суше карта и быстрее распространение."
+                                                Foreground="#9A96A3"
+                                                FontSize="11"
+                                                Margin="0,4,0,0"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Сила рельефа"
+                                                Foreground="#6E6A78"
+                                                Margin="0,0,0,6" />
+                                            <TextBox x:Name="ReliefStrengthBox"
+                                                Text="1.0"
+                                                Background="#FAF8F2"
+                                                Foreground="#2F2A3A" />
+                                            <TextBlock
+                                                Text="0.5–1.5. Больше — сильнее перепады высот."
+                                                Foreground="#9A96A3"
+                                                FontSize="11"
+                                                Margin="0,4,0,0"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <StackPanel>
+                                        <TextBlock Text="Плотность горючего покрова"
+                                            Foreground="#6E6A78"
+                                            Margin="0,0,0,6" />
+                                        <TextBox x:Name="FuelDensityBox"
+                                            Text="1.0"
+                                            Background="#FAF8F2"
+                                            Foreground="#2F2A3A" />
+                                        <TextBlock
+                                            Text="0.5–1.5. Больше — чаще тяжёлые типы растительности."
+                                            Foreground="#9A96A3"
+                                            FontSize="11"
+                                            Margin="0,4,0,0"
+                                            TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
+
+
                     </StackPanel>
                 </Border>
 

@@ -1379,7 +1379,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         SetTransientStatus("Создание симуляции...", false);
 
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {
             WindInfo = $"{dialog.WindSpeed} м/с, {GetWindDirectionName(dialog.WindDirection)}";
             TemperatureInfo = $"{dialog.Temperature} °C";
@@ -1391,6 +1391,7 @@ public partial class MainWindowViewModel : ObservableObject
         });
 
         var graphType = GetCreateGraphType();
+
         var graphTypeText = graphType switch
         {
             GraphType.Grid => "Сетка",
@@ -1422,13 +1423,18 @@ public partial class MainWindowViewModel : ObservableObject
         var description =
             $"{graphTypeText} {dialog.GridWidth}x{dialog.GridHeight} | Режим карты: {mapModeText}" +
             (string.IsNullOrWhiteSpace(scenarioText) ? string.Empty : $" | Сценарий: {scenarioText}") +
+            $" | Сухость: {dialog.MapDrynessFactor:F2}" +
+            $" | Рельеф: {dialog.ReliefStrengthFactor:F2}" +
+            $" | Горючий покров: {dialog.FuelDensityFactor:F2}" +
             $" | Ветер: {dialog.WindSpeed} м/с, {GetWindDirectionName(dialog.WindDirection)}" +
             $" | Осадки: {dialog.Precipitation} мм/ч" +
             (dialog.RandomSeed.HasValue ? $" | Seed: {dialog.RandomSeed.Value}" : string.Empty);
 
         var dto = new CreateSimulationDto
         {
-            Name = dialog.SimulationName,
+            Name = string.IsNullOrWhiteSpace(dialog.SimulationName)
+                ? $"Симуляция {DateTime.Now:dd.MM HH:mm}"
+                : dialog.SimulationName.Trim(),
             Description = description,
             GridWidth = dialog.GridWidth,
             GridHeight = dialog.GridHeight,
@@ -1441,19 +1447,20 @@ public partial class MainWindowViewModel : ObservableObject
             StepDurationSeconds = dialog.StepDurationSeconds,
             RandomSeed = dialog.RandomSeed,
             Precipitation = dialog.Precipitation,
-
             MapCreationMode = dialog.SelectedMapCreationMode,
             ScenarioType = dialog.SelectedScenarioType,
             MapNoiseStrength = dialog.MapNoiseStrength,
-            MapRegionObjects = dialog.MapRegionObjects,
-
-            VegetationDistributions = dialog.VegetationDistributions
+            MapDrynessFactor = dialog.MapDrynessFactor,
+            ReliefStrengthFactor = dialog.ReliefStrengthFactor,
+            FuelDensityFactor = dialog.FuelDensityFactor,
+            MapRegionObjects = dialog.MapRegionObjects?.ToList() ?? new List<MapRegionObjectDto>(),
+            VegetationDistributions = dialog.VegetationDistributions?
                 .Select(v => new VegetationDistributionDto
                 {
                     VegetationType = v.VegetationType,
                     Probability = v.Probability
                 })
-                .ToList()
+                .ToList() ?? new List<VegetationDistributionDto>()
         };
 
         var simulationId = await _apiService.CreateSimulationAsync(
@@ -1463,15 +1470,30 @@ public partial class MainWindowViewModel : ObservableObject
             dialog.WindSpeed,
             dialog.WindDirection);
 
-        if (simulationId.HasValue)
+        if (!simulationId.HasValue)
         {
-            await LoadSimulationsAsync();
-            SetTransientStatus($"Симуляция создана: {dto.Name}", true);
+            SetTransientStatus("Не удалось создать симуляцию", true);
+            return;
+        }
+
+        await LoadSimulationsAsync();
+
+        var createdSimulation = Simulations.FirstOrDefault(s => s.Id == simulationId.Value)
+            ?? GridSimulations.FirstOrDefault(s => s.Id == simulationId.Value)
+            ?? GraphSimulations.FirstOrDefault(s => s.Id == simulationId.Value);
+
+        if (createdSimulation != null)
+        {
+            SelectedSimulation = createdSimulation;
+            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Создана симуляция {createdSimulation.Name}");
+            SetTransientStatus("Симуляция создана", true);
         }
         else
         {
-            SetTransientStatus("Не удалось создать симуляцию", true);
+            SetTransientStatus("Симуляция создана, но не найдена в списке", true);
         }
+
+        RefreshWorkflowStatus();
     }
 
     [RelayCommand]

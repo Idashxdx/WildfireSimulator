@@ -417,6 +417,10 @@ public class SimulationParameters
     public MapScenarioType? ScenarioType { get; set; }
     public double MapNoiseStrength { get; set; }
 
+    public double MapDrynessFactor { get; set; }
+    public double ReliefStrengthFactor { get; set; }
+    public double FuelDensityFactor { get; set; }
+
     [NotMapped]
     public List<MapRegionObject> MapRegionObjects { get; set; } = new();
 
@@ -444,6 +448,10 @@ public class SimulationParameters
         MapCreationMode = MapCreationMode.Random;
         ScenarioType = null;
         MapNoiseStrength = 0.08;
+
+        MapDrynessFactor = 1.0;
+        ReliefStrengthFactor = 1.0;
+        FuelDensityFactor = 1.0;
     }
 }
 

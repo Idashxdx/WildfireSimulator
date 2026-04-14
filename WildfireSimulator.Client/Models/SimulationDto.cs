@@ -152,6 +152,15 @@ public class CreateSimulationDto
     [JsonPropertyName("mapNoiseStrength")]
     public double MapNoiseStrength { get; set; } = 0.08;
 
+    [JsonPropertyName("mapDrynessFactor")]
+    public double MapDrynessFactor { get; set; } = 1.0;
+
+    [JsonPropertyName("reliefStrengthFactor")]
+    public double ReliefStrengthFactor { get; set; } = 1.0;
+
+    [JsonPropertyName("fuelDensityFactor")]
+    public double FuelDensityFactor { get; set; } = 1.0;
+
     [JsonPropertyName("mapRegionObjects")]
     public List<MapRegionObjectDto> MapRegionObjects { get; set; } = new();
 

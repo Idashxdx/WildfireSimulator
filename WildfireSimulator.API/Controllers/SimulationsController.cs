@@ -123,7 +123,10 @@ public class SimulationsController : ControllerBase
                 RandomSeed = request.RandomSeed,
                 MapCreationMode = request.MapCreationMode,
                 ScenarioType = request.ScenarioType,
-                MapNoiseStrength = request.MapNoiseStrength
+                MapNoiseStrength = request.MapNoiseStrength,
+                MapDrynessFactor = request.MapDrynessFactor,
+                ReliefStrengthFactor = request.ReliefStrengthFactor,
+                FuelDensityFactor = request.FuelDensityFactor
             };
 
             if (request.VegetationDistributions != null && request.VegetationDistributions.Any())
@@ -181,12 +184,15 @@ public class SimulationsController : ControllerBase
             await _simulationRepository.AddAsync(simulation, cancellationToken);
 
             _logger.LogInformation(
-                "Создана симуляция {Id} со статусом {Status}. Режим карты: {Mode}, сценарий: {Scenario}, объектов: {ObjectsCount}",
+                "Создана симуляция {Id} со статусом {Status}. Режим карты: {Mode}, сценарий: {Scenario}, объектов: {ObjectsCount}, dry={Dryness:F2}, relief={Relief:F2}, fuel={Fuel:F2}",
                 simulation.Id,
                 simulation.Status,
                 simulation.Parameters.MapCreationMode,
                 simulation.Parameters.ScenarioType,
-                simulation.Parameters.MapRegionObjects.Count);
+                simulation.Parameters.MapRegionObjects.Count,
+                simulation.Parameters.MapDrynessFactor,
+                simulation.Parameters.ReliefStrengthFactor,
+                simulation.Parameters.FuelDensityFactor);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -291,6 +297,10 @@ public class CreateSimulationWithWeatherRequest
     public MapCreationMode MapCreationMode { get; set; } = MapCreationMode.Random;
     public MapScenarioType? ScenarioType { get; set; }
     public double MapNoiseStrength { get; set; } = 0.08;
+
+    public double MapDrynessFactor { get; set; } = 1.0;
+    public double ReliefStrengthFactor { get; set; } = 1.0;
+    public double FuelDensityFactor { get; set; } = 1.0;
 
     public List<MapRegionObjectRequest> MapRegionObjects { get; set; } = new();
     public List<InitialFirePositionDto> InitialFirePositions { get; set; } = new();
