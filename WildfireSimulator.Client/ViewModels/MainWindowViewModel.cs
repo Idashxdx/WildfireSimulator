@@ -40,6 +40,10 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _isStepInProgress;
     private const int AutoStepDelayMs = 700;
 
+    private System.Threading.CancellationTokenSource? _statusMessageCts;
+    private const int StatusMessageLifetimeMs = 7000;
+    private string _persistentStatusText = "Не подключено к API";
+
     [ObservableProperty]
     private bool _hasSavedIgnitionPreview;
 
@@ -53,7 +57,7 @@ public partial class MainWindowViewModel : ObservableObject
     private string _autoSimulationStatusText = "Авто-режим выключен";
 
     [ObservableProperty]
-    private string _greeting = "🌲 Wildfire Simulator";
+    private string _greeting = "Wildfire Simulator";
 
     [ObservableProperty]
     private string _statusText = "Не подключено к API";
@@ -128,7 +132,7 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _isSignalRConnected = false;
 
     [ObservableProperty]
-    private string _signalRStatus = "Отключено";
+    private string _signalRStatus = "Не подключено";
 
     [ObservableProperty]
     private double _movingAverage3;
@@ -140,22 +144,22 @@ public partial class MainWindowViewModel : ObservableObject
     private double _movingAverage10;
 
     [ObservableProperty]
-    private string _trendText = "⚖️ СТАБИЛЬНО";
+    private string _trendText = "—";
 
     [ObservableProperty]
     private ObservableCollection<string> _eventLog = new();
 
     [ObservableProperty]
-    private string _windInfo = "5 м/с, СВ (45°)";
+    private string _windInfo = "—";
 
     [ObservableProperty]
-    private string _temperatureInfo = "25°C";
+    private string _temperatureInfo = "—";
 
     [ObservableProperty]
-    private string _humidityInfo = "40%";
+    private string _humidityInfo = "—";
 
     [ObservableProperty]
-    private string _vegetationStats = "Загрузка...";
+    private string _vegetationStats = "—";
 
     [ObservableProperty]
     private bool _canResetSimulation;
@@ -167,7 +171,7 @@ public partial class MainWindowViewModel : ObservableObject
     private double _forecastDelta;
 
     [ObservableProperty]
-    private string _forecastMethod = "Нет прогноза";
+    private string _forecastMethod = "—";
 
     [ObservableProperty]
     private double _lastForecastAbsoluteError;
@@ -194,7 +198,10 @@ public partial class MainWindowViewModel : ObservableObject
     private ObservableCollection<SimulationGraphNodeDto> _selectedIgnitionNodes = new();
 
     [ObservableProperty]
-    private string _precipitationInfo = "0 мм/ч";
+    private string _precipitationInfo = "—";
+
+    [ObservableProperty]
+    private string _workflowStatusText = "Выберите симуляцию";
 
     public bool IsRandomIgnitionMode => SelectedIgnitionMode == IgnitionMode.Random;
     public bool IsManualIgnitionMode => SelectedIgnitionMode == IgnitionMode.Manual;
@@ -217,6 +224,7 @@ public partial class MainWindowViewModel : ObservableObject
         SelectedSimulation != null &&
         SelectedSimulationStatus == 0 &&
         !IsSimulationRunning;
+
     public string IgnitionModeText => SelectedIgnitionMode switch
     {
         IgnitionMode.Random => "Случайные или сохранённые очаги",
@@ -273,13 +281,13 @@ public partial class MainWindowViewModel : ObservableObject
         };
 
     public string SelectedGraphNodeMoistureText =>
-        SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.Moisture:P0}";
+        SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.Moisture:F2}";
 
     public string SelectedGraphNodeElevationText =>
         SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.Elevation:F0} м";
 
     public string SelectedGraphNodeProbabilityText =>
-        SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.BurnProbability:P0}";
+        SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.BurnProbability:F3}";
 
     public string SelectedGraphNodeGroupText =>
         string.IsNullOrWhiteSpace(SelectedGraphNode?.GroupKey) ? "—" : SelectedGraphNode!.GroupKey;
@@ -342,11 +350,11 @@ public partial class MainWindowViewModel : ObservableObject
     public string VisualizationMeaningText => SelectedSimulationGraphType switch
     {
         GraphType.Grid =>
-            "Регулярная карта: каждая клетка — участок поверхности (≈ 1 гектар), огонь распространяется по соседям и формирует фронт.",
+            "Регулярная карта: каждая клетка — участок поверхности, огонь распространяется по соседям и формирует фронт.",
         GraphType.ClusteredGraph =>
             "Кластерный граф: один связный граф с локальной кластеризацией вершин без явного разделения на регионы.",
         GraphType.RegionClusterGraph =>
-            "Региональный кластерный граф: территория разделена на регионы, внутри которых связи плотные, а между регионами — редкие мосты.",
+            "Региональный граф: территория разделена на регионы, внутри которых связи плотные, а между регионами — редкие мосты.",
         _ =>
             "Модель не выбрана."
     };
@@ -388,14 +396,14 @@ public partial class MainWindowViewModel : ObservableObject
     {
         GraphType.Grid => "Сетка",
         GraphType.ClusteredGraph => "Кластерный граф",
-        GraphType.RegionClusterGraph => "Региональный кластерный граф",
+        GraphType.RegionClusterGraph => "Региональный граф",
         _ => "Неизвестно"
     };
 
     public string SelectedGraphCreationModeText => SelectedGraphCreationMode switch
     {
         GraphCreationMode.Clustered => "Кластерный граф",
-        GraphCreationMode.RegionCluster => "Региональный кластерный граф",
+        GraphCreationMode.RegionCluster => "Региональный граф",
         _ => "Кластерный граф"
     };
 
@@ -423,8 +431,10 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool CanStopAutoSimulation =>
         IsAutoSimulationRunning;
+
     public bool CanManageSimulationActions =>
         !IsAutoSimulationRunning && !_isStepInProgress;
+
     public bool CanStartSelectedSimulation
     {
         get
@@ -476,6 +486,8 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
         OnPropertyChanged(nameof(CanEditIgnitionSetup));
         OnPropertyChanged(nameof(ShowIgnitionControls));
+
+        RefreshWorkflowStatus();
     }
 
     partial void OnApiUrlChanged(string value)
@@ -503,6 +515,8 @@ public partial class MainWindowViewModel : ObservableObject
         SimulationInfoText = value == AppPage.Grid
             ? "Выберите симуляцию типа «Сетка»"
             : "Выберите графовую симуляцию";
+
+        RefreshWorkflowStatus();
     }
 
     partial void OnSelectedGraphCreationModeChanged(GraphCreationMode value)
@@ -586,6 +600,23 @@ public partial class MainWindowViewModel : ObservableObject
             GraphNodes.Clear();
             GraphEdges.Clear();
 
+            WindInfo = "—";
+            TemperatureInfo = "—";
+            HumidityInfo = "—";
+            VegetationStats = "—";
+            PrecipitationInfo = "—";
+            MovingAverage3 = 0;
+            MovingAverage5 = 0;
+            MovingAverage10 = 0;
+            TrendText = "—";
+            ForecastNextArea = 0;
+            ForecastDelta = 0;
+            ForecastMethod = "—";
+            LastForecastAbsoluteError = 0;
+            MeanAbsoluteError = 0;
+            ForecastErrorCount = 0;
+            SignalRStatus = IsSignalRConnected ? "Подключено" : "Не подключено";
+
             CanResetSimulation = false;
             SimulationInfoText = CurrentPage == AppPage.Grid
                 ? "Выберите симуляцию типа «Сетка»"
@@ -608,8 +639,121 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
             OnPropertyChanged(nameof(CanEditIgnitionSetup));
             OnPropertyChanged(nameof(ShowIgnitionControls));
+
+            RefreshWorkflowStatus();
         }
     }
+
+    private void SetPersistentStatus(string message)
+    {
+        _persistentStatusText = message;
+        SetTransientStatus(message, false);
+    }
+
+    private void SetTransientStatus(string message, bool autoClear = true)
+    {
+        StatusText = message;
+
+        try
+        {
+            _statusMessageCts?.Cancel();
+        }
+        catch
+        {
+        }
+
+        _statusMessageCts?.Dispose();
+        _statusMessageCts = null;
+
+        if (!autoClear)
+            return;
+
+        _statusMessageCts = new System.Threading.CancellationTokenSource();
+        var token = _statusMessageCts.Token;
+
+        Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(StatusMessageLifetimeMs, token);
+
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (!token.IsCancellationRequested && StatusText == message)
+                        StatusText = string.Empty;
+                });
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }, token);
+    }
+
+    private void RefreshWorkflowStatus()
+    {
+        if (SelectedSimulation == null)
+        {
+            WorkflowStatusText = "Выберите симуляцию";
+            return;
+        }
+
+        if (IsAutoSimulationRunning && IsAutoSimulationPaused)
+        {
+            WorkflowStatusText = "Авто-режим: пауза";
+            return;
+        }
+
+        if (IsAutoSimulationRunning)
+        {
+            WorkflowStatusText = "Авто-режим: моделирование идёт";
+            return;
+        }
+
+        if (IsSimulationRunning && SelectedSimulationStatus == 1)
+        {
+            WorkflowStatusText = "Симуляция идёт";
+            return;
+        }
+
+        if (SelectedSimulationStatus == 2)
+        {
+            WorkflowStatusText = "Симуляция завершена";
+            return;
+        }
+
+        if (SelectedSimulationStatus == 3)
+        {
+            WorkflowStatusText = "Симуляция отменена";
+            return;
+        }
+
+        if (SelectedSimulationStatus == 0)
+        {
+            if (HasSavedIgnitionPreview)
+            {
+                WorkflowStatusText = "Показаны сохранённые стартовые очаги";
+                return;
+            }
+
+            if (IsManualIgnitionMode)
+            {
+                var selectedCount = SelectedSimulationGraphType == GraphType.Grid
+                    ? SelectedIgnitionCells.Count
+                    : SelectedIgnitionNodes.Count;
+
+                WorkflowStatusText = selectedCount > 0
+                    ? "Очаги выбраны, можно запускать"
+                    : "Выберите стартовые очаги";
+                return;
+            }
+
+            WorkflowStatusText = "Готово к запуску";
+            return;
+        }
+
+        WorkflowStatusText = "Состояние обновляется";
+    }
+
     private void StopAutoSimulationInternal(string? message = null)
     {
         try
@@ -641,8 +785,11 @@ public partial class MainWindowViewModel : ObservableObject
             CanResetSimulation = (SelectedSimulationStatus == 2 || SelectedSimulationStatus == 3 || SelectedSimulationStatus == 1) && IsConnected;
 
         if (wasRunning && !string.IsNullOrWhiteSpace(message))
-            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⏹ {message}");
+            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] {message}");
+
+        RefreshWorkflowStatus();
     }
+
     private async Task<bool> ExecuteSingleStepAsync(bool startedByAutoMode, System.Threading.CancellationToken cancellationToken = default)
     {
         if (SelectedSimulation == null || !IsConnected)
@@ -666,9 +813,9 @@ public partial class MainWindowViewModel : ObservableObject
 
         try
         {
-            StatusText = startedByAutoMode
+            SetTransientStatus(startedByAutoMode
                 ? "Автоматическое выполнение шага..."
-                : "Выполнение шага...";
+                : "Выполнение шага...", false);
 
             var (success, message, cells, stepResult, isRunning, status) =
                 await _apiService.ExecuteStepAsync(SelectedSimulation.Id);
@@ -699,16 +846,16 @@ public partial class MainWindowViewModel : ObservableObject
                         if (!IsSimulationRunning)
                         {
                             SimulationInfoText = $"Симуляция завершена: клеток {Cells.Count}, горят {burning}, сгорело {burned}";
-                            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🏁 Симуляция завершена");
+                            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Симуляция завершена");
                         }
                         else
                         {
                             SimulationInfoText = $"Шаг {stepResult.Step}: клеток {Cells.Count}, горят {burning}, сгорело {burned}, новых очагов {stepResult.NewlyIgnitedCells}";
 
                             if (startedByAutoMode)
-                                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🤖 Авто-шаг {stepResult.Step}, +{stepResult.NewlyIgnitedCells} новых");
+                                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Авто-шаг {stepResult.Step}, +{stepResult.NewlyIgnitedCells} новых");
                             else
-                                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⚡ Шаг {stepResult.Step} выполнен, +{stepResult.NewlyIgnitedCells} новых");
+                                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Шаг {stepResult.Step} выполнен, +{stepResult.NewlyIgnitedCells} новых");
                         }
                     });
                 }
@@ -719,16 +866,16 @@ public partial class MainWindowViewModel : ObservableObject
                     if (!IsSimulationRunning)
                     {
                         SimulationInfoText = $"Графовая симуляция завершена на шаге {stepResult.Step}";
-                        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🏁 Графовая симуляция завершена");
+                        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Графовая симуляция завершена");
                     }
                     else
                     {
                         SimulationInfoText = $"Шаг {stepResult.Step}: площадь {stepResult.FireArea:F0} га, новых очагов {stepResult.NewlyIgnitedCells}";
 
                         if (startedByAutoMode)
-                            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🤖 Авто-шаг {stepResult.Step}");
+                            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Авто-шаг {stepResult.Step}");
                         else
-                            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⚡ Графовый шаг {stepResult.Step} выполнен");
+                            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Графовый шаг {stepResult.Step} выполнен");
                     }
                 }
 
@@ -742,14 +889,18 @@ public partial class MainWindowViewModel : ObservableObject
                 OnPropertyChanged(nameof(CanResetSimulation));
                 OnPropertyChanged(nameof(CanManageSimulationActions));
 
+                RefreshWorkflowStatus();
+                SetTransientStatus("Шаг выполнен", true);
+
                 return true;
             }
 
-            StatusText = $"❌ {message}";
+            SetTransientStatus($"Ошибка: {message}", true);
 
             if (SelectedSimulation != null)
                 await LoadSimulationStatusAsync(SelectedSimulation.Id);
 
+            RefreshWorkflowStatus();
             return false;
         }
         finally
@@ -762,8 +913,11 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(CanPauseAutoSimulation));
             OnPropertyChanged(nameof(CanResumeAutoSimulation));
             OnPropertyChanged(nameof(CanStopAutoSimulation));
+
+            RefreshWorkflowStatus();
         }
     }
+
     partial void OnSelectedGraphNodeChanged(SimulationGraphNodeDto? value)
     {
         OnPropertyChanged(nameof(HasSelectedGraphNode));
@@ -800,6 +954,8 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (SelectedSimulation != null)
             CanResetSimulation = (SelectedSimulationStatus == 2 || SelectedSimulationStatus == 3 || SelectedSimulationStatus == 1) && value;
+
+        RefreshWorkflowStatus();
     }
 
     partial void OnIsSimulationRunningChanged(bool value)
@@ -814,6 +970,8 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (!value && IsAutoSimulationRunning)
             StopAutoSimulationInternal("Авто-режим остановлен: симуляция завершилась");
+
+        RefreshWorkflowStatus();
     }
 
     partial void OnSelectedSimulationStatusChanged(int value)
@@ -831,7 +989,10 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (value != 1 && IsAutoSimulationRunning)
             StopAutoSimulationInternal("Авто-режим остановлен: симуляция больше не в статусе Running");
+
+        RefreshWorkflowStatus();
     }
+
 
     [RelayCommand]
     private async Task RefreshIgnitionSetupAsync()
@@ -839,15 +1000,15 @@ public partial class MainWindowViewModel : ObservableObject
         if (SelectedSimulation == null || !IsConnected)
             return;
 
-        StatusText = "Обновление стартовых очагов...";
-        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🔁 Очистка сохранённых очагов...");
+        SetTransientStatus("Обновление стартовых очагов...", false);
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Очистка сохранённых очагов...");
 
         var result = await _apiService.RefreshIgnitionSetupAsync(SelectedSimulation.Id);
 
         if (!result.Success)
         {
-            StatusText = $"❌ {result.Message}";
-            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ❌ Ошибка обновления очагов: {result.Message}");
+            SetTransientStatus($"Ошибка: {result.Message}", true);
+            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Ошибка обновления очагов: {result.Message}");
             return;
         }
 
@@ -866,18 +1027,20 @@ public partial class MainWindowViewModel : ObservableObject
         IsPreparedMapLoaded = true;
         IsIgnitionSelectionEnabled = IsManualIgnitionMode && CanEditIgnitionSetup;
 
-        StatusText = "✅ Старые очаги очищены";
+        SetTransientStatus("Сохранённые очаги очищены", true);
         SimulationInfoText = SelectedSimulationGraphType == GraphType.Grid
             ? "Старые очаги удалены. Карта очищена, можно задать новый старт."
             : "Старые очаги удалены. Граф очищен, можно задать новый старт.";
 
-        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ✅ Сохранённые очаги очищены");
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Сохранённые очаги очищены");
 
         OnPropertyChanged(nameof(CanStartSelectedSimulation));
         OnPropertyChanged(nameof(IgnitionSelectionSummary));
         OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
         OnPropertyChanged(nameof(CanEditIgnitionSetup));
         OnPropertyChanged(nameof(ShowIgnitionControls));
+
+        RefreshWorkflowStatus();
     }
 
     [RelayCommand]
@@ -907,20 +1070,20 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task TestConnectionAsync()
     {
-        StatusText = "Проверка подключения...";
+        SetTransientStatus("Проверка подключения...", false);
 
         var success = await _apiService.TestConnectionAsync();
 
         if (success)
         {
-            StatusText = "✅ Подключено к API";
             IsConnected = true;
+            SetTransientStatus("Подключение к API установлено", true);
             await LoadSimulationsAsync();
         }
         else
         {
-            StatusText = "❌ Ошибка подключения";
             IsConnected = false;
+            SetTransientStatus("Ошибка подключения к API", true);
         }
     }
 
@@ -937,8 +1100,9 @@ public partial class MainWindowViewModel : ObservableObject
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 IsSignalRConnected = true;
-                SignalRStatus = "✅ Подключено";
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🔌 SignalR подключен");
+                SignalRStatus = "Подключено";
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Подключены потоковые данные");
+                SetTransientStatus("Потоковые данные подключены", true);
             });
 
             if (SelectedSimulation != null)
@@ -950,8 +1114,8 @@ public partial class MainWindowViewModel : ObservableObject
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 IsSignalRConnected = false;
-                SignalRStatus = "❌ Отключено";
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🔌 SignalR отключен");
+                SignalRStatus = "Не подключено";
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Потоковые данные отключены");
             });
         };
 
@@ -971,9 +1135,9 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 TrendText = data.Trend switch
                 {
-                    "ACCELERATING" => "🔥 УСКОРЯЕТСЯ",
-                    "DECELERATING" => "💨 ЗАМЕДЛЯЕТСЯ",
-                    _ => "⚖️ СТАБИЛЬНО"
+                    "ACCELERATING" => "Ускоряется",
+                    "DECELERATING" => "Замедляется",
+                    _ => "Стабильно"
                 };
             });
         };
@@ -982,7 +1146,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⚠️ АНОМАЛИЯ: {data.Reason}");
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Аномалия: {data.Reason}");
             });
         };
 
@@ -992,7 +1156,7 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 ForecastNextArea = data.ForecastNextArea;
                 ForecastDelta = data.ForecastDelta;
-                ForecastMethod = $"Прогноз на следующий шаг ({data.Method})";
+                ForecastMethod = $"Прогноз на следующий шаг ({GetForecastMethodName(data.Method)})";
                 LastForecastAbsoluteError = data.LastForecastAbsoluteError;
                 MeanAbsoluteError = data.MeanAbsoluteError;
                 ForecastErrorCount = data.ForecastErrorCount;
@@ -1008,7 +1172,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (!IsConnected)
             return;
 
-        StatusText = "Загрузка симуляций...";
+        SetTransientStatus("Загрузка симуляций...", false);
 
         var selectedId = SelectedSimulation?.Id;
         var simulations = await _apiService.GetSimulationsAsync();
@@ -1047,7 +1211,7 @@ public partial class MainWindowViewModel : ObservableObject
                 }
             }
 
-            StatusText = $"✅ Загружено {Simulations.Count} симуляций";
+            SetTransientStatus($"Список симуляций обновлён: {Simulations.Count}", true);
         });
     }
 
@@ -1062,7 +1226,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (mainWindow == null)
         {
-            StatusText = "❌ Не удалось получить главное окно";
+            SetTransientStatus("Не удалось получить главное окно", true);
             return;
         }
 
@@ -1070,14 +1234,14 @@ public partial class MainWindowViewModel : ObservableObject
         if (!result)
             return;
 
-        StatusText = "Создание симуляции...";
+        SetTransientStatus("Создание симуляции...", false);
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             WindInfo = $"{dialog.WindSpeed} м/с, {GetWindDirectionName(dialog.WindDirection)}";
-            TemperatureInfo = $"{dialog.Temperature}°C";
+            TemperatureInfo = $"{dialog.Temperature} °C";
             HumidityInfo = $"{dialog.Humidity}%";
-            PrecipitationInfo = $"{dialog.Precipitation} мм/ч";
+            PrecipitationInfo = $"{dialog.Precipitation:F1} мм/ч";
             GridWidth = dialog.GridWidth;
             GridHeight = dialog.GridHeight;
             InitialFireCells = dialog.InitialFireCells;
@@ -1088,7 +1252,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             GraphType.Grid => "Сетка",
             GraphType.ClusteredGraph => "Кластерный граф",
-            GraphType.RegionClusterGraph => "Региональный кластерный граф",
+            GraphType.RegionClusterGraph => "Региональный граф",
             _ => "Сетка"
         };
 
@@ -1126,9 +1290,9 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (id.HasValue)
         {
-            StatusText = $"✅ Симуляция создана: {dialog.SimulationName}";
+            SetTransientStatus($"Симуляция создана: {dialog.SimulationName}", true);
             SimulationInfoText = $"Создана новая симуляция «{dialog.SimulationName}»";
-            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ✅ Создана симуляция: {dialog.SimulationName}");
+            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Создана симуляция: {dialog.SimulationName}");
             await LoadSimulationsAsync();
 
             var newSim = Simulations.FirstOrDefault(s => s.Id == id.Value);
@@ -1141,17 +1305,20 @@ public partial class MainWindowViewModel : ObservableObject
         }
         else
         {
-            StatusText = "❌ Ошибка создания";
+            SetTransientStatus("Ошибка создания симуляции", true);
         }
+
+        RefreshWorkflowStatus();
     }
+
     [RelayCommand]
     private async Task ResetSimulationAsync()
     {
         if (SelectedSimulation == null || !IsConnected)
             return;
 
-        StatusText = "Перезапуск симуляции...";
-        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🔄 Перезапуск симуляции {SelectedSimulation.Name}...");
+        SetTransientStatus("Перезапуск симуляции...", false);
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Перезапуск симуляции {SelectedSimulation.Name}...");
 
         var (success, message, cells, isRunning, fireArea, currentStep, status) =
             await _apiService.ResetSimulationAsync(SelectedSimulation.Id);
@@ -1187,7 +1354,7 @@ public partial class MainWindowViewModel : ObservableObject
                         ? $"Симуляция сброшена. Показаны сохранённые стартовые очаги: {burning}. Чтобы задать новые, нажмите «Обновить очаги»."
                         : $"Сетка восстановлена: клеток {Cells.Count}, горят {burning}, сгорело {burned}. Можно запускать заново.";
 
-                    EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ✅ Симуляция перезапущена");
+                    EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Симуляция перезапущена");
                 });
             }
             else
@@ -1200,7 +1367,7 @@ public partial class MainWindowViewModel : ObservableObject
                     ? "Графовая симуляция сброшена. Показаны сохранённые стартовые очаги. Чтобы задать новые, нажмите «Обновить очаги»."
                     : "Графовая симуляция восстановлена. Можно запускать заново.";
 
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ✅ Графовая симуляция перезапущена");
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Графовая симуляция перезапущена");
             }
 
             SelectedIgnitionMode = IgnitionMode.Random;
@@ -1216,12 +1383,16 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
             OnPropertyChanged(nameof(CanEditIgnitionSetup));
             OnPropertyChanged(nameof(ShowIgnitionControls));
+
+            SetTransientStatus("Симуляция перезапущена", true);
         }
         else
         {
-            StatusText = $"❌ {message}";
-            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ❌ Ошибка перезапуска: {message}");
+            SetTransientStatus($"Ошибка: {message}", true);
+            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Ошибка перезапуска: {message}");
         }
+
+        RefreshWorkflowStatus();
     }
 
     [RelayCommand]
@@ -1231,6 +1402,7 @@ public partial class MainWindowViewModel : ObservableObject
             return;
 
         SelectedIgnitionMode = IgnitionMode.Random;
+        RefreshWorkflowStatus();
     }
 
     [RelayCommand]
@@ -1248,8 +1420,8 @@ public partial class MainWindowViewModel : ObservableObject
             CanEditIgnitionSetup;
 
         OnPropertyChanged(nameof(CanStartSelectedSimulation));
+        RefreshWorkflowStatus();
     }
-
 
     [RelayCommand]
     private async Task DeleteSimulationAsync()
@@ -1263,9 +1435,9 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (result)
         {
-            StatusText = "✅ Симуляция удалена";
+            SetTransientStatus("Симуляция удалена", true);
             SimulationInfoText = "Симуляция удалена";
-            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 🗑 Удалена симуляция");
+            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Удалена симуляция");
 
             SelectedSimulation = null;
             SelectedGraphNode = null;
@@ -1277,8 +1449,10 @@ public partial class MainWindowViewModel : ObservableObject
         }
         else
         {
-            StatusText = "❌ Ошибка удаления";
+            SetTransientStatus("Ошибка удаления", true);
         }
+
+        RefreshWorkflowStatus();
     }
 
     [RelayCommand]
@@ -1301,12 +1475,12 @@ public partial class MainWindowViewModel : ObservableObject
 
             if (!hasManualSelection)
             {
-                StatusText = "❌ Сначала выберите хотя бы один очаг на визуализации";
+                SetTransientStatus("Сначала выберите хотя бы один очаг на визуализации", true);
                 return;
             }
         }
 
-        StatusText = "Запуск симуляции...";
+        SetTransientStatus("Запуск симуляции...", false);
 
         List<(int X, int Y)>? manualPositions = null;
 
@@ -1349,14 +1523,14 @@ public partial class MainWindowViewModel : ObservableObject
                     var burned = cells.Count(c => c.IsBurned);
 
                     SimulationInfoText = $"Сетка загружена: клеток {Cells.Count}, горят {burning}, сгорело {burned}";
-                    EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ▶ Симуляция запущена");
+                    EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Симуляция запущена");
                 });
             }
             else
             {
                 await LoadSimulationGraphAsync(SelectedSimulation.Id);
                 SimulationInfoText = "Графовая симуляция запущена";
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ▶ Графовая симуляция запущена");
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Графовая симуляция запущена");
             }
 
             OnPropertyChanged(nameof(CanStartSelectedSimulation));
@@ -1367,11 +1541,15 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
             OnPropertyChanged(nameof(CanEditIgnitionSetup));
             OnPropertyChanged(nameof(ShowIgnitionControls));
+
+            SetTransientStatus("Симуляция запущена", true);
         }
         else
         {
-            StatusText = $"❌ {message}";
+            SetTransientStatus($"Ошибка: {message}", true);
         }
+
+        RefreshWorkflowStatus();
     }
 
     [RelayCommand]
@@ -1391,6 +1569,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         await ExecuteSingleStepAsync(startedByAutoMode: false);
     }
+
     [RelayCommand]
     private async Task StartAutoSimulationAsync()
     {
@@ -1412,7 +1591,8 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanResumeAutoSimulation));
         OnPropertyChanged(nameof(CanStopAutoSimulation));
 
-        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ▶ Запущен авто-режим");
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Запущен авто-режим");
+        RefreshWorkflowStatus();
 
         try
         {
@@ -1458,7 +1638,8 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanPauseAutoSimulation));
         OnPropertyChanged(nameof(CanResumeAutoSimulation));
 
-        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⏸ Авто-режим поставлен на паузу");
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Авто-режим поставлен на паузу");
+        RefreshWorkflowStatus();
     }
 
     [RelayCommand]
@@ -1473,7 +1654,8 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanPauseAutoSimulation));
         OnPropertyChanged(nameof(CanResumeAutoSimulation));
 
-        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] ⏵ Авто-режим продолжен");
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Авто-режим продолжен");
+        RefreshWorkflowStatus();
     }
 
     [RelayCommand]
@@ -1483,8 +1665,8 @@ public partial class MainWindowViewModel : ObservableObject
             return;
 
         StopAutoSimulationInternal("Авто-режим остановлен пользователем");
+        RefreshWorkflowStatus();
     }
-
 
     [RelayCommand]
     private async Task RefreshStatusAsync()
@@ -1498,6 +1680,8 @@ public partial class MainWindowViewModel : ObservableObject
             else
                 await LoadSimulationGraphAsync(SelectedSimulation.Id);
         }
+
+        RefreshWorkflowStatus();
     }
 
     private GraphType GetCreateGraphType()
@@ -1528,7 +1712,7 @@ public partial class MainWindowViewModel : ObservableObject
             _subscribedSimulationId = newId;
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] 📡 Подписка на симуляцию {newId}");
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Подписка на симуляцию {newId}");
             });
         }
     }
@@ -1577,6 +1761,36 @@ public partial class MainWindowViewModel : ObservableObject
                 CanResetSimulation = (SelectedSimulationStatus == 2 || SelectedSimulationStatus == 3 || SelectedSimulationStatus == 1) && IsConnected;
             }
         });
+
+        RefreshWorkflowStatus();
+    }
+
+    private string GetVegetationDisplayName(string? vegetation)
+    {
+        return vegetation?.Trim() switch
+        {
+            "Coniferous" => "Хвойный лес",
+            "Deciduous" => "Лиственный лес",
+            "Mixed" => "Смешанный лес",
+            "Grass" => "Трава",
+            "Shrub" => "Кустарник",
+            "Water" => "Вода",
+            "Bare" => "Пустая поверхность",
+            null or "" => "Неизвестно",
+            _ => vegetation
+        };
+    }
+
+    private string GetForecastMethodName(string? method)
+    {
+        return method switch
+        {
+            "linear-regression" => "линейная регрессия",
+            "recent-average-delta" => "среднее изменение",
+            "current-value" => "текущее значение",
+            null or "" => "неизвестный метод",
+            _ => method
+        };
     }
 
     private async Task LoadSimulationCellsAsync(Guid simulationId)
@@ -1607,22 +1821,26 @@ public partial class MainWindowViewModel : ObservableObject
                 burning > 0;
 
             SimulationInfoText = HasSavedIgnitionPreview
-                ? $"Загружено {cells.Count} клеток. Показаны сохранённые стартовые очаги: {burning}. Чтобы задать новые, нажмите «Обновить очаги»."
-                : $"Загружено {cells.Count} клеток. Горят: {burning}. Сгорело: {burned}.";
+                ? $"Загружено клеток: {cells.Count}. Показаны сохранённые стартовые очаги: {burning}. Чтобы задать новые, нажмите «Обновить очаги»."
+                : $"Загружено клеток: {cells.Count}. Горят: {burning}. Сгорело: {burned}.";
 
             var stats = cells
-                .GroupBy(c => c.Vegetation)
+                .GroupBy(c => GetVegetationDisplayName(c.Vegetation))
+                .OrderBy(g => g.Key)
                 .Select(g => $"{g.Key}: {g.Count()}")
                 .ToList();
 
             VegetationStats = stats.Count > 0
                 ? string.Join(", ", stats)
-                : "Нет данных";
+                : "—";
 
             IsPreparedMapLoaded = cells.Count > 0;
             IsIgnitionSelectionEnabled = IsManualIgnitionMode && CanEditIgnitionSetup;
         });
+
+        RefreshWorkflowStatus();
     }
+
     private async Task LoadSimulationGraphAsync(Guid simulationId)
     {
         var graph = await _apiService.GetSimulationGraphAsync(simulationId);
@@ -1638,6 +1856,7 @@ public partial class MainWindowViewModel : ObservableObject
                 IsIgnitionSelectionEnabled = false;
                 HasSavedIgnitionPreview = false;
                 SimulationInfoText = "Не удалось загрузить граф симуляции";
+                VegetationStats = "—";
                 return;
             }
 
@@ -1659,16 +1878,17 @@ public partial class MainWindowViewModel : ObservableObject
 
             SimulationInfoText = HasSavedIgnitionPreview
                 ? $"Граф загружен: узлов {graph.Nodes.Count}, рёбер {graph.Edges.Count}. Показаны сохранённые стартовые очаги: {burning}. Чтобы задать новые, нажмите «Обновить очаги»."
-                : $"Граф загружен: узлов {graph.Nodes.Count}, рёбер {graph.Edges.Count}, горят {burning}, сгорело {burned}";
+                : $"Граф загружен: узлов {graph.Nodes.Count}, рёбер {graph.Edges.Count}. Горят: {burning}. Сгорело: {burned}.";
 
             var stats = graph.Nodes
-                .GroupBy(n => n.Vegetation)
+                .GroupBy(n => GetVegetationDisplayName(n.Vegetation))
+                .OrderBy(g => g.Key)
                 .Select(g => $"{g.Key}: {g.Count()}")
                 .ToList();
 
             VegetationStats = stats.Count > 0
                 ? string.Join(", ", stats)
-                : "Нет данных";
+                : "—";
 
             IsPreparedMapLoaded = graph.Nodes.Count > 0;
             IsIgnitionSelectionEnabled = IsManualIgnitionMode && CanEditIgnitionSetup;
@@ -1683,7 +1903,10 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(SelectedGraphNodeMediumEdgesText));
             OnPropertyChanged(nameof(SelectedGraphNodeWeakEdgesText));
         });
+
+        RefreshWorkflowStatus();
     }
+
     private int GetNeighborCount(Guid nodeId)
     {
         return GraphEdges.Count(e => e.FromCellId == nodeId || e.ToCellId == nodeId);
@@ -1761,7 +1984,10 @@ public partial class MainWindowViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IgnitionSelectionSummary));
         OnPropertyChanged(nameof(CanStartSelectedSimulation));
+
+        RefreshWorkflowStatus();
     }
+
     public void ToggleIgnitionNodeSelection(SimulationGraphNodeDto? node)
     {
         if (node == null)
@@ -1788,7 +2014,10 @@ public partial class MainWindowViewModel : ObservableObject
 
         OnPropertyChanged(nameof(IgnitionSelectionSummary));
         OnPropertyChanged(nameof(CanStartSelectedSimulation));
+
+        RefreshWorkflowStatus();
     }
+
     private Window? GetMainWindow()
     {
         var app = Avalonia.Application.Current;

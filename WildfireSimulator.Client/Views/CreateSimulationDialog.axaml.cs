@@ -23,11 +23,11 @@ public partial class CreateSimulationDialog : Window
     public double Humidity { get; private set; } = 40.0;
     public double WindSpeed { get; private set; } = 5.0;
     public double WindDirection { get; private set; } = 45.0;
-
     public double Precipitation { get; private set; } = 0.0;
     public int? RandomSeed { get; private set; }
 
     public List<(int VegetationType, double Probability)> VegetationDistributions { get; private set; } = new();
+
     private TextBox? _coniferousBox;
     private TextBox? _deciduousBox;
     private TextBox? _mixedBox;
@@ -175,7 +175,7 @@ public partial class CreateSimulationDialog : Window
         }
         else if (_mode == GraphCreationMode.RegionCluster)
         {
-            _nameBox.Text = "Региональный кластерный граф";
+            _nameBox.Text = "Региональный граф";
             _widthBox.Text = "20";
             _heightBox.Text = "20";
             _fireCellsBox.Text = "1";
@@ -214,6 +214,7 @@ public partial class CreateSimulationDialog : Window
         if (_waterBox != null) _waterBox.Text = "0";
         if (_bareBox != null) _bareBox.Text = "0";
     }
+
     private void ApplyModeTexts()
     {
         if (_page == AppPage.Grid)
@@ -242,7 +243,7 @@ public partial class CreateSimulationDialog : Window
         else if (_mode == GraphCreationMode.RegionCluster)
         {
             if (_typeInfoTextBlock != null)
-                _typeInfoTextBlock.Text = "Региональный кластерный граф";
+                _typeInfoTextBlock.Text = "Региональный граф";
 
             if (_typeHintTextBlock != null)
                 _typeHintTextBlock.Text =
@@ -373,9 +374,7 @@ public partial class CreateSimulationDialog : Window
 
         SimulationName = _nameBox?.Text?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(SimulationName))
-        {
             SimulationName = $"Симуляция {DateTime.Now:HH:mm:ss}";
-        }
 
         var width = ParseInt(_widthBox?.Text, "Ширина", errors);
         var height = ParseInt(_heightBox?.Text, "Высота", errors);
@@ -455,19 +454,19 @@ public partial class CreateSimulationDialog : Window
             if (int.TryParse(_randomSeedBox.Text, out var parsedSeed))
                 randomSeed = parsedSeed;
             else
-                errors.Add("Поле «Random seed» должно быть целым числом.");
+                errors.Add("Поле «Зерно генерации» должно быть целым числом.");
         }
 
         var vegetationPercents = new[]
         {
-        ("Хвойный лес", coniferousPercent),
-        ("Лиственный лес", deciduousPercent),
-        ("Смешанный лес", mixedPercent),
-        ("Трава", grassPercent),
-        ("Кустарник", shrubPercent),
-        ("Вода", waterPercent),
-        ("Пустая поверхность", barePercent)
-    };
+            ("Хвойный лес", coniferousPercent),
+            ("Лиственный лес", deciduousPercent),
+            ("Смешанный лес", mixedPercent),
+            ("Трава", grassPercent),
+            ("Кустарник", shrubPercent),
+            ("Вода", waterPercent),
+            ("Пустая поверхность", barePercent)
+        };
 
         foreach (var (name, value) in vegetationPercents)
         {
@@ -519,15 +518,15 @@ public partial class CreateSimulationDialog : Window
         RandomSeed = randomSeed;
 
         VegetationDistributions = new List<(int VegetationType, double Probability)>
-    {
-        ((int)3, coniferousPercent!.Value / 100.0),
-        ((int)2, deciduousPercent!.Value / 100.0),
-        ((int)4, mixedPercent!.Value / 100.0),
-        ((int)0, grassPercent!.Value / 100.0),
-        ((int)1, shrubPercent!.Value / 100.0),
-        ((int)5, waterPercent!.Value / 100.0),
-        ((int)6, barePercent!.Value / 100.0)
-    };
+        {
+            ((int)3, coniferousPercent!.Value / 100.0),
+            ((int)2, deciduousPercent!.Value / 100.0),
+            ((int)4, mixedPercent!.Value / 100.0),
+            ((int)0, grassPercent!.Value / 100.0),
+            ((int)1, shrubPercent!.Value / 100.0),
+            ((int)5, waterPercent!.Value / 100.0),
+            ((int)6, barePercent!.Value / 100.0)
+        };
 
         Close(true);
     }

@@ -10,6 +10,23 @@
     Background="#FAF8F2"
     CanResize="False">
 
+    <Window.Styles>
+        <Style Selector="Button.dialogButton">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="TextBlock.TextAlignment" Value="Center" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style Selector="Button.dialogButton:pointerover">
+            <Setter Property="Opacity" Value="0.88" />
+        </Style>
+    </Window.Styles>
+
     <Grid RowDefinitions="*,Auto" Margin="20">
 
         <ScrollViewer Grid.Row="0">
@@ -321,6 +338,7 @@
                                     Margin="0,4,0,0" />
                             </StackPanel>
                         </Grid>
+
                         <Grid ColumnDefinitions="*,*"
                             ColumnSpacing="12">
                             <StackPanel Grid.Column="0">
@@ -338,7 +356,7 @@
                             </StackPanel>
 
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="Random seed"
+                                <TextBlock Text="Случайное зерно"
                                     Foreground="#6E6A78"
                                     Margin="0,0,0,6" />
                                 <TextBox x:Name="RandomSeedBox"
@@ -347,7 +365,7 @@
                                     Background="#FAF8F2"
                                     Foreground="#2F2A3A" />
                                 <TextBlock
-                                    Text="Необязательно. Одинаковый seed даёт воспроизводимую генерацию."
+                                    Text="Необязательно. Одинаковое значение даёт воспроизводимую генерацию."
                                     Foreground="#9A96A3"
                                     FontSize="11"
                                     Margin="0,4,0,0"
@@ -459,23 +477,23 @@
             CornerRadius="12"
             Padding="12"
             Margin="0,14,0,0">
-            <StackPanel Orientation="Horizontal"
-                HorizontalAlignment="Right"
-                Spacing="10">
-                <Button x:Name="CancelButton"
+            <Grid ColumnDefinitions="*,*"
+                ColumnSpacing="10">
+                <Button Grid.Column="0"
+                    x:Name="CancelButton"
+                    Classes="dialogButton"
                     Content="Отмена"
                     Background="#ECE6FA"
-                    Foreground="#2F2A3A"
-                    Padding="18,10"
-                    FontWeight="SemiBold" />
+                    Foreground="#2F2A3A" />
 
-                <Button x:Name="CreateButton"
+                <Button Grid.Column="1"
+                    x:Name="CreateButton"
+                    Classes="dialogButton"
                     Content="Создать симуляцию"
                     Background="#B7E4A8"
                     Foreground="#2F2A3A"
-                    Padding="18,10"
                     FontWeight="Bold" />
-            </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </Window>

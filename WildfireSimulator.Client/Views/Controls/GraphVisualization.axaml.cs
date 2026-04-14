@@ -5,7 +5,6 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
-using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -21,7 +20,6 @@ public partial class GraphVisualization : UserControl
     private bool _drawScheduled;
 
     private const int PaddingSize = 24;
-    private const int MaxCellSize = 26;
     private const int MinCellSize = 8;
 
     public static readonly StyledProperty<IEnumerable<GraphCellDto>?> CellsProperty =
@@ -73,9 +71,7 @@ public partial class GraphVisualization : UserControl
         this.AttachedToVisualTree += (_, _) => ScheduleDraw();
 
         if (_scrollHost != null)
-        {
             _scrollHost.SizeChanged += (_, _) => ScheduleDraw();
-        }
     }
 
     private void InitializeComponent()
@@ -171,9 +167,7 @@ public partial class GraphVisualization : UserControl
         }
 
         foreach (var cell in cells.OrderBy(c => c.Y).ThenBy(c => c.X))
-        {
             DrawCell(cell, originX, originY, cellSize);
-        }
     }
 
     private int GetCellSize(int gridWidth, int gridHeight)
@@ -320,6 +314,7 @@ public partial class GraphVisualization : UserControl
         Canvas.SetTop(inner, centerY - innerSize / 2.0);
         _graphCanvas.Children.Add(inner);
     }
+
     private void DrawIgnitionSelectionGlow(double x, double y, int cellSize)
     {
         if (_graphCanvas == null)
@@ -340,27 +335,6 @@ public partial class GraphVisualization : UserControl
         Canvas.SetLeft(glow, x + 1);
         Canvas.SetTop(glow, y + 1);
         _graphCanvas.Children.Add(glow);
-    }
-    private double GetCellOpacity(GraphCellDto cell)
-    {
-        if (IsIgnitionSelectionEnabled && !cell.IsIgnitable)
-            return 0.45;
-
-        return 1.0;
-    }
-
-    private double GetStrokeThickness(GraphCellDto cell)
-    {
-        if (cell.IsSelectedIgnition)
-            return 2.5;
-
-        if (cell.IsBurning)
-            return 2.0;
-
-        if (IsIgnitionSelectionEnabled && cell.IsIgnitable)
-            return 1.5;
-
-        return 1.0;
     }
 
     private Color GetCellColor(GraphCellDto cell)
@@ -410,15 +384,35 @@ public partial class GraphVisualization : UserControl
     private string GetCellTooltip(GraphCellDto cell)
     {
         var ignitableText = cell.IsIgnitable ? "Да" : "Нет";
-        var selectedText = cell.IsSelectedIgnition ? "\nВыбран как очаг: Да" : string.Empty;
+        var selectedText = cell.IsSelectedIgnition ? "\nВыбран как стартовый очаг: Да" : string.Empty;
+
+        var vegetationText = cell.Vegetation?.Trim() switch
+        {
+            "Coniferous" => "Хвойный лес",
+            "Deciduous" => "Лиственный лес",
+            "Mixed" => "Смешанный лес",
+            "Grass" => "Трава",
+            "Shrub" => "Кустарник",
+            "Water" => "Вода",
+            "Bare" => "Пустая поверхность",
+            _ => cell.Vegetation
+        };
+
+        var stateText = cell.State?.Trim() switch
+        {
+            "Burning" => "Горит",
+            "Burned" => "Сгорела",
+            "Normal" => "Нормальная",
+            _ => cell.State
+        };
 
         return $"Координаты: ({cell.X}, {cell.Y})\n" +
-               $"Тип: {cell.Vegetation}\n" +
-               $"Состояние: {cell.State}\n" +
+               $"Тип поверхности: {vegetationText}\n" +
+               $"Состояние: {stateText}\n" +
                $"Можно выбрать как очаг: {ignitableText}" +
                selectedText + "\n" +
-               $"Влажность: {cell.Moisture:P0}\n" +
+               $"Влажность: {cell.Moisture:F2}\n" +
                $"Высота: {cell.Elevation:F0} м\n" +
-               $"Вероятность возгорания: {cell.BurnProbability:P0}";
+               $"Вероятность возгорания: {cell.BurnProbability:F3}";
     }
 }

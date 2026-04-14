@@ -58,6 +58,7 @@ public partial class NodeGraphVisualization : UserControl
 
     public static readonly StyledProperty<bool> IsIgnitionSelectionEnabledProperty =
         AvaloniaProperty.Register<NodeGraphVisualization, bool>(nameof(IsIgnitionSelectionEnabled), false);
+
     public bool IsIgnitionSelectionEnabled
     {
         get => GetValue(IsIgnitionSelectionEnabledProperty);
@@ -159,8 +160,8 @@ public partial class NodeGraphVisualization : UserControl
         }
 
         if (e.Property == LayoutHintProperty ||
-e.Property == SelectedNodeProperty ||
-e.Property == IsIgnitionSelectionEnabledProperty)
+            e.Property == SelectedNodeProperty ||
+            e.Property == IsIgnitionSelectionEnabledProperty)
         {
             ScheduleDraw();
         }
@@ -1206,16 +1207,36 @@ e.Property == IsIgnitionSelectionEnabledProperty)
         var weak = nodeEdges.Count(e => e.FireSpreadModifier < 0.35);
         var ignitionText = node.IsSelectedIgnition ? "\nСтартовый очаг: Да" : string.Empty;
 
+        var vegetationText = node.Vegetation?.Trim() switch
+        {
+            "Coniferous" => "Хвойный лес",
+            "Deciduous" => "Лиственный лес",
+            "Mixed" => "Смешанный лес",
+            "Grass" => "Трава",
+            "Shrub" => "Кустарник",
+            "Water" => "Вода",
+            "Bare" => "Пустая поверхность",
+            _ => node.Vegetation
+        };
+
+        var stateText = node.State?.Trim() switch
+        {
+            "Burning" => "Горит",
+            "Burned" => "Сгорела",
+            "Normal" => "Нормальная",
+            _ => node.State
+        };
+
         return $"Координаты модели: ({node.X}, {node.Y})\n" +
-               $"Координаты отрисовки: ({node.RenderX:F2}, {node.RenderY:F2})\n" +
+               $"Координаты на схеме: ({node.RenderX:F2}, {node.RenderY:F2})\n" +
                $"Группа: {node.GroupKey}\n" +
-               $"Тип: {node.Vegetation}\n" +
-               $"Состояние: {node.State}\n" +
-               $"Влажность: {node.Moisture:P0}\n" +
+               $"Тип поверхности: {vegetationText}\n" +
+               $"Состояние: {stateText}\n" +
+               $"Влажность: {node.Moisture:F2}\n" +
                $"Высота: {node.Elevation:F0} м\n" +
-               $"Вероятность возгорания: {node.BurnProbability:P0}" +
+               $"Вероятность возгорания: {node.BurnProbability:F3}" +
                ignitionText + "\n" +
-               $"Связей: {degree}\n" +
+               $"Количество связей: {degree}\n" +
                $"Сильных: {strong}, средних: {medium}, слабых: {weak}";
     }
 
