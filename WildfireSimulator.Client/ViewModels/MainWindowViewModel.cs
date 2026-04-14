@@ -203,6 +203,122 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private string _workflowStatusText = "Выберите симуляцию";
 
+    [ObservableProperty]
+    private ObservableCollection<FireMetricsHistoryDto> _metricsHistory = new();
+
+    [ObservableProperty]
+    private bool _isMetricsHistoryLoading = false;
+
+    [ObservableProperty]
+    private string _metricsHistorySummary = "История метрик не загружена";
+
+    [ObservableProperty]
+    private string _lastAnomalyText = "Нет";
+
+    [ObservableProperty]
+    private double _streamSpeed;
+
+    [ObservableProperty]
+    private double _streamAcceleration;
+
+    [ObservableProperty]
+    private bool _streamIsCritical;
+
+    [ObservableProperty]
+    private double _anomalyDeviation;
+
+    [ObservableProperty]
+    private double _anomalyPreviousAverage;
+
+    [ObservableProperty]
+    private double _anomalyCurrentArea;
+
+    public string StreamMovingAverageText =>
+        $"MA3: {MovingAverage3:F1} • MA5: {MovingAverage5:F1} • MA10: {MovingAverage10:F1}";
+
+    public string StreamDynamicsText =>
+        $"Скорость: {StreamSpeed:F2} • Ускорение: {StreamAcceleration:F2}";
+
+    public string StreamCriticalText =>
+        StreamIsCritical ? "Критическое ускорение обнаружено" : "Критических изменений нет";
+
+    public string ForecastSummaryText =>
+     ForecastNextArea > 0
+         ? $"{ForecastNextArea:F0} га • {ForecastMethod}"
+         : "Нет данных";
+
+    public string ForecastErrorSummaryText =>
+        ForecastErrorCount > 0
+            ? $"Средняя ошибка: {MeanAbsoluteError:F2} га • проверок: {ForecastErrorCount}"
+            : "Проверки прогноза пока не накоплены";
+    private string BuildVegetationStatsText(IEnumerable<(string Name, int Count)> items)
+    {
+        var preferredOrder = new[]
+        {
+        "Хвойный лес",
+        "Лиственный лес",
+        "Смешанный лес",
+        "Трава",
+        "Кустарник",
+        "Вода",
+        "Пустая поверхность"
+    };
+
+        var ordered = items
+            .OrderBy(item =>
+            {
+                var index = Array.IndexOf(preferredOrder, item.Name);
+                return index >= 0 ? index : int.MaxValue;
+            })
+            .ThenBy(item => item.Name)
+            .ToList();
+
+        if (ordered.Count == 0)
+            return "—";
+
+        return string.Join(Environment.NewLine, ordered.Select(item => $"• {item.Name}: {item.Count}"));
+    }
+    public string CompactMetricsSummaryText
+    {
+        get
+        {
+            if (MetricsHistory.Count == 0)
+                return "История метрик пока пуста";
+
+            var ordered = MetricsHistory.OrderBy(m => m.Step).ToList();
+            var last = ordered.Last();
+
+            return $"Записей: {ordered.Count} • последний шаг: {last.Step} • площадь: {last.FireArea:F0} га • скорость: {last.FireSpreadSpeed:F2}";
+        }
+    }
+    public bool HasMetricsHistory => MetricsHistory.Count > 0;
+
+    public string MetricsLastFireAreaText =>
+        !HasMetricsHistory
+            ? "—"
+            : $"{MetricsHistory.OrderBy(m => m.Step).Last().FireArea:F0} га";
+
+    public string MetricsMaxFireAreaText =>
+        !HasMetricsHistory
+            ? "—"
+            : $"{MetricsHistory.Max(m => m.FireArea):F0} га";
+
+    public string MetricsAverageSpreadSpeedText =>
+        !HasMetricsHistory
+            ? "—"
+            : $"{MetricsHistory.Average(m => m.FireSpreadSpeed):F2}";
+
+    public string MetricsLastWeatherText
+    {
+        get
+        {
+            if (!HasMetricsHistory)
+                return "—";
+
+            var last = MetricsHistory.OrderBy(m => m.Step).Last();
+            return $"{last.AverageTemperature:F1} °C, {last.AverageWindSpeed:F1} м/с";
+        }
+    }
     public bool IsRandomIgnitionMode => SelectedIgnitionMode == IgnitionMode.Random;
     public bool IsManualIgnitionMode => SelectedIgnitionMode == IgnitionMode.Manual;
 
@@ -528,6 +644,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnSelectedSimulationChanged(SimulationDto? value)
     {
+        ResetStreamAnalysisState();
+
         if (value != null)
         {
             SelectedSimulationStatus = value.Status;
@@ -538,6 +656,7 @@ public partial class MainWindowViewModel : ObservableObject
             IsIgnitionSelectionEnabled = false;
             HasSavedIgnitionPreview = false;
             SelectedIgnitionMode = IgnitionMode.Random;
+
             ClearSelectedIgnitionCells();
             ClearSelectedIgnitionNodes();
 
@@ -572,6 +691,7 @@ public partial class MainWindowViewModel : ObservableObject
                 else
                     await LoadSimulationGraphAsync(value.Id);
 
+                await LoadSimulationMetricsHistoryAsync(value.Id);
                 await SubscribeToSelectedSimulationAsync(value.Id);
             });
         }
@@ -580,6 +700,7 @@ public partial class MainWindowViewModel : ObservableObject
             Task.Run(async () =>
             {
                 await UnsubscribeFromCurrentSimulationAsync();
+                await ClearSimulationMetricsHistoryAsync();
             });
 
             SelectedSimulationStatus = 0;
@@ -593,6 +714,7 @@ public partial class MainWindowViewModel : ObservableObject
             IsIgnitionSelectionEnabled = false;
             HasSavedIgnitionPreview = false;
             SelectedIgnitionMode = IgnitionMode.Random;
+
             ClearSelectedIgnitionCells();
             ClearSelectedIgnitionNodes();
 
@@ -605,16 +727,6 @@ public partial class MainWindowViewModel : ObservableObject
             HumidityInfo = "—";
             VegetationStats = "—";
             PrecipitationInfo = "—";
-            MovingAverage3 = 0;
-            MovingAverage5 = 0;
-            MovingAverage10 = 0;
-            TrendText = "—";
-            ForecastNextArea = 0;
-            ForecastDelta = 0;
-            ForecastMethod = "—";
-            LastForecastAbsoluteError = 0;
-            MeanAbsoluteError = 0;
-            ForecastErrorCount = 0;
             SignalRStatus = IsSignalRConnected ? "Подключено" : "Не подключено";
 
             CanResetSimulation = false;
@@ -643,7 +755,6 @@ public partial class MainWindowViewModel : ObservableObject
             RefreshWorkflowStatus();
         }
     }
-
     private void SetPersistentStatus(string message)
     {
         _persistentStatusText = message;
@@ -879,6 +990,8 @@ public partial class MainWindowViewModel : ObservableObject
                     }
                 }
 
+                await LoadSimulationMetricsHistoryAsync(SelectedSimulation!.Id);
+
                 OnPropertyChanged(nameof(CanStartSelectedSimulation));
                 OnPropertyChanged(nameof(CanExecuteStepSimulation));
                 OnPropertyChanged(nameof(CanStartAutoSimulation));
@@ -898,7 +1011,10 @@ public partial class MainWindowViewModel : ObservableObject
             SetTransientStatus($"Ошибка: {message}", true);
 
             if (SelectedSimulation != null)
+            {
                 await LoadSimulationStatusAsync(SelectedSimulation.Id);
+                await LoadSimulationMetricsHistoryAsync(SelectedSimulation.Id);
+            }
 
             RefreshWorkflowStatus();
             return false;
@@ -917,7 +1033,6 @@ public partial class MainWindowViewModel : ObservableObject
             RefreshWorkflowStatus();
         }
     }
-
     partial void OnSelectedGraphNodeChanged(SimulationGraphNodeDto? value)
     {
         OnPropertyChanged(nameof(HasSelectedGraphNode));
@@ -1120,48 +1235,70 @@ public partial class MainWindowViewModel : ObservableObject
         };
 
         _signalRService.OnMovingAveragesReceived += (s, data) =>
-        {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                MovingAverage3 = data.MovingAverage3;
-                MovingAverage5 = data.MovingAverage5;
-                MovingAverage10 = data.MovingAverage10;
-            });
-        };
+  {
+      Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+      {
+          MovingAverage3 = data.MovingAverage3;
+          MovingAverage5 = data.MovingAverage5;
+          MovingAverage10 = data.MovingAverage10;
+          StreamSpeed = data.Speed;
+          StreamAcceleration = data.Acceleration;
+
+          OnPropertyChanged(nameof(StreamMovingAverageText));
+          OnPropertyChanged(nameof(StreamDynamicsText));
+      });
+  };
 
         _signalRService.OnTrendReceived += (s, data) =>
-        {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                TrendText = data.Trend switch
-                {
-                    "ACCELERATING" => "Ускоряется",
-                    "DECELERATING" => "Замедляется",
-                    _ => "Стабильно"
-                };
-            });
-        };
+   {
+       Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+       {
+           TrendText = data.Trend switch
+           {
+               "ACCELERATING" => "Ускоряется",
+               "DECELERATING" => "Замедляется",
+               _ => "Стабильно"
+           };
 
+           StreamSpeed = data.Speed;
+           StreamAcceleration = data.Acceleration;
+           StreamIsCritical = data.IsCritical;
+
+           OnPropertyChanged(nameof(StreamDynamicsText));
+           OnPropertyChanged(nameof(StreamCriticalText));
+       });
+   };
         _signalRService.OnAnomalyReceived += (s, data) =>
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Аномалия: {data.Reason}");
+                LastAnomalyText = string.IsNullOrWhiteSpace(data.Reason)
+                    ? "Обнаружено отклонение"
+                    : data.Reason;
+
+                AnomalyDeviation = data.Deviation;
+                AnomalyPreviousAverage = data.PreviousAvg;
+                AnomalyCurrentArea = data.CurrentArea;
+
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Аномалия: {LastAnomalyText}");
             });
         };
 
         _signalRService.OnForecastReceived += (s, data) =>
-        {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                ForecastNextArea = data.ForecastNextArea;
-                ForecastDelta = data.ForecastDelta;
-                ForecastMethod = $"Прогноз на следующий шаг ({GetForecastMethodName(data.Method)})";
-                LastForecastAbsoluteError = data.LastForecastAbsoluteError;
-                MeanAbsoluteError = data.MeanAbsoluteError;
-                ForecastErrorCount = data.ForecastErrorCount;
-            });
-        };
+  {
+      Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+      {
+          ForecastNextArea = data.ForecastNextArea;
+          ForecastDelta = data.ForecastDelta;
+          ForecastMethod = GetForecastMethodName(data.Method);
+          LastForecastAbsoluteError = data.LastForecastAbsoluteError;
+          MeanAbsoluteError = data.MeanAbsoluteError;
+          ForecastErrorCount = data.ForecastErrorCount;
+
+          OnPropertyChanged(nameof(ForecastSummaryText));
+          OnPropertyChanged(nameof(ForecastErrorSummaryText));
+      });
+  };
 
         await _signalRService.ConnectAsync();
     }
@@ -1371,6 +1508,7 @@ public partial class MainWindowViewModel : ObservableObject
             }
 
             SelectedIgnitionMode = IgnitionMode.Random;
+            await LoadSimulationMetricsHistoryAsync(SelectedSimulation!.Id);
 
             OnPropertyChanged(nameof(CanStartSelectedSimulation));
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
@@ -1533,6 +1671,8 @@ public partial class MainWindowViewModel : ObservableObject
                 EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Графовая симуляция запущена");
             }
 
+            await LoadSimulationMetricsHistoryAsync(SelectedSimulation.Id);
+
             OnPropertyChanged(nameof(CanStartSelectedSimulation));
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
             OnPropertyChanged(nameof(SimulationStatusText));
@@ -1679,6 +1819,8 @@ public partial class MainWindowViewModel : ObservableObject
                 await LoadSimulationCellsAsync(SelectedSimulation.Id);
             else
                 await LoadSimulationGraphAsync(SelectedSimulation.Id);
+
+            await LoadSimulationMetricsHistoryAsync(SelectedSimulation.Id);
         }
 
         RefreshWorkflowStatus();
@@ -1739,6 +1881,10 @@ public partial class MainWindowViewModel : ObservableObject
                 IsSimulationRunning = status.IsRunning;
                 SelectedSimulationStatus = status.Status;
                 SelectedSimulationGraphType = status.GraphType;
+
+                TemperatureInfo = $"{status.Temperature:F1} °C";
+                HumidityInfo = $"{status.Humidity:F1}%";
+                WindInfo = $"{status.WindSpeed:F1} м/с, {GetWindDirectionName(status.WindDirectionDegrees)}";
                 PrecipitationInfo = $"{status.Precipitation:F1} мм/ч";
 
                 if (SelectedSimulation != null)
@@ -1826,13 +1972,10 @@ public partial class MainWindowViewModel : ObservableObject
 
             var stats = cells
                 .GroupBy(c => GetVegetationDisplayName(c.Vegetation))
-                .OrderBy(g => g.Key)
-                .Select(g => $"{g.Key}: {g.Count()}")
+                .Select(g => (Name: g.Key, Count: g.Count()))
                 .ToList();
 
-            VegetationStats = stats.Count > 0
-                ? string.Join(", ", stats)
-                : "—";
+            VegetationStats = BuildVegetationStatsText(stats);
 
             IsPreparedMapLoaded = cells.Count > 0;
             IsIgnitionSelectionEnabled = IsManualIgnitionMode && CanEditIgnitionSetup;
@@ -1882,13 +2025,10 @@ public partial class MainWindowViewModel : ObservableObject
 
             var stats = graph.Nodes
                 .GroupBy(n => GetVegetationDisplayName(n.Vegetation))
-                .OrderBy(g => g.Key)
-                .Select(g => $"{g.Key}: {g.Count()}")
+                .Select(g => (Name: g.Key, Count: g.Count()))
                 .ToList();
 
-            VegetationStats = stats.Count > 0
-                ? string.Join(", ", stats)
-                : "—";
+            VegetationStats = BuildVegetationStatsText(stats);
 
             IsPreparedMapLoaded = graph.Nodes.Count > 0;
             IsIgnitionSelectionEnabled = IsManualIgnitionMode && CanEditIgnitionSetup;
@@ -1906,7 +2046,6 @@ public partial class MainWindowViewModel : ObservableObject
 
         RefreshWorkflowStatus();
     }
-
     private int GetNeighborCount(Guid nodeId)
     {
         return GraphEdges.Count(e => e.FromCellId == nodeId || e.ToCellId == nodeId);
@@ -1921,7 +2060,36 @@ public partial class MainWindowViewModel : ObservableObject
             (e.FromCellId == SelectedGraphNode.Id || e.ToCellId == SelectedGraphNode.Id) &&
             predicate(e));
     }
+    private void ResetStreamAnalysisState()
+    {
+        MovingAverage3 = 0;
+        MovingAverage5 = 0;
+        MovingAverage10 = 0;
 
+        TrendText = "—";
+
+        StreamSpeed = 0;
+        StreamAcceleration = 0;
+        StreamIsCritical = false;
+
+        ForecastNextArea = 0;
+        ForecastDelta = 0;
+        ForecastMethod = "—";
+        LastForecastAbsoluteError = 0;
+        MeanAbsoluteError = 0;
+        ForecastErrorCount = 0;
+
+        LastAnomalyText = "Нет";
+        AnomalyDeviation = 0;
+        AnomalyPreviousAverage = 0;
+        AnomalyCurrentArea = 0;
+
+        OnPropertyChanged(nameof(StreamMovingAverageText));
+        OnPropertyChanged(nameof(StreamDynamicsText));
+        OnPropertyChanged(nameof(StreamCriticalText));
+        OnPropertyChanged(nameof(ForecastSummaryText));
+        OnPropertyChanged(nameof(ForecastErrorSummaryText));
+    }
     private string GetWindDirectionName(double degrees)
     {
         if (degrees >= 337.5 || degrees < 22.5) return "С";
@@ -2016,6 +2184,62 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanStartSelectedSimulation));
 
         RefreshWorkflowStatus();
+    }
+    private async Task LoadSimulationMetricsHistoryAsync(Guid simulationId)
+    {
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            IsMetricsHistoryLoading = true;
+            MetricsHistorySummary = "Загрузка истории метрик...";
+            OnPropertyChanged(nameof(HasMetricsHistory));
+            OnPropertyChanged(nameof(MetricsLastFireAreaText));
+            OnPropertyChanged(nameof(MetricsMaxFireAreaText));
+            OnPropertyChanged(nameof(MetricsAverageSpreadSpeedText));
+            OnPropertyChanged(nameof(MetricsLastWeatherText));
+            OnPropertyChanged(nameof(CompactMetricsSummaryText));
+        });
+
+        var history = await _apiService.GetSimulationMetricsHistoryAsync(simulationId);
+
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            MetricsHistory = new ObservableCollection<FireMetricsHistoryDto>(
+                history.OrderByDescending(m => m.Step));
+
+            if (MetricsHistory.Count == 0)
+            {
+                MetricsHistorySummary = "История метрик пока пуста";
+            }
+            else
+            {
+                MetricsHistorySummary = CompactMetricsSummaryText;
+            }
+
+            IsMetricsHistoryLoading = false;
+
+            OnPropertyChanged(nameof(HasMetricsHistory));
+            OnPropertyChanged(nameof(MetricsLastFireAreaText));
+            OnPropertyChanged(nameof(MetricsMaxFireAreaText));
+            OnPropertyChanged(nameof(MetricsAverageSpreadSpeedText));
+            OnPropertyChanged(nameof(MetricsLastWeatherText));
+            OnPropertyChanged(nameof(CompactMetricsSummaryText));
+        });
+    }
+    private async Task ClearSimulationMetricsHistoryAsync()
+    {
+        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            MetricsHistory.Clear();
+            IsMetricsHistoryLoading = false;
+            MetricsHistorySummary = "История метрик не загружена";
+
+            OnPropertyChanged(nameof(HasMetricsHistory));
+            OnPropertyChanged(nameof(MetricsLastFireAreaText));
+            OnPropertyChanged(nameof(MetricsMaxFireAreaText));
+            OnPropertyChanged(nameof(MetricsAverageSpreadSpeedText));
+            OnPropertyChanged(nameof(MetricsLastWeatherText));
+            OnPropertyChanged(nameof(CompactMetricsSummaryText));
+        });
     }
 
     private Window? GetMainWindow()

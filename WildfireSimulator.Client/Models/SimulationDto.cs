@@ -149,7 +149,6 @@ public class GraphCellDto
     public bool IsBurned => State == "Burned";
     public bool IsNormal => State == "Normal";
 }
-
 public class SimulationStatusDto
 {
     public Guid Id { get; set; }
@@ -163,6 +162,12 @@ public class SimulationStatusDto
     public double Precipitation { get; set; }
     public GraphType GraphType { get; set; } = GraphType.Grid;
     public string? Warning { get; set; }
+
+    public double Temperature { get; set; }
+    public double Humidity { get; set; }
+    public double WindSpeed { get; set; }
+    public string WindDirection { get; set; } = "—";
+    public double WindDirectionDegrees { get; set; }
 
     public string StatusText => Status switch
     {

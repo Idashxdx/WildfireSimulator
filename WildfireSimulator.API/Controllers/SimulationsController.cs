@@ -34,31 +34,36 @@ public class SimulationsController : ControllerBase
         {
             var simulation = await _simulationRepository.GetByIdAsync(id, cancellationToken);
             if (simulation == null)
-                return NotFound($"Симуляция с ID {id} не найдена");
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    message = $"Симуляция с ID {id} не найдена"
+                });
+            }
 
             var metrics = await _fireMetricsRepository.GetBySimulationIdAsync(id, cancellationToken);
 
-            var result = metrics.Select(m => new
-            {
-                id = m.Id,
-                simulationId = m.SimulationId,
-                step = m.Step,
-                timestamp = m.Timestamp,
-                burningCellsCount = m.BurningCellsCount,
-                burnedCellsCount = m.BurnedCellsCount,
-                totalCellsAffected = m.TotalCellsAffected,
-                fireSpreadSpeed = m.FireSpreadSpeed,
-                averageTemperature = m.AverageTemperature,
-                averageWindSpeed = m.AverageWindSpeed,
-                fireArea = m.GetFireArea(1.0)
-            });
+            var result = metrics
+                .Select(m => FireMetricsHistoryDto.FromEntity(m))
+                .ToList();
 
-            return Ok(result);
+            return Ok(new
+            {
+                success = true,
+                simulationId = id,
+                count = result.Count,
+                metrics = result
+            });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Ошибка при получении метрик симуляции с ID {Id}", id);
-            return StatusCode(500, "Внутренняя ошибка сервера");
+            return StatusCode(500, new
+            {
+                success = false,
+                message = "Внутренняя ошибка сервера"
+            });
         }
     }
 
@@ -170,7 +175,7 @@ public class SimulationsController : ControllerBase
             return StatusCode(500, "Внутренняя ошибка сервера");
         }
     }
-    
+
     [HttpGet("status/{status}")]
     public async Task<IActionResult> GetByStatus(SimulationStatus status, CancellationToken cancellationToken)
     {

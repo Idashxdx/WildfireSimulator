@@ -1,0 +1,153 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="WildfireSimulator.Client.Views.Controls.MetricsHistoryView">
+    <Border Background="#FFFDF8"
+            BorderBrush="#E7E0F2"
+            BorderThickness="1"
+            CornerRadius="12"
+            Padding="12">
+        <StackPanel Spacing="10">
+
+            <Border Background="#F6F1FF"
+                    BorderBrush="#E1D8F2"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="10,8">
+                <TextBlock Text="История и аналитика"
+                           Foreground="#554E63"
+                           FontSize="16"
+                           FontWeight="Bold" />
+            </Border>
+
+            <Grid ColumnDefinitions="*,*,*"
+                  ColumnSpacing="10">
+                <Border Grid.Column="0"
+                        Background="#FBF9F4"
+                        BorderBrush="#E7E0F2"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="10">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Текущая площадь"
+                                   Foreground="#8A8495"
+                                   FontSize="11" />
+                        <TextBlock x:Name="CurrentAreaTextBlock"
+                                   Text="—"
+                                   Foreground="#8E7CC3"
+                                   FontSize="15"
+                                   FontWeight="Bold" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1"
+                        Background="#FBF9F4"
+                        BorderBrush="#E7E0F2"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="10">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Прогноз следующего шага"
+                                   Foreground="#8A8495"
+                                   FontSize="11" />
+                        <TextBlock x:Name="ForecastTextBlock"
+                                   Text="—"
+                                   Foreground="#2F2A3A"
+                                   FontSize="15"
+                                   FontWeight="Bold" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2"
+                        Background="#FBF9F4"
+                        BorderBrush="#E7E0F2"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="10">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Средняя ошибка прогноза"
+                                   Foreground="#8A8495"
+                                   FontSize="11" />
+                        <TextBlock x:Name="MaeTextBlock"
+                                   Text="—"
+                                   Foreground="#2F2A3A"
+                                   FontSize="15"
+                                   FontWeight="Bold" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border Background="#FBF9F4"
+                    BorderBrush="#E7E0F2"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="12">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Площадь пожара по шагам"
+                               Foreground="#2F2A3A"
+                               FontSize="15"
+                               FontWeight="Bold" />
+
+                    <Canvas x:Name="ChartCanvas"
+                            Height="180"
+                            Background="#FFFDF8" />
+
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock x:Name="MinStepTextBlock"
+                                   Grid.Column="0"
+                                   Text="Шаг 0"
+                                   Foreground="#8A8495"
+                                   FontSize="11" />
+
+                        <TextBlock Grid.Column="1"
+                                   Text="История площади"
+                                   HorizontalAlignment="Center"
+                                   Foreground="#8A8495"
+                                   FontSize="11" />
+
+                        <TextBlock x:Name="MaxStepTextBlock"
+                                   Grid.Column="2"
+                                   Text="Шаг 0"
+                                   Foreground="#8A8495"
+                                   FontSize="11" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Background="#FBF9F4"
+                    BorderBrush="#E7E0F2"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="10">
+                <Grid ColumnDefinitions="Auto,*,Auto,*"
+                      ColumnSpacing="8">
+                    <TextBlock Grid.Column="0"
+                               Text="Тренд:"
+                               Foreground="#8A8495"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+
+                    <TextBlock x:Name="TrendTextBlock"
+                               Grid.Column="1"
+                               Text="—"
+                               Foreground="#2F2A3A"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center" />
+
+                    <TextBlock Grid.Column="2"
+                               Text="Аномалия:"
+                               Foreground="#8A8495"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+
+                    <TextBlock x:Name="AnomalyTextBlock"
+                               Grid.Column="3"
+                               Text="Нет"
+                               Foreground="#2F2A3A"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+        </StackPanel>
+    </Border>
+</UserControl>

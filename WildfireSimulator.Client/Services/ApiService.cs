@@ -290,12 +290,26 @@ public class ApiService
                             status.Precipitation = precipitationElement.GetDouble();
                     }
 
-                    if (status.Precipitation <= 0 &&
-                        doc.RootElement.TryGetProperty("weather", out var weatherElement) &&
-                        weatherElement.ValueKind == JsonValueKind.Object &&
-                        weatherElement.TryGetProperty("precipitation", out var weatherPrecipitationElement))
+                    if (doc.RootElement.TryGetProperty("weather", out var weatherElement) &&
+                        weatherElement.ValueKind == JsonValueKind.Object)
                     {
-                        status.Precipitation = weatherPrecipitationElement.GetDouble();
+                        if (weatherElement.TryGetProperty("temperature", out var temperatureElement))
+                            status.Temperature = temperatureElement.GetDouble();
+
+                        if (weatherElement.TryGetProperty("humidity", out var humidityElement))
+                            status.Humidity = humidityElement.GetDouble();
+
+                        if (weatherElement.TryGetProperty("windSpeed", out var windSpeedElement))
+                            status.WindSpeed = windSpeedElement.GetDouble();
+
+                        if (weatherElement.TryGetProperty("windDirection", out var windDirectionElement))
+                            status.WindDirection = windDirectionElement.GetString() ?? "—";
+
+                        if (weatherElement.TryGetProperty("windDirectionDegrees", out var windDirectionDegreesElement))
+                            status.WindDirectionDegrees = windDirectionDegreesElement.GetDouble();
+
+                        if (weatherElement.TryGetProperty("precipitation", out var weatherPrecipitationElement))
+                            status.Precipitation = weatherPrecipitationElement.GetDouble();
                     }
 
                     if (doc.RootElement.TryGetProperty("warning", out var warningElement) &&
@@ -315,7 +329,6 @@ public class ApiService
 
         return null;
     }
-
     public async Task<SimulationGraphDto?> GetSimulationGraphAsync(Guid simulationId)
     {
         try
@@ -465,6 +478,28 @@ public class ApiService
         {
             Console.WriteLine($"Error refreshing ignition setup: {ex.Message}");
             return (false, ex.Message, null);
+        }
+    }
+    public async Task<List<FireMetricsHistoryDto>> GetSimulationMetricsHistoryAsync(Guid simulationId)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/simulations/{simulationId}/metrics");
+            if (!response.IsSuccessStatusCode)
+                return new List<FireMetricsHistoryDto>();
+
+            var json = await response.Content.ReadAsStringAsync();
+            var historyResponse = JsonSerializer.Deserialize<FireMetricsHistoryResponseDto>(json, _jsonOptions);
+
+            if (historyResponse?.Success == true && historyResponse.Metrics != null)
+                return historyResponse.Metrics;
+
+            return new List<FireMetricsHistoryDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting simulation metrics history: {ex.Message}");
+            return new List<FireMetricsHistoryDto>();
         }
     }
 }

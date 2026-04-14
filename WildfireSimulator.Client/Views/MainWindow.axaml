@@ -453,109 +453,209 @@
                 BorderThickness="1"
                 CornerRadius="14"
                 Padding="14">
-                <Grid RowDefinitions="Auto,Auto,*"
-                    RowSpacing="12">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="12">
 
-                    <Border Grid.Row="0"
-                        Background="#F8F5FF"
-                        BorderBrush="#E6DFF1"
-                        BorderThickness="1"
-                        Padding="12"
-                        CornerRadius="10">
-                        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto"
-                            ColumnSpacing="18">
-                            <TextBlock Grid.Column="0"
-                                Text="Визуализация"
+                        <Border Background="#F8F5FF"
+                            BorderBrush="#E6DFF1"
+                            BorderThickness="1"
+                            Padding="12"
+                            CornerRadius="10">
+                            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto"
+                                ColumnSpacing="18">
+                                <TextBlock Grid.Column="0"
+                                    Text="Визуализация"
+                                    Foreground="#2F2A3A"
+                                    FontSize="20"
+                                    FontWeight="Bold"
+                                    VerticalAlignment="Center" />
+
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="Тип"
+                                        FontSize="11"
+                                        Foreground="#8A8495" />
+                                    <TextBlock Text="{Binding GraphTypeText}"
+                                        FontWeight="Bold"
+                                        Foreground="#2F2A3A" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2" Spacing="2">
+                                    <TextBlock Text="Статус"
+                                        FontSize="11"
+                                        Foreground="#8A8495" />
+                                    <TextBlock Text="{Binding SimulationStatusText}"
+                                        FontWeight="Bold"
+                                        Foreground="#2F2A3A" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="3" Spacing="2">
+                                    <TextBlock Text="Шаг"
+                                        FontSize="11"
+                                        Foreground="#8A8495" />
+                                    <TextBlock Text="{Binding CurrentStep}"
+                                        FontWeight="Bold"
+                                        Foreground="#2F2A3A" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="4" Spacing="2">
+                                    <TextBlock Text="Площадь пожара"
+                                        FontSize="11"
+                                        Foreground="#8A8495" />
+                                    <TextBlock Text="{Binding FireArea, StringFormat={}{0:F0} га}"
+                                        FontWeight="Bold"
+                                        Foreground="#8E7CC3" />
+                                </StackPanel>
+
+                                <Button Grid.Column="5"
+                                    Classes="uniformButton"
+                                    Content="Обновить статус"
+                                    Command="{Binding RefreshStatusCommand}"
+                                    Background="#ECE6FA"
+                                    Foreground="#2F2A3A"
+                                    IsEnabled="{Binding IsConnected}"
+                                    MinWidth="150" />
+                            </Grid>
+                        </Border>
+
+                        <Border Background="#F2FAEA"
+                            BorderBrush="#D7E8C8"
+                            BorderThickness="1"
+                            Padding="12"
+                            CornerRadius="10">
+                            <TextBlock Text="{Binding SimulationInfoText}"
                                 Foreground="#2F2A3A"
-                                FontSize="20"
-                                FontWeight="Bold"
-                                VerticalAlignment="Center" />
+                                FontWeight="SemiBold"
+                                TextWrapping="Wrap" />
+                        </Border>
 
-                            <StackPanel Grid.Column="1" Spacing="2">
-                                <TextBlock Text="Тип"
-                                    FontSize="11"
-                                    Foreground="#8A8495" />
-                                <TextBlock Text="{Binding GraphTypeText}"
-                                    FontWeight="Bold"
-                                    Foreground="#2F2A3A" />
+                        <Border Background="#FFFDF8"
+                            BorderBrush="#E7E0F2"
+                            BorderThickness="1"
+                            Padding="12"
+                            CornerRadius="12">
+                            <Grid MinHeight="560">
+                                <controls:GraphVisualization x:Name="GridVisualization"
+                                    Cells="{Binding Cells}"
+                                    GridWidth="{Binding GridWidth}"
+                                    GridHeight="{Binding GridHeight}"
+                                    IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
+                                    IsVisible="{Binding IsGridSelected}" />
+
+                                <controls:NodeGraphVisualization x:Name="ClusteredGraphVisualization"
+                                    Nodes="{Binding GraphNodes}"
+                                    Edges="{Binding GraphEdges}"
+                                    SelectedNode="{Binding SelectedGraphNode, Mode=TwoWay}"
+                                    LayoutHint="{Binding GraphLayoutHint}"
+                                    IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
+                                    IsVisible="{Binding IsClusteredGraphSelected}" />
+
+                                <controls:NodeGraphVisualization x:Name="RegionGraphVisualization"
+                                    Nodes="{Binding GraphNodes}"
+                                    Edges="{Binding GraphEdges}"
+                                    SelectedNode="{Binding SelectedGraphNode, Mode=TwoWay}"
+                                    LayoutHint="{Binding GraphLayoutHint}"
+                                    IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
+                                    IsVisible="{Binding IsRegionClusterGraphSelected}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Background="#FFFDF8"
+                            BorderBrush="#E7E0F2"
+                            BorderThickness="1"
+                            Padding="12"
+                            CornerRadius="12">
+                            <StackPanel Spacing="10">
+                                <Border Background="#F6F1FF"
+                                    BorderBrush="#E1D8F2"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="10,8">
+                                    <TextBlock Text="История метрик"
+                                        Foreground="#4F4A5E"
+                                        FontSize="14"
+                                        FontWeight="Bold" />
+                                </Border>
+
+                                <TextBlock
+                                    Text="{Binding CompactMetricsSummaryText}"
+                                    Foreground="#6E6A78"
+                                    TextWrapping="Wrap" />
+
+                                <Border Background="#F8F5FF"
+                                    BorderBrush="#E6DFF1"
+                                    BorderThickness="1"
+                                    Padding="10"
+                                    CornerRadius="10">
+                                    <Grid ColumnDefinitions="80,120,90,90,90,*"
+                                        ColumnSpacing="10">
+                                        <TextBlock Grid.Column="0" Text="Шаг" Foreground="#6E6A78" FontWeight="Bold" />
+                                        <TextBlock Grid.Column="1" Text="Площадь" Foreground="#6E6A78" FontWeight="Bold" />
+                                        <TextBlock Grid.Column="2" Text="Горят" Foreground="#6E6A78" FontWeight="Bold" />
+                                        <TextBlock Grid.Column="3" Text="Сгорело" Foreground="#6E6A78" FontWeight="Bold" />
+                                        <TextBlock Grid.Column="4" Text="Скорость" Foreground="#6E6A78" FontWeight="Bold" />
+                                        <TextBlock Grid.Column="5" Text="Затронуто" Foreground="#6E6A78" FontWeight="Bold" />
+                                    </Grid>
+                                </Border>
+
+                                <ListBox ItemsSource="{Binding MetricsHistory}"
+                                    Background="#FAF8F2"
+                                    Foreground="#2F2A3A"
+                                    BorderBrush="#ECE4F6"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    MinHeight="220"
+                                    MaxHeight="280">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="4"
+                                                Padding="10"
+                                                Background="#FFFDF8"
+                                                BorderBrush="#EEE7F6"
+                                                BorderThickness="1"
+                                                CornerRadius="8">
+                                                <Grid ColumnDefinitions="80,120,90,90,90,*"
+                                                    ColumnSpacing="10">
+                                                    <TextBlock Grid.Column="0"
+                                                        Text="{Binding Step}"
+                                                        Foreground="#2F2A3A"
+                                                        FontWeight="Bold"
+                                                        VerticalAlignment="Center" />
+
+                                                    <TextBlock Grid.Column="1"
+                                                        Text="{Binding FireArea, StringFormat={}{0:F0} га}"
+                                                        Foreground="#8E7CC3"
+                                                        FontWeight="Bold"
+                                                        VerticalAlignment="Center" />
+
+                                                    <TextBlock Grid.Column="2"
+                                                        Text="{Binding BurningCellsCount}"
+                                                        Foreground="#B5473E"
+                                                        VerticalAlignment="Center" />
+
+                                                    <TextBlock Grid.Column="3"
+                                                        Text="{Binding BurnedCellsCount}"
+                                                        Foreground="#6E6A78"
+                                                        VerticalAlignment="Center" />
+
+                                                    <TextBlock Grid.Column="4"
+                                                        Text="{Binding FireSpreadSpeed, StringFormat={}{0:F2}}"
+                                                        Foreground="#2F2A3A"
+                                                        VerticalAlignment="Center" />
+
+                                                    <TextBlock Grid.Column="5"
+                                                        Text="{Binding TotalCellsAffected}"
+                                                        Foreground="#6E6A78"
+                                                        VerticalAlignment="Center" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
                             </StackPanel>
+                        </Border>
 
-                            <StackPanel Grid.Column="2" Spacing="2">
-                                <TextBlock Text="Статус"
-                                    FontSize="11"
-                                    Foreground="#8A8495" />
-                                <TextBlock Text="{Binding SimulationStatusText}"
-                                    FontWeight="Bold"
-                                    Foreground="#2F2A3A" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="3" Spacing="2">
-                                <TextBlock Text="Шаг"
-                                    FontSize="11"
-                                    Foreground="#8A8495" />
-                                <TextBlock Text="{Binding CurrentStep}"
-                                    FontWeight="Bold"
-                                    Foreground="#2F2A3A" />
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="4" Spacing="2">
-                                <TextBlock Text="Площадь пожара"
-                                    FontSize="11"
-                                    Foreground="#8A8495" />
-                                <TextBlock Text="{Binding FireArea, StringFormat={}{0:F0} га}"
-                                    FontWeight="Bold"
-                                    Foreground="#8E7CC3" />
-                            </StackPanel>
-
-                            <Button Grid.Column="5"
-                                Classes="uniformButton"
-                                Content="Обновить статус"
-                                Command="{Binding RefreshStatusCommand}"
-                                Background="#ECE6FA"
-                                Foreground="#2F2A3A"
-                                IsEnabled="{Binding IsConnected}"
-                                MinWidth="150" />
-                        </Grid>
-                    </Border>
-
-                    <Border Grid.Row="1"
-                        Background="#F2FAEA"
-                        BorderBrush="#D7E8C8"
-                        BorderThickness="1"
-                        Padding="12"
-                        CornerRadius="10">
-                        <TextBlock Text="{Binding SimulationInfoText}"
-                            Foreground="#2F2A3A"
-                            FontWeight="SemiBold"
-                            TextWrapping="Wrap" />
-                    </Border>
-
-                    <controls:GraphVisualization x:Name="GridVisualization"
-                        Grid.Row="2"
-                        Cells="{Binding Cells}"
-                        GridWidth="{Binding GridWidth}"
-                        GridHeight="{Binding GridHeight}"
-                        IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
-                        IsVisible="{Binding IsGridSelected}" />
-
-                    <controls:NodeGraphVisualization x:Name="ClusteredGraphVisualization"
-                        Grid.Row="2"
-                        Nodes="{Binding GraphNodes}"
-                        Edges="{Binding GraphEdges}"
-                        SelectedNode="{Binding SelectedGraphNode, Mode=TwoWay}"
-                        LayoutHint="{Binding GraphLayoutHint}"
-                        IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
-                        IsVisible="{Binding IsClusteredGraphSelected}" />
-
-                    <controls:NodeGraphVisualization x:Name="RegionGraphVisualization"
-                        Grid.Row="2"
-                        Nodes="{Binding GraphNodes}"
-                        Edges="{Binding GraphEdges}"
-                        SelectedNode="{Binding SelectedGraphNode, Mode=TwoWay}"
-                        LayoutHint="{Binding GraphLayoutHint}"
-                        IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
-                        IsVisible="{Binding IsRegionClusterGraphSelected}" />
-                </Grid>
+                    </StackPanel>
+                </ScrollViewer>
             </Border>
 
             <Border Grid.Column="2"
@@ -577,94 +677,55 @@
                                 Margin="0,8,0,0">
                                 <StackPanel Spacing="8">
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#FF7A59" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Горит" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
+                                        <Rectangle Width="20" Height="20" Fill="#FF7A59" RadiusX="4" RadiusY="4" />
+                                        <TextBlock Text="Горит" Foreground="#2F2A3A" VerticalAlignment="Center" />
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#777777" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Сгорело" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
+                                        <Rectangle Width="20" Height="20" Fill="#777777" RadiusX="4" RadiusY="4" />
+                                        <TextBlock Text="Сгорело" Foreground="#2F2A3A" VerticalAlignment="Center" />
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#5E9B5E" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Хвойный лес" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
+                                        <Rectangle Width="20" Height="20" Fill="#5E9B5E" RadiusX="4" RadiusY="4" />
+                                        <TextBlock Text="Хвойный лес" Foreground="#2F2A3A" VerticalAlignment="Center" />
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#8ACB88" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Лиственный лес" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
+                                        <Rectangle Width="20" Height="20" Fill="#8ACB88" RadiusX="4" RadiusY="4" />
+                                        <TextBlock Text="Лиственный лес" Foreground="#2F2A3A" VerticalAlignment="Center" />
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#E7D36F" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Трава" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
+                                        <Rectangle Width="20" Height="20" Fill="#E7D36F" RadiusX="4" RadiusY="4" />
+                                        <TextBlock Text="Трава" Foreground="#2F2A3A" VerticalAlignment="Center" />
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#A8C97F" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Смешанный лес" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
+                                        <Rectangle Width="20" Height="20" Fill="#A8C97F" RadiusX="4" RadiusY="4" />
+                                        <TextBlock Text="Смешанный лес" Foreground="#2F2A3A" VerticalAlignment="Center" />
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#CFA46A" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Кустарник" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
+                                        <Rectangle Width="20" Height="20" Fill="#CFA46A" RadiusX="4" RadiusY="4" />
+                                        <TextBlock Text="Кустарник" Foreground="#2F2A3A" VerticalAlignment="Center" />
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#7CC6F2" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Вода" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
+                                        <Rectangle Width="20" Height="20" Fill="#7CC6F2" RadiusX="4" RadiusY="4" />
+                                        <TextBlock Text="Вода" Foreground="#2F2A3A" VerticalAlignment="Center" />
                                     </StackPanel>
 
                                     <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#C9B7A7" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Пустая поверхность" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
-
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Line StartPoint="0,10" EndPoint="20,10" Stroke="#D8D2E1"
-                                            StrokeThickness="2" />
-                                        <TextBlock Text="Слабая связь" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
-
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Line StartPoint="0,10" EndPoint="20,10" Stroke="#AAA0B8"
-                                            StrokeThickness="2.4" />
-                                        <TextBlock Text="Средняя связь" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
-
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Line StartPoint="0,10" EndPoint="20,10" Stroke="#D0825C"
-                                            StrokeThickness="3" />
-                                        <TextBlock Text="Сильная связь" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
+                                        <Rectangle Width="20" Height="20" Fill="#C9B7A7" RadiusX="4" RadiusY="4" />
+                                        <TextBlock Text="Пустая поверхность" Foreground="#2F2A3A" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
                         </Expander>
 
                         <Expander Header="Параметры"
-                            IsExpanded="False">
+                            IsExpanded="True">
                             <Border Background="#F2FAEA"
                                 BorderBrush="#D7E8C8"
                                 BorderThickness="1"
@@ -673,175 +734,23 @@
                                 Margin="0,8,0,0">
                                 <StackPanel Spacing="8">
                                     <TextBlock Text="Ветер" Foreground="#7A7486" FontSize="12" />
-                                    <TextBlock Text="{Binding WindInfo}" Foreground="#2F2A3A"
-                                        FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding WindInfo}" Foreground="#2F2A3A" FontWeight="SemiBold" />
 
-                                    <TextBlock Text="Температура" Foreground="#7A7486" FontSize="12"
-                                        Margin="0,4,0,0" />
-                                    <TextBlock Text="{Binding TemperatureInfo}" Foreground="#2F2A3A"
-                                        FontWeight="SemiBold" />
+                                    <TextBlock Text="Температура" Foreground="#7A7486" FontSize="12" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding TemperatureInfo}" Foreground="#2F2A3A" FontWeight="SemiBold" />
 
-                                    <TextBlock Text="Влажность" Foreground="#7A7486" FontSize="12"
-                                        Margin="0,4,0,0" />
-                                    <TextBlock Text="{Binding HumidityInfo}" Foreground="#2F2A3A"
-                                        FontWeight="SemiBold" />
+                                    <TextBlock Text="Влажность" Foreground="#7A7486" FontSize="12" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding HumidityInfo}" Foreground="#2F2A3A" FontWeight="SemiBold" />
 
-                                    <TextBlock Text="Осадки" Foreground="#7A7486" FontSize="12"
-                                        Margin="0,4,0,0" />
-                                    <TextBlock Text="{Binding PrecipitationInfo}"
-                                        Foreground="#2F2A3A"
-                                        FontWeight="SemiBold" />
+                                    <TextBlock Text="Осадки" Foreground="#7A7486" FontSize="12" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding PrecipitationInfo}" Foreground="#2F2A3A" FontWeight="SemiBold" />
 
-                                    <TextBlock Text="Растительность" Foreground="#7A7486"
-                                        FontSize="12"
-                                        Margin="0,4,0,0" />
-                                    <TextBlock Text="{Binding VegetationStats}" Foreground="#2F2A3A"
-                                        TextWrapping="Wrap" />
+                                    <TextBlock Text="Растительность" Foreground="#7A7486" FontSize="12" Margin="0,4,0,0" />
+                                    <TextBlock Text="{Binding VegetationStats}" Foreground="#2F2A3A" TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
                         </Expander>
 
-                        <Border Background="#F8F5FF"
-                            BorderBrush="#E6DFF1"
-                            BorderThickness="1"
-                            Padding="12"
-                            CornerRadius="10"
-                            IsVisible="{Binding HasSelectedGraphNode}">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="Диагностика узла"
-                                    Foreground="#2F2A3A"
-                                    FontSize="16"
-                                    FontWeight="Bold" />
-
-                                <TextBlock Text="{Binding SelectedGraphNodeTitle}"
-                                    Foreground="#2F2A3A"
-                                    FontWeight="Bold" />
-
-                                <Grid ColumnDefinitions="Auto,*"
-                                    RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
-                                    ColumnSpacing="8"
-                                    RowSpacing="6">
-
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Состояние:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="0" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeStateText}"
-                                        Foreground="#2F2A3A" FontWeight="SemiBold" />
-
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Стадия:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="1" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeFireStageText}"
-                                        Foreground="#2F2A3A" FontWeight="SemiBold" />
-
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Тип:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="2" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeVegetationText}"
-                                        Foreground="#2F2A3A" />
-
-                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Влажность:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="3" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeMoistureText}"
-                                        Foreground="#2F2A3A" />
-
-                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Высота:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="4" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeElevationText}"
-                                        Foreground="#2F2A3A" />
-
-                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Вероятность:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="5" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeProbabilityText}"
-                                        Foreground="#8E7CC3" FontWeight="SemiBold" />
-
-                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Интенсивность:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="6" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeFireIntensityText}"
-                                        Foreground="#2F2A3A" />
-
-                                    <TextBlock Grid.Row="7" Grid.Column="0"
-                                        Text="Накопленное тепло:" Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="7" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeAccumulatedHeatText}"
-                                        Foreground="#2F2A3A" />
-
-                                    <TextBlock Grid.Row="8" Grid.Column="0" Text="Текущее топливо:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="8" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeCurrentFuelLoadText}"
-                                        Foreground="#2F2A3A" />
-
-                                    <TextBlock Grid.Row="9" Grid.Column="0" Text="Полное топливо:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="9" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeFuelLoadText}"
-                                        Foreground="#2F2A3A" />
-
-                                    <TextBlock Grid.Row="10" Grid.Column="0" Text="Остаток топлива:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="10" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeFuelRatioText}"
-                                        Foreground="#2F2A3A" />
-
-                                    <TextBlock Grid.Row="11" Grid.Column="0" Text="Время горения:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="11" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeBurningElapsedText}"
-                                        Foreground="#2F2A3A" />
-
-                                    <TextBlock Grid.Row="12" Grid.Column="0" Text="Группа:"
-                                        Foreground="#6E6A78" />
-                                    <TextBlock Grid.Row="12" Grid.Column="1"
-                                        Text="{Binding SelectedGraphNodeGroupText}"
-                                        Foreground="#2F2A3A" />
-                                </Grid>
-
-                                <Border Background="#FFFDF8"
-                                    BorderBrush="#ECE4F6"
-                                    BorderThickness="1"
-                                    Padding="10"
-                                    CornerRadius="8">
-                                    <Grid ColumnDefinitions="*,*,*,*">
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="Связей" Foreground="#9A96A3"
-                                                FontSize="10" />
-                                            <TextBlock
-                                                Text="{Binding SelectedGraphNodeNeighborCountText}"
-                                                Foreground="#2F2A3A" FontWeight="Bold" />
-                                        </StackPanel>
-
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock Text="Сильных" Foreground="#9A96A3"
-                                                FontSize="10" />
-                                            <TextBlock
-                                                Text="{Binding SelectedGraphNodeStrongEdgesText}"
-                                                Foreground="#D0825C" FontWeight="Bold" />
-                                        </StackPanel>
-
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Средних" Foreground="#9A96A3"
-                                                FontSize="10" />
-                                            <TextBlock
-                                                Text="{Binding SelectedGraphNodeMediumEdgesText}"
-                                                Foreground="#8E7CC3" FontWeight="Bold" />
-                                        </StackPanel>
-
-                                        <StackPanel Grid.Column="3">
-                                            <TextBlock Text="Слабых" Foreground="#9A96A3"
-                                                FontSize="10" />
-                                            <TextBlock
-                                                Text="{Binding SelectedGraphNodeWeakEdgesText}"
-                                                Foreground="#6E6A78" FontWeight="Bold" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </StackPanel>
-                        </Border>
                         <Border Background="#F8F5FF"
                             BorderBrush="#E6DFF1"
                             BorderThickness="1"
@@ -852,7 +761,7 @@
                                 <Grid ColumnDefinitions="*,Auto"
                                     ColumnSpacing="8">
                                     <TextBlock Grid.Column="0"
-                                        Text="Потоковые данные"
+                                        Text="Потоковый анализ"
                                         Foreground="#2F2A3A"
                                         FontSize="16"
                                         FontWeight="Bold"
@@ -880,40 +789,14 @@
                                     BorderThickness="1"
                                     Padding="10"
                                     CornerRadius="8">
-                                    <StackPanel>
+                                    <StackPanel Spacing="4">
                                         <TextBlock Text="Скользящие средние"
                                             Foreground="#7A7486"
                                             FontSize="12" />
-                                        <Grid ColumnDefinitions="*,*,*"
-                                            Margin="0,6,0,0">
-                                            <StackPanel Grid.Column="0">
-                                                <TextBlock Text="Среднее за 3"
-                                                    Foreground="#9A96A3"
-                                                    FontSize="10" />
-                                                <TextBlock
-                                                    Text="{Binding MovingAverage3, StringFormat={}{0:F0} га}"
-                                                    Foreground="#8E7CC3"
-                                                    FontWeight="SemiBold" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1">
-                                                <TextBlock Text="Среднее за 5"
-                                                    Foreground="#9A96A3"
-                                                    FontSize="10" />
-                                                <TextBlock
-                                                    Text="{Binding MovingAverage5, StringFormat={}{0:F0} га}"
-                                                    Foreground="#8E7CC3"
-                                                    FontWeight="SemiBold" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="2">
-                                                <TextBlock Text="Среднее за 10"
-                                                    Foreground="#9A96A3"
-                                                    FontSize="10" />
-                                                <TextBlock
-                                                    Text="{Binding MovingAverage10, StringFormat={}{0:F0} га}"
-                                                    Foreground="#8E7CC3"
-                                                    FontWeight="SemiBold" />
-                                            </StackPanel>
-                                        </Grid>
+                                        <TextBlock Text="{Binding StreamMovingAverageText}"
+                                            Foreground="#2F2A3A"
+                                            FontWeight="SemiBold"
+                                            TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
 
@@ -922,13 +805,21 @@
                                     BorderThickness="1"
                                     Padding="10"
                                     CornerRadius="8">
-                                    <StackPanel>
-                                        <TextBlock Text="Тренд"
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Динамика"
                                             Foreground="#7A7486"
                                             FontSize="12" />
                                         <TextBlock Text="{Binding TrendText}"
+                                            Foreground="#8E7CC3"
+                                            FontWeight="Bold"
+                                            TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding StreamDynamicsText}"
                                             Foreground="#2F2A3A"
-                                            FontWeight="Bold" />
+                                            TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding StreamCriticalText}"
+                                            Foreground="#6E6A78"
+                                            FontSize="11"
+                                            TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
 
@@ -937,38 +828,37 @@
                                     BorderThickness="1"
                                     Padding="10"
                                     CornerRadius="8">
-                                    <StackPanel>
+                                    <StackPanel Spacing="4">
                                         <TextBlock Text="Прогноз"
                                             Foreground="#7A7486"
                                             FontSize="12" />
-                                        <TextBlock Text="{Binding ForecastMethod}"
-                                            Foreground="#2F2A3A"
-                                            FontWeight="SemiBold" />
-                                        <TextBlock
-                                            Text="{Binding ForecastNextArea, StringFormat=Следующая площадь: {0:F0} га}"
+                                        <TextBlock Text="{Binding ForecastSummaryText}"
                                             Foreground="#8E7CC3"
                                             FontWeight="Bold"
-                                            Margin="0,4,0,0" />
-                                        <TextBlock
-                                            Text="{Binding ForecastDelta, StringFormat=Прирост: {0:+0.##;-0.##;0} га}"
-                                            Foreground="#6E6A78" />
-                                        <TextBlock
-                                            Text="{Binding LastForecastAbsoluteError, StringFormat=Последняя абсолютная ошибка: {0:F2} га}"
-                                            Foreground="#6E6A78"
-                                            Margin="0,6,0,0"
                                             TextWrapping="Wrap" />
-                                        <TextBlock
-                                            Text="{Binding MeanAbsoluteError, StringFormat=Средняя абсолютная ошибка: {0:F2} га}"
+                                        <TextBlock Text="{Binding ForecastErrorSummaryText}"
                                             Foreground="#6E6A78"
                                             TextWrapping="Wrap" />
-                                        <TextBlock
-                                            Text="{Binding ForecastErrorCount, StringFormat=Сравнений прогноза: {0}}"
-                                            Foreground="#6E6A78" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="#FFFDF8"
+                                    BorderBrush="#ECE4F6"
+                                    BorderThickness="1"
+                                    Padding="10"
+                                    CornerRadius="8">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Аномалия"
+                                            Foreground="#7A7486"
+                                            FontSize="12" />
+                                        <TextBlock Text="{Binding LastAnomalyText}"
+                                            Foreground="#2F2A3A"
+                                            FontWeight="SemiBold"
+                                            TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
                         </Border>
-
 
                         <Border Background="#FFFDF8"
                             BorderBrush="#E7E0F2"
