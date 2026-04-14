@@ -28,17 +28,6 @@ public class Simulation
 
     private Simulation() { }
 
-
-    public void ClearInitialFirePositions()
-    {
-        InitialFirePositions = null;
-    }
-    public void SetWeatherCondition(WeatherCondition weatherCondition)
-    {
-        WeatherCondition = Guard.Against.Null(weatherCondition, nameof(weatherCondition));
-        WeatherConditionId = weatherCondition.Id;
-    }
-
     public Simulation(string name, string description, SimulationParameters parameters)
     {
         Id = Guid.NewGuid();
@@ -47,6 +36,17 @@ public class Simulation
         CreatedAt = DateTime.UtcNow;
         Status = SimulationStatus.Created;
         Parameters = Guard.Against.Null(parameters, nameof(parameters));
+    }
+
+    public void ClearInitialFirePositions()
+    {
+        InitialFirePositions = null;
+    }
+
+    public void SetWeatherCondition(WeatherCondition weatherCondition)
+    {
+        WeatherCondition = Guard.Against.Null(weatherCondition, nameof(weatherCondition));
+        WeatherConditionId = weatherCondition.Id;
     }
 
     public void Start(WeatherCondition weatherCondition)
@@ -220,7 +220,7 @@ public class Simulation
 
     public void SaveInitialFirePositions(List<(int X, int Y)> positions)
     {
-        positions = positions ?? new List<(int X, int Y)>();
+        positions ??= new List<(int X, int Y)>();
 
         var payload = positions
             .Select(p => new CoordinateDto { X = p.X, Y = p.Y })
@@ -289,7 +289,6 @@ public class Simulation
         Status = SimulationStatus.Created;
         StartedAt = null;
         FinishedAt = null;
-
         CachedGraph = null;
     }
 
@@ -337,6 +336,58 @@ public enum SimulationStatus
     Cancelled = 3
 }
 
+public enum MapCreationMode
+{
+    Random = 0,
+    Scenario = 1,
+    SemiManual = 2
+}
+
+public enum MapScenarioType
+{
+    MixedForest = 0,
+    DryConiferousMassif = 1,
+    ForestWithRiver = 2,
+    ForestWithLake = 3,
+    ForestWithFirebreak = 4,
+    HillyTerrain = 5,
+    WetForestAfterRain = 6
+}
+
+public enum MapObjectType
+{
+    ConiferousArea = 0,
+    DeciduousArea = 1,
+    MixedForestArea = 2,
+    GrassArea = 3,
+    ShrubArea = 4,
+    WaterBody = 5,
+    Firebreak = 6,
+    WetZone = 7,
+    DryZone = 8,
+    Hill = 9,
+    Lowland = 10
+}
+
+public enum MapObjectShape
+{
+    Rectangle = 0,
+    Ellipse = 1
+}
+
+public class MapRegionObject
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public MapObjectType ObjectType { get; set; }
+    public MapObjectShape Shape { get; set; } = MapObjectShape.Rectangle;
+    public int StartX { get; set; }
+    public int StartY { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public double Strength { get; set; } = 1.0;
+    public int Priority { get; set; } = 0;
+}
+
 public class SimulationParameters
 {
     public int GridWidth { get; set; }
@@ -349,7 +400,9 @@ public class SimulationParameters
     public string VegetationDistributionsJson
     {
         get => JsonSerializer.Serialize(VegetationDistributions);
-        set => VegetationDistributions = JsonSerializer.Deserialize<List<VegetationDistribution>>(value) ?? new();
+        set => VegetationDistributions = string.IsNullOrWhiteSpace(value)
+            ? new List<VegetationDistribution>()
+            : JsonSerializer.Deserialize<List<VegetationDistribution>>(value) ?? new List<VegetationDistribution>();
     }
 
     public double InitialMoistureMin { get; set; }
@@ -359,6 +412,21 @@ public class SimulationParameters
     public int SimulationSteps { get; set; }
     public int StepDurationSeconds { get; set; }
     public int? RandomSeed { get; set; }
+
+    public MapCreationMode MapCreationMode { get; set; }
+    public MapScenarioType? ScenarioType { get; set; }
+    public double MapNoiseStrength { get; set; }
+
+    [NotMapped]
+    public List<MapRegionObject> MapRegionObjects { get; set; } = new();
+
+    public string MapRegionObjectsJson
+    {
+        get => JsonSerializer.Serialize(MapRegionObjects);
+        set => MapRegionObjects = string.IsNullOrWhiteSpace(value)
+            ? new List<MapRegionObject>()
+            : JsonSerializer.Deserialize<List<MapRegionObject>>(value) ?? new List<MapRegionObject>();
+    }
 
     public SimulationParameters()
     {
@@ -372,6 +440,10 @@ public class SimulationParameters
         SimulationSteps = 100;
         StepDurationSeconds = 60;
         RandomSeed = null;
+
+        MapCreationMode = MapCreationMode.Random;
+        ScenarioType = null;
+        MapNoiseStrength = 0.08;
     }
 }
 

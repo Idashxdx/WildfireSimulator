@@ -125,8 +125,23 @@ public class ApplicationDbContext : DbContext
                 p.Property(pp => pp.StepDurationSeconds).IsRequired();
                 p.Property(pp => pp.RandomSeed).IsRequired(false);
 
+                p.Property(pp => pp.MapCreationMode)
+                    .IsRequired()
+                    .HasConversion<int>();
+
+                p.Property(pp => pp.ScenarioType)
+                    .HasConversion<int?>();
+
+                p.Property(pp => pp.MapNoiseStrength)
+                    .IsRequired()
+                    .HasPrecision(4, 3);
+
                 p.Property(pp => pp.VegetationDistributionsJson)
                     .HasColumnName("VegetationDistributions")
+                    .HasColumnType("jsonb");
+
+                p.Property(pp => pp.MapRegionObjectsJson)
+                    .HasColumnName("MapRegionObjects")
                     .HasColumnType("jsonb");
             });
 

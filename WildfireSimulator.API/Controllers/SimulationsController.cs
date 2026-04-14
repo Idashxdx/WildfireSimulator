@@ -120,7 +120,10 @@ public class SimulationsController : ControllerBase
                 InitialFireCellsCount = request.InitialFireCellsCount,
                 SimulationSteps = request.SimulationSteps,
                 StepDurationSeconds = request.StepDurationSeconds,
-                RandomSeed = request.RandomSeed
+                RandomSeed = request.RandomSeed,
+                MapCreationMode = request.MapCreationMode,
+                ScenarioType = request.ScenarioType,
+                MapNoiseStrength = request.MapNoiseStrength
             };
 
             if (request.VegetationDistributions != null && request.VegetationDistributions.Any())
@@ -130,6 +133,24 @@ public class SimulationsController : ControllerBase
                     {
                         VegetationType = v.VegetationType,
                         Probability = v.Probability
+                    })
+                    .ToList();
+            }
+
+            if (request.MapRegionObjects != null && request.MapRegionObjects.Any())
+            {
+                parameters.MapRegionObjects = request.MapRegionObjects
+                    .Select(x => new MapRegionObject
+                    {
+                        Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
+                        ObjectType = x.ObjectType,
+                        Shape = x.Shape,
+                        StartX = x.StartX,
+                        StartY = x.StartY,
+                        Width = x.Width,
+                        Height = x.Height,
+                        Strength = x.Strength,
+                        Priority = x.Priority
                     })
                     .ToList();
             }
@@ -160,9 +181,12 @@ public class SimulationsController : ControllerBase
             await _simulationRepository.AddAsync(simulation, cancellationToken);
 
             _logger.LogInformation(
-                "Создана симуляция {Id} со статусом {Status}",
+                "Создана симуляция {Id} со статусом {Status}. Режим карты: {Mode}, сценарий: {Scenario}, объектов: {ObjectsCount}",
                 simulation.Id,
-                simulation.Status);
+                simulation.Status,
+                simulation.Parameters.MapCreationMode,
+                simulation.Parameters.ScenarioType,
+                simulation.Parameters.MapRegionObjects.Count);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -249,7 +273,6 @@ public class SimulationsController : ControllerBase
         }
     }
 }
-
 public class CreateSimulationWithWeatherRequest
 {
     public string Name { get; set; } = string.Empty;
@@ -265,6 +288,11 @@ public class CreateSimulationWithWeatherRequest
     public int StepDurationSeconds { get; set; } = 60;
     public int? RandomSeed { get; set; }
 
+    public MapCreationMode MapCreationMode { get; set; } = MapCreationMode.Random;
+    public MapScenarioType? ScenarioType { get; set; }
+    public double MapNoiseStrength { get; set; } = 0.08;
+
+    public List<MapRegionObjectRequest> MapRegionObjects { get; set; } = new();
     public List<InitialFirePositionDto> InitialFirePositions { get; set; } = new();
 
     public double Temperature { get; set; } = 25.0;
@@ -281,8 +309,22 @@ public class InitialFirePositionDto
     public int X { get; set; }
     public int Y { get; set; }
 }
+
 public class VegetationDistributionRequest
 {
     public VegetationType VegetationType { get; set; }
     public double Probability { get; set; }
+}
+
+public class MapRegionObjectRequest
+{
+    public Guid Id { get; set; }
+    public MapObjectType ObjectType { get; set; }
+    public MapObjectShape Shape { get; set; } = MapObjectShape.Rectangle;
+    public int StartX { get; set; }
+    public int StartY { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public double Strength { get; set; } = 1.0;
+    public int Priority { get; set; } = 0;
 }

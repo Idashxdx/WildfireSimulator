@@ -64,11 +64,11 @@ public class ApiService
     }
 
     public async Task<Guid?> CreateSimulationAsync(
-     CreateSimulationDto dto,
-     double temperature,
-     double humidity,
-     double windSpeed,
-     double windDirection)
+    CreateSimulationDto dto,
+    double temperature,
+    double humidity,
+    double windSpeed,
+    double windDirection)
     {
         try
         {
@@ -87,6 +87,12 @@ public class ApiService
                 stepDurationSeconds = dto.StepDurationSeconds,
                 randomSeed = dto.RandomSeed,
                 vegetationDistributions = dto.VegetationDistributions,
+
+                mapCreationMode = dto.MapCreationMode,
+                scenarioType = dto.ScenarioType,
+                mapNoiseStrength = dto.MapNoiseStrength,
+                mapRegionObjects = dto.MapRegionObjects,
+
                 temperature = temperature,
                 humidity = humidity,
                 windSpeed = windSpeed,

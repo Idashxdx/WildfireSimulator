@@ -1393,11 +1393,37 @@ public partial class MainWindowViewModel : ObservableObject
             _ => "Сетка"
         };
 
+        var mapModeText = dialog.SelectedMapCreationMode switch
+        {
+            MapCreationMode.Random => "Случайная генерация",
+            MapCreationMode.Scenario => "Сценарий",
+            MapCreationMode.SemiManual => "Полуручное создание",
+            _ => "Случайная генерация"
+        };
+
+        var scenarioText = dialog.SelectedScenarioType switch
+        {
+            MapScenarioType.MixedForest => "Смешанный лес",
+            MapScenarioType.DryConiferousMassif => "Сухой хвойный массив",
+            MapScenarioType.ForestWithRiver => "Лес с рекой",
+            MapScenarioType.ForestWithLake => "Лес с озером",
+            MapScenarioType.ForestWithFirebreak => "Лес с просекой",
+            MapScenarioType.HillyTerrain => "Холмистая местность",
+            MapScenarioType.WetForestAfterRain => "Влажный лес после дождя",
+            _ => string.Empty
+        };
+
+        var description =
+            $"{graphTypeText} {dialog.GridWidth}x{dialog.GridHeight} | Режим карты: {mapModeText}" +
+            (string.IsNullOrWhiteSpace(scenarioText) ? string.Empty : $" | Сценарий: {scenarioText}") +
+            $" | Ветер: {dialog.WindSpeed} м/с, {GetWindDirectionName(dialog.WindDirection)}" +
+            $" | Осадки: {dialog.Precipitation} мм/ч" +
+            (dialog.RandomSeed.HasValue ? $" | Seed: {dialog.RandomSeed.Value}" : string.Empty);
+
         var dto = new CreateSimulationDto
         {
             Name = dialog.SimulationName,
-            Description = $"{graphTypeText} {dialog.GridWidth}x{dialog.GridHeight} | Ветер: {dialog.WindSpeed} м/с, {GetWindDirectionName(dialog.WindDirection)} | Осадки: {dialog.Precipitation} мм/ч" +
-                          (dialog.RandomSeed.HasValue ? $" | Seed: {dialog.RandomSeed.Value}" : string.Empty),
+            Description = description,
             GridWidth = dialog.GridWidth,
             GridHeight = dialog.GridHeight,
             GraphType = (int)graphType,
@@ -1409,6 +1435,12 @@ public partial class MainWindowViewModel : ObservableObject
             StepDurationSeconds = dialog.StepDurationSeconds,
             RandomSeed = dialog.RandomSeed,
             Precipitation = dialog.Precipitation,
+
+            MapCreationMode = dialog.SelectedMapCreationMode,
+            ScenarioType = dialog.SelectedScenarioType,
+            MapNoiseStrength = dialog.MapNoiseStrength,
+            MapRegionObjects = dialog.MapRegionObjects,
+
             VegetationDistributions = dialog.VegetationDistributions
                 .Select(v => new VegetationDistributionDto
                 {
@@ -1418,34 +1450,22 @@ public partial class MainWindowViewModel : ObservableObject
                 .ToList()
         };
 
-        var id = await _apiService.CreateSimulationAsync(
+        var simulationId = await _apiService.CreateSimulationAsync(
             dto,
             dialog.Temperature,
             dialog.Humidity,
             dialog.WindSpeed,
             dialog.WindDirection);
 
-        if (id.HasValue)
+        if (simulationId.HasValue)
         {
-            SetTransientStatus($"Симуляция создана: {dialog.SimulationName}", true);
-            SimulationInfoText = $"Создана новая симуляция «{dialog.SimulationName}»";
-            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Создана симуляция: {dialog.SimulationName}");
             await LoadSimulationsAsync();
-
-            var newSim = Simulations.FirstOrDefault(s => s.Id == id.Value);
-            if (newSim != null)
-            {
-                SelectedSimulation = newSim;
-                SelectedSimulationStatus = newSim.Status;
-                SelectedSimulationGraphType = newSim.GraphType;
-            }
+            SetTransientStatus($"Симуляция создана: {dto.Name}", true);
         }
         else
         {
-            SetTransientStatus("Ошибка создания симуляции", true);
+            SetTransientStatus("Не удалось создать симуляцию", true);
         }
-
-        RefreshWorkflowStatus();
     }
 
     [RelayCommand]

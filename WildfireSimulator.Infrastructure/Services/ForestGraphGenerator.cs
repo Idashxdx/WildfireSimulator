@@ -97,7 +97,13 @@ public class ForestGraphGenerator : IForestGraphGenerator
 
     public async Task<ForestGraph> GenerateGridAsync(int width, int height, SimulationParameters parameters)
     {
-        _logger.LogInformation("Генерация сетки {Width}x{Height}", width, height);
+        _logger.LogInformation(
+            "Генерация сетки {Width}x{Height}. Режим карты: {Mode}, сценарий: {Scenario}, полуручных объектов: {ObjectsCount}",
+            width,
+            height,
+            parameters.MapCreationMode,
+            parameters.ScenarioType,
+            parameters.MapRegionObjects?.Count ?? 0);
 
         var random = CreateRandom(parameters);
 
@@ -108,27 +114,776 @@ public class ForestGraphGenerator : IForestGraphGenerator
             StepDurationSeconds = parameters.StepDurationSeconds
         };
 
-        var vegetationMap = BuildGridVegetationMap(width, height, parameters, random);
+        BuildGridMaps(
+            width,
+            height,
+            parameters,
+            random,
+            out var vegetationMap,
+            out var moistureMap,
+            out var elevationMap);
 
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
-                var vegetation = vegetationMap[x, y];
-                var moisture = GetRandomMoisture(parameters.InitialMoistureMin, parameters.InitialMoistureMax, random);
-                var elevation = GetRandomElevation(parameters.ElevationVariation, random);
+                var cell = new ForestCell(
+                    x,
+                    y,
+                    vegetationMap[x, y],
+                    moistureMap[x, y],
+                    elevationMap[x, y]);
 
-                var cell = new ForestCell(x, y, vegetation, moisture, elevation);
                 graph.Cells.Add(cell);
             }
         }
 
         CreateEdgesForGrid(graph, width, height);
+        ApplySurfaceBarrierEdgeModifiers(graph);
 
-        _logger.LogInformation("Сгенерировано {Cells} клеток и {Edges} ребер",
-            graph.Cells.Count, graph.Edges.Count);
+        _logger.LogInformation(
+            "Сгенерирована сетка: {Cells} клеток, {Edges} ребер, режим={Mode}",
+            graph.Cells.Count,
+            graph.Edges.Count,
+            parameters.MapCreationMode);
 
         return await Task.FromResult(graph);
+    }
+    private void BuildGridMaps(
+        int width,
+        int height,
+        SimulationParameters parameters,
+        Random random,
+        out VegetationType[,] vegetationMap,
+        out double[,] moistureMap,
+        out double[,] elevationMap)
+    {
+        vegetationMap = new VegetationType[width, height];
+        moistureMap = new double[width, height];
+        elevationMap = new double[width, height];
+
+        switch (parameters.MapCreationMode)
+        {
+            case MapCreationMode.Scenario:
+                BuildScenarioGridMaps(width, height, parameters, random, vegetationMap, moistureMap, elevationMap);
+                break;
+
+            case MapCreationMode.SemiManual:
+                BuildSemiManualGridMaps(width, height, parameters, random, vegetationMap, moistureMap, elevationMap);
+                break;
+
+            default:
+                BuildRandomGridMaps(width, height, parameters, random, vegetationMap, moistureMap, elevationMap);
+                break;
+        }
+    }
+
+    private void BuildRandomGridMaps(
+        int width,
+        int height,
+        SimulationParameters parameters,
+        Random random,
+        VegetationType[,] vegetationMap,
+        double[,] moistureMap,
+        double[,] elevationMap)
+    {
+        var generatedVegetation = BuildGridVegetationMap(width, height, parameters, random);
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                vegetationMap[x, y] = generatedVegetation[x, y];
+                moistureMap[x, y] = GetRandomMoisture(parameters.InitialMoistureMin, parameters.InitialMoistureMax, random);
+                elevationMap[x, y] = GetRandomElevation(parameters.ElevationVariation, random);
+            }
+        }
+
+        ApplyWaterAdjacencyEffects(width, height, vegetationMap, moistureMap, elevationMap, parameters);
+        ApplyTerrainNoise(width, height, vegetationMap, moistureMap, elevationMap, parameters, random);
+    }
+
+    private void BuildScenarioGridMaps(
+        int width,
+        int height,
+        SimulationParameters parameters,
+        Random random,
+        VegetationType[,] vegetationMap,
+        double[,] moistureMap,
+        double[,] elevationMap)
+    {
+        var scenario = parameters.ScenarioType ?? MapScenarioType.MixedForest;
+
+        switch (scenario)
+        {
+            case MapScenarioType.DryConiferousMassif:
+                InitializeBaseLandscape(
+                    width, height, parameters, random,
+                    vegetationMap, moistureMap, elevationMap,
+                    moistureCenter: parameters.InitialMoistureMin + 0.08,
+                    moistureSpread: 0.08,
+                    elevationBaseFactor: 0.15,
+                    vegetationPicker: r => PickByWeights(r,
+                        (VegetationType.Coniferous, 0.62),
+                        (VegetationType.Mixed, 0.20),
+                        (VegetationType.Shrub, 0.12),
+                        (VegetationType.Grass, 0.04),
+                        (VegetationType.Deciduous, 0.02)));
+                break;
+
+            case MapScenarioType.ForestWithRiver:
+                InitializeBaseLandscape(
+                    width, height, parameters, random,
+                    vegetationMap, moistureMap, elevationMap,
+                    moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0,
+                    moistureSpread: 0.10,
+                    elevationBaseFactor: 0.12,
+                    vegetationPicker: r => PickByWeights(r,
+                        (VegetationType.Mixed, 0.45),
+                        (VegetationType.Deciduous, 0.28),
+                        (VegetationType.Coniferous, 0.18),
+                        (VegetationType.Shrub, 0.06),
+                        (VegetationType.Grass, 0.03)));
+                PaintRiver(width, height, vegetationMap, elevationMap, random);
+                break;
+
+            case MapScenarioType.ForestWithLake:
+                InitializeBaseLandscape(
+                    width, height, parameters, random,
+                    vegetationMap, moistureMap, elevationMap,
+                    moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0 + 0.03,
+                    moistureSpread: 0.10,
+                    elevationBaseFactor: 0.10,
+                    vegetationPicker: r => PickByWeights(r,
+                        (VegetationType.Mixed, 0.40),
+                        (VegetationType.Deciduous, 0.30),
+                        (VegetationType.Coniferous, 0.18),
+                        (VegetationType.Shrub, 0.08),
+                        (VegetationType.Grass, 0.04)));
+                PaintLake(width, height, vegetationMap, elevationMap, random);
+                break;
+
+            case MapScenarioType.ForestWithFirebreak:
+                InitializeBaseLandscape(
+                    width, height, parameters, random,
+                    vegetationMap, moistureMap, elevationMap,
+                    moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0,
+                    moistureSpread: 0.10,
+                    elevationBaseFactor: 0.12,
+                    vegetationPicker: r => PickByWeights(r,
+                        (VegetationType.Mixed, 0.42),
+                        (VegetationType.Coniferous, 0.28),
+                        (VegetationType.Deciduous, 0.18),
+                        (VegetationType.Shrub, 0.08),
+                        (VegetationType.Grass, 0.04)));
+                PaintFirebreak(width, height, vegetationMap, random);
+                break;
+
+            case MapScenarioType.HillyTerrain:
+                InitializeBaseLandscape(
+                    width, height, parameters, random,
+                    vegetationMap, moistureMap, elevationMap,
+                    moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0,
+                    moistureSpread: 0.11,
+                    elevationBaseFactor: 0.18,
+                    vegetationPicker: r => PickByWeights(r,
+                        (VegetationType.Mixed, 0.36),
+                        (VegetationType.Coniferous, 0.26),
+                        (VegetationType.Deciduous, 0.18),
+                        (VegetationType.Shrub, 0.12),
+                        (VegetationType.Grass, 0.08)));
+                AddHillFeature(width, height, elevationMap, parameters, width * 0.30, height * 0.35, 1.0);
+                AddHillFeature(width, height, elevationMap, parameters, width * 0.68, height * 0.58, 0.85);
+                AddHillFeature(width, height, elevationMap, parameters, width * 0.48, height * 0.76, 0.70);
+                break;
+
+            case MapScenarioType.WetForestAfterRain:
+                InitializeBaseLandscape(
+                    width, height, parameters, random,
+                    vegetationMap, moistureMap, elevationMap,
+                    moistureCenter: Math.Min(0.92, parameters.InitialMoistureMax + 0.10),
+                    moistureSpread: 0.07,
+                    elevationBaseFactor: 0.12,
+                    vegetationPicker: r => PickByWeights(r,
+                        (VegetationType.Mixed, 0.42),
+                        (VegetationType.Deciduous, 0.30),
+                        (VegetationType.Coniferous, 0.14),
+                        (VegetationType.Shrub, 0.08),
+                        (VegetationType.Grass, 0.06)));
+                AddWetPatches(width, height, moistureMap, random, intensity: 0.14, patchCount: 4);
+                break;
+
+            case MapScenarioType.MixedForest:
+            default:
+                InitializeBaseLandscape(
+                    width, height, parameters, random,
+                    vegetationMap, moistureMap, elevationMap,
+                    moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0,
+                    moistureSpread: 0.10,
+                    elevationBaseFactor: 0.12,
+                    vegetationPicker: r => PickByWeights(r,
+                        (VegetationType.Mixed, 0.44),
+                        (VegetationType.Deciduous, 0.24),
+                        (VegetationType.Coniferous, 0.18),
+                        (VegetationType.Shrub, 0.08),
+                        (VegetationType.Grass, 0.06)));
+                break;
+        }
+
+        ApplyWaterAdjacencyEffects(width, height, vegetationMap, moistureMap, elevationMap, parameters);
+        ApplyTerrainNoise(width, height, vegetationMap, moistureMap, elevationMap, parameters, random);
+    }
+
+    private void BuildSemiManualGridMaps(
+        int width,
+        int height,
+        SimulationParameters parameters,
+        Random random,
+        VegetationType[,] vegetationMap,
+        double[,] moistureMap,
+        double[,] elevationMap)
+    {
+        InitializeBaseLandscape(
+            width, height, parameters, random,
+            vegetationMap, moistureMap, elevationMap,
+            moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0,
+            moistureSpread: 0.10,
+            elevationBaseFactor: 0.10,
+            vegetationPicker: r => GetRandomCombustibleVegetation(parameters.VegetationDistributions, r));
+
+        var orderedObjects = (parameters.MapRegionObjects ?? new List<MapRegionObject>())
+            .OrderBy(o => o.Priority)
+            .ToList();
+
+        foreach (var mapObject in orderedObjects)
+            ApplyMapObject(width, height, parameters, vegetationMap, moistureMap, elevationMap, mapObject);
+
+        ApplyWaterAdjacencyEffects(width, height, vegetationMap, moistureMap, elevationMap, parameters);
+        ApplyTerrainNoise(width, height, vegetationMap, moistureMap, elevationMap, parameters, random);
+    }
+
+    private void InitializeBaseLandscape(
+        int width,
+        int height,
+        SimulationParameters parameters,
+        Random random,
+        VegetationType[,] vegetationMap,
+        double[,] moistureMap,
+        double[,] elevationMap,
+        double moistureCenter,
+        double moistureSpread,
+        double elevationBaseFactor,
+        Func<Random, VegetationType> vegetationPicker)
+    {
+        double elevationRange = Math.Max(1.0, parameters.ElevationVariation * elevationBaseFactor);
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                vegetationMap[x, y] = vegetationPicker(random);
+
+                var moisture = moistureCenter + (random.NextDouble() * 2.0 - 1.0) * moistureSpread;
+                moistureMap[x, y] = ClampMoisture(moisture, parameters);
+
+                elevationMap[x, y] = (random.NextDouble() * 2.0 - 1.0) * elevationRange;
+            }
+        }
+    }
+
+    private VegetationType PickByWeights(Random random, params (VegetationType Type, double Weight)[] items)
+    {
+        double total = items.Sum(i => Math.Max(0.0, i.Weight));
+        if (total <= 0.000001)
+            return VegetationType.Mixed;
+
+        double roll = random.NextDouble() * total;
+        double cumulative = 0.0;
+
+        foreach (var item in items)
+        {
+            cumulative += Math.Max(0.0, item.Weight);
+            if (roll <= cumulative)
+                return item.Type;
+        }
+
+        return items[^1].Type;
+    }
+
+    private void PaintRiver(
+        int width,
+        int height,
+        VegetationType[,] vegetationMap,
+        double[,] elevationMap,
+        Random random)
+    {
+        bool vertical = width >= height;
+        int thickness = Math.Max(1, Math.Min(3, Math.Min(width, height) / 12));
+
+        if (vertical)
+        {
+            double centerX = width * (0.30 + random.NextDouble() * 0.40);
+
+            for (int y = 0; y < height; y++)
+            {
+                double drift = Math.Sin((double)y / Math.Max(4.0, height / 5.0)) * (1.5 + random.NextDouble());
+                int riverX = (int)Math.Round(centerX + drift);
+
+                for (int dx = -thickness; dx <= thickness; dx++)
+                {
+                    int x = riverX + dx;
+                    if (x < 0 || x >= width)
+                        continue;
+
+                    vegetationMap[x, y] = VegetationType.Water;
+                    elevationMap[x, y] -= 8.0 + Math.Abs(dx) * 1.5;
+                }
+            }
+        }
+        else
+        {
+            double centerY = height * (0.30 + random.NextDouble() * 0.40);
+
+            for (int x = 0; x < width; x++)
+            {
+                double drift = Math.Sin((double)x / Math.Max(4.0, width / 5.0)) * (1.5 + random.NextDouble());
+                int riverY = (int)Math.Round(centerY + drift);
+
+                for (int dy = -thickness; dy <= thickness; dy++)
+                {
+                    int y = riverY + dy;
+                    if (y < 0 || y >= height)
+                        continue;
+
+                    vegetationMap[x, y] = VegetationType.Water;
+                    elevationMap[x, y] -= 8.0 + Math.Abs(dy) * 1.5;
+                }
+            }
+        }
+    }
+
+    private void PaintLake(
+        int width,
+        int height,
+        VegetationType[,] vegetationMap,
+        double[,] elevationMap,
+        Random random)
+    {
+        double centerX = width * (0.35 + random.NextDouble() * 0.30);
+        double centerY = height * (0.35 + random.NextDouble() * 0.30);
+
+        double radiusX = Math.Max(2.0, width * (0.12 + random.NextDouble() * 0.08));
+        double radiusY = Math.Max(2.0, height * (0.12 + random.NextDouble() * 0.08));
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                double nx = (x - centerX) / radiusX;
+                double ny = (y - centerY) / radiusY;
+                double distance = nx * nx + ny * ny;
+
+                if (distance <= 1.0)
+                {
+                    vegetationMap[x, y] = VegetationType.Water;
+                    elevationMap[x, y] -= 10.0 * (1.05 - distance);
+                }
+            }
+        }
+    }
+
+    private void PaintFirebreak(
+        int width,
+        int height,
+        VegetationType[,] vegetationMap,
+        Random random)
+    {
+        bool vertical = width >= height;
+        int thickness = Math.Max(1, Math.Min(2, Math.Min(width, height) / 15));
+
+        if (vertical)
+        {
+            int centerX = (int)Math.Round(width * (0.35 + random.NextDouble() * 0.30));
+
+            for (int x = centerX - thickness; x <= centerX + thickness; x++)
+            {
+                if (x < 0 || x >= width)
+                    continue;
+
+                for (int y = 0; y < height; y++)
+                    vegetationMap[x, y] = VegetationType.Bare;
+            }
+
+            for (int side = -1; side <= 1; side += 2)
+            {
+                int grassX = centerX + side * (thickness + 1);
+                if (grassX < 0 || grassX >= width)
+                    continue;
+
+                for (int y = 0; y < height; y++)
+                {
+                    if (vegetationMap[grassX, y] != VegetationType.Water)
+                        vegetationMap[grassX, y] = VegetationType.Grass;
+                }
+            }
+        }
+        else
+        {
+            int centerY = (int)Math.Round(height * (0.35 + random.NextDouble() * 0.30));
+
+            for (int y = centerY - thickness; y <= centerY + thickness; y++)
+            {
+                if (y < 0 || y >= height)
+                    continue;
+
+                for (int x = 0; x < width; x++)
+                    vegetationMap[x, y] = VegetationType.Bare;
+            }
+
+            for (int side = -1; side <= 1; side += 2)
+            {
+                int grassY = centerY + side * (thickness + 1);
+                if (grassY < 0 || grassY >= height)
+                    continue;
+
+                for (int x = 0; x < width; x++)
+                {
+                    if (vegetationMap[x, grassY] != VegetationType.Water)
+                        vegetationMap[x, grassY] = VegetationType.Grass;
+                }
+            }
+        }
+    }
+
+    private void AddHillFeature(
+        int width,
+        int height,
+        double[,] elevationMap,
+        SimulationParameters parameters,
+        double centerX,
+        double centerY,
+        double strength)
+    {
+        double radius = Math.Max(3.0, Math.Min(width, height) * 0.18);
+        double amplitude = Math.Max(4.0, parameters.ElevationVariation * 0.55 * strength);
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                double dx = x - centerX;
+                double dy = y - centerY;
+                double distance = Math.Sqrt(dx * dx + dy * dy);
+
+                if (distance > radius * 1.8)
+                    continue;
+
+                double normalized = distance / radius;
+                double falloff = Math.Exp(-(normalized * normalized) * 1.45);
+                elevationMap[x, y] += amplitude * falloff;
+            }
+        }
+    }
+
+    private void AddWetPatches(
+        int width,
+        int height,
+        double[,] moistureMap,
+        Random random,
+        double intensity,
+        int patchCount)
+    {
+        for (int i = 0; i < patchCount; i++)
+        {
+            double centerX = random.NextDouble() * Math.Max(1, width - 1);
+            double centerY = random.NextDouble() * Math.Max(1, height - 1);
+            double radius = Math.Max(2.5, Math.Min(width, height) * (0.10 + random.NextDouble() * 0.08));
+
+            for (int x = 0; x < width; x++)
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    double dx = x - centerX;
+                    double dy = y - centerY;
+                    double distance = Math.Sqrt(dx * dx + dy * dy);
+
+                    if (distance > radius * 1.7)
+                        continue;
+
+                    double normalized = distance / radius;
+                    double falloff = Math.Exp(-(normalized * normalized) * 1.30);
+                    moistureMap[x, y] += intensity * falloff;
+                }
+            }
+        }
+    }
+
+    private void ApplyMapObject(
+        int width,
+        int height,
+        SimulationParameters parameters,
+        VegetationType[,] vegetationMap,
+        double[,] moistureMap,
+        double[,] elevationMap,
+        MapRegionObject mapObject)
+    {
+        if (mapObject.Width <= 0 || mapObject.Height <= 0)
+            return;
+
+        double baseElevationDelta = Math.Max(4.0, parameters.ElevationVariation * 0.55 * Math.Max(0.1, mapObject.Strength));
+        double moistureDelta = 0.22 * Math.Max(0.1, mapObject.Strength);
+
+        ForEachObjectCell(width, height, mapObject, (x, y, influence) =>
+        {
+            switch (mapObject.ObjectType)
+            {
+                case MapObjectType.ConiferousArea:
+                    vegetationMap[x, y] = VegetationType.Coniferous;
+                    break;
+
+                case MapObjectType.DeciduousArea:
+                    vegetationMap[x, y] = VegetationType.Deciduous;
+                    break;
+
+                case MapObjectType.MixedForestArea:
+                    vegetationMap[x, y] = VegetationType.Mixed;
+                    break;
+
+                case MapObjectType.GrassArea:
+                    vegetationMap[x, y] = VegetationType.Grass;
+                    break;
+
+                case MapObjectType.ShrubArea:
+                    vegetationMap[x, y] = VegetationType.Shrub;
+                    break;
+
+                case MapObjectType.WaterBody:
+                    vegetationMap[x, y] = VegetationType.Water;
+                    elevationMap[x, y] -= 10.0 * influence;
+                    moistureMap[x, y] = Math.Max(moistureMap[x, y], 0.92);
+                    break;
+
+                case MapObjectType.Firebreak:
+                    vegetationMap[x, y] = VegetationType.Bare;
+                    moistureMap[x, y] = Math.Min(moistureMap[x, y], 0.18);
+                    break;
+
+                case MapObjectType.WetZone:
+                    moistureMap[x, y] += moistureDelta * influence;
+                    break;
+
+                case MapObjectType.DryZone:
+                    moistureMap[x, y] -= moistureDelta * influence;
+                    break;
+
+                case MapObjectType.Hill:
+                    elevationMap[x, y] += baseElevationDelta * influence;
+                    break;
+
+                case MapObjectType.Lowland:
+                    elevationMap[x, y] -= baseElevationDelta * influence;
+                    moistureMap[x, y] += 0.06 * influence;
+                    break;
+            }
+        });
+
+        ClampMaps(width, height, vegetationMap, moistureMap, elevationMap, parameters);
+    }
+
+    private void ForEachObjectCell(
+        int width,
+        int height,
+        MapRegionObject mapObject,
+        Action<int, int, double> action)
+    {
+        int startX = Math.Max(0, mapObject.StartX);
+        int startY = Math.Max(0, mapObject.StartY);
+        int endX = Math.Min(width - 1, mapObject.StartX + mapObject.Width - 1);
+        int endY = Math.Min(height - 1, mapObject.StartY + mapObject.Height - 1);
+
+        if (endX < startX || endY < startY)
+            return;
+
+        double centerX = mapObject.StartX + (mapObject.Width - 1) / 2.0;
+        double centerY = mapObject.StartY + (mapObject.Height - 1) / 2.0;
+        double halfWidth = Math.Max(1.0, mapObject.Width / 2.0);
+        double halfHeight = Math.Max(1.0, mapObject.Height / 2.0);
+
+        for (int x = startX; x <= endX; x++)
+        {
+            for (int y = startY; y <= endY; y++)
+            {
+                double influence;
+
+                if (mapObject.Shape == MapObjectShape.Ellipse)
+                {
+                    double nx = (x - centerX) / halfWidth;
+                    double ny = (y - centerY) / halfHeight;
+                    double d = nx * nx + ny * ny;
+
+                    if (d > 1.0)
+                        continue;
+
+                    influence = Math.Clamp(1.0 - d, 0.15, 1.0);
+                }
+                else
+                {
+                    double dx = Math.Abs(x - centerX) / halfWidth;
+                    double dy = Math.Abs(y - centerY) / halfHeight;
+                    double edge = Math.Max(dx, dy);
+                    influence = Math.Clamp(1.0 - edge * 0.75, 0.20, 1.0);
+                }
+
+                action(x, y, influence);
+            }
+        }
+    }
+
+    private void ApplyWaterAdjacencyEffects(
+        int width,
+        int height,
+        VegetationType[,] vegetationMap,
+        double[,] moistureMap,
+        double[,] elevationMap,
+        SimulationParameters parameters)
+    {
+        var originalMoisture = (double[,])moistureMap.Clone();
+        var originalElevation = (double[,])elevationMap.Clone();
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (vegetationMap[x, y] == VegetationType.Water)
+                {
+                    moistureMap[x, y] = 1.0;
+                    continue;
+                }
+
+                int nearestWaterDistance = FindNearestVegetationDistance(x, y, width, height, vegetationMap, VegetationType.Water, 4);
+                if (nearestWaterDistance <= 0)
+                    continue;
+
+                double factor = nearestWaterDistance switch
+                {
+                    1 => 0.16,
+                    2 => 0.10,
+                    3 => 0.06,
+                    4 => 0.03,
+                    _ => 0.0
+                };
+
+                moistureMap[x, y] = ClampMoisture(originalMoisture[x, y] + factor, parameters);
+                elevationMap[x, y] = originalElevation[x, y] - factor * 6.0;
+            }
+        }
+    }
+
+    private int FindNearestVegetationDistance(
+        int startX,
+        int startY,
+        int width,
+        int height,
+        VegetationType[,] vegetationMap,
+        VegetationType targetType,
+        int maxDistance)
+    {
+        for (int distance = 1; distance <= maxDistance; distance++)
+        {
+            for (int dx = -distance; dx <= distance; dx++)
+            {
+                for (int dy = -distance; dy <= distance; dy++)
+                {
+                    int x = startX + dx;
+                    int y = startY + dy;
+
+                    if (x < 0 || x >= width || y < 0 || y >= height)
+                        continue;
+
+                    if (Math.Abs(dx) + Math.Abs(dy) > maxDistance + 1)
+                        continue;
+
+                    if (vegetationMap[x, y] == targetType)
+                        return distance;
+                }
+            }
+        }
+
+        return int.MaxValue;
+    }
+
+    private void ApplyTerrainNoise(
+        int width,
+        int height,
+        VegetationType[,] vegetationMap,
+        double[,] moistureMap,
+        double[,] elevationMap,
+        SimulationParameters parameters,
+        Random random)
+    {
+        double noiseStrength = Math.Clamp(parameters.MapNoiseStrength, 0.0, 0.30);
+
+        if (noiseStrength <= 0.0001)
+        {
+            ClampMaps(width, height, vegetationMap, moistureMap, elevationMap, parameters);
+            return;
+        }
+
+        double moistureAmplitude = 0.12 * noiseStrength;
+        double elevationAmplitude = Math.Max(1.0, parameters.ElevationVariation * 0.12 * noiseStrength);
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (vegetationMap[x, y] != VegetationType.Water)
+                {
+                    moistureMap[x, y] += (random.NextDouble() * 2.0 - 1.0) * moistureAmplitude;
+                    elevationMap[x, y] += (random.NextDouble() * 2.0 - 1.0) * elevationAmplitude;
+                }
+            }
+        }
+
+        ClampMaps(width, height, vegetationMap, moistureMap, elevationMap, parameters);
+    }
+
+    private void ClampMaps(
+        int width,
+        int height,
+        VegetationType[,] vegetationMap,
+        double[,] moistureMap,
+        double[,] elevationMap,
+        SimulationParameters parameters)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (vegetationMap[x, y] == VegetationType.Water)
+                {
+                    moistureMap[x, y] = 1.0;
+                }
+                else if (vegetationMap[x, y] == VegetationType.Bare)
+                {
+                    moistureMap[x, y] = Math.Clamp(moistureMap[x, y], 0.02, 0.35);
+                }
+                else
+                {
+                    moistureMap[x, y] = ClampMoisture(moistureMap[x, y], parameters);
+                }
+            }
+        }
+    }
+
+    private double ClampMoisture(double moisture, SimulationParameters parameters)
+    {
+        double min = Math.Clamp(parameters.InitialMoistureMin, 0.0, 1.0);
+        double max = Math.Clamp(parameters.InitialMoistureMax, 0.0, 1.0);
+
+        if (max < min)
+            (min, max) = (max, min);
+
+        return Math.Clamp(moisture, min, max);
     }
 
     private VegetationType[,] BuildGridVegetationMap(

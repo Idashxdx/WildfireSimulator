@@ -11,6 +11,56 @@ public enum GraphType
     RegionClusterGraph = 2
 }
 
+public enum VegetationType
+{
+    Coniferous = 0,
+    Deciduous = 1,
+    Mixed = 2,
+    Grass = 3,
+    Shrub = 4,
+    Water = 5,
+    Bare = 6
+}
+
+public enum MapCreationMode
+{
+    Random = 0,
+    Scenario = 1,
+    SemiManual = 2
+}
+
+public enum MapScenarioType
+{
+    MixedForest = 0,
+    DryConiferousMassif = 1,
+    ForestWithRiver = 2,
+    ForestWithLake = 3,
+    ForestWithFirebreak = 4,
+    HillyTerrain = 5,
+    WetForestAfterRain = 6
+}
+
+public enum MapObjectType
+{
+    ConiferousArea = 0,
+    DeciduousArea = 1,
+    MixedForestArea = 2,
+    GrassArea = 3,
+    ShrubArea = 4,
+    WaterBody = 5,
+    Firebreak = 6,
+    WetZone = 7,
+    DryZone = 8,
+    Hill = 9,
+    Lowland = 10
+}
+
+public enum MapObjectShape
+{
+    Rectangle = 0,
+    Ellipse = 1
+}
+
 public class SimulationDto
 {
     [JsonPropertyName("id")]
@@ -93,9 +143,52 @@ public class CreateSimulationDto
     [JsonPropertyName("precipitation")]
     public double Precipitation { get; set; } = 0.0;
 
+    [JsonPropertyName("mapCreationMode")]
+    public MapCreationMode MapCreationMode { get; set; } = MapCreationMode.Random;
+
+    [JsonPropertyName("scenarioType")]
+    public MapScenarioType? ScenarioType { get; set; }
+
+    [JsonPropertyName("mapNoiseStrength")]
+    public double MapNoiseStrength { get; set; } = 0.08;
+
+    [JsonPropertyName("mapRegionObjects")]
+    public List<MapRegionObjectDto> MapRegionObjects { get; set; } = new();
+
     [JsonPropertyName("vegetationDistributions")]
     public List<VegetationDistributionDto> VegetationDistributions { get; set; } = new();
 }
+
+public class MapRegionObjectDto
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [JsonPropertyName("objectType")]
+    public MapObjectType ObjectType { get; set; }
+
+    [JsonPropertyName("shape")]
+    public MapObjectShape Shape { get; set; } = MapObjectShape.Rectangle;
+
+    [JsonPropertyName("startX")]
+    public int StartX { get; set; }
+
+    [JsonPropertyName("startY")]
+    public int StartY { get; set; }
+
+    [JsonPropertyName("width")]
+    public int Width { get; set; }
+
+    [JsonPropertyName("height")]
+    public int Height { get; set; }
+
+    [JsonPropertyName("strength")]
+    public double Strength { get; set; } = 1.0;
+
+    [JsonPropertyName("priority")]
+    public int Priority { get; set; } = 0;
+}
+
 public class GraphCellDto
 {
     [JsonPropertyName("id")]
@@ -149,6 +242,7 @@ public class GraphCellDto
     public bool IsBurned => State == "Burned";
     public bool IsNormal => State == "Normal";
 }
+
 public class SimulationStatusDto
 {
     public Guid Id { get; set; }
