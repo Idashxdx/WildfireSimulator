@@ -13,11 +13,11 @@ public enum GraphType
 
 public enum VegetationType
 {
-    Coniferous = 0,
-    Deciduous = 1,
-    Mixed = 2,
-    Grass = 3,
-    Shrub = 4,
+    Grass = 0,
+    Shrub = 1,
+    Deciduous = 2,
+    Coniferous = 3,
+    Mixed = 4,
     Water = 5,
     Bare = 6
 }
