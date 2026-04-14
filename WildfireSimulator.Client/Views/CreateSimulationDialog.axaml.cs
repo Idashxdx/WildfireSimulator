@@ -701,16 +701,25 @@ public partial class CreateSimulationDialog : Window
 
     private List<(int VegetationType, double Probability)> ReadVegetationDistributions()
     {
-        return new List<(int VegetationType, double Probability)>
-        {
-            ((int)VegetationType.Coniferous, ParseDouble(_coniferousBox?.Text, 30)),
-            ((int)VegetationType.Deciduous, ParseDouble(_deciduousBox?.Text, 20)),
-            ((int)VegetationType.Mixed, ParseDouble(_mixedBox?.Text, 25)),
-            ((int)VegetationType.Grass, ParseDouble(_grassBox?.Text, 15)),
-            ((int)VegetationType.Shrub, ParseDouble(_shrubBox?.Text, 10)),
-            ((int)VegetationType.Water, ParseDouble(_waterBox?.Text, 0)),
-            ((int)VegetationType.Bare, ParseDouble(_bareBox?.Text, 0))
-        };
+        var raw = new List<(int VegetationType, double Probability)>
+    {
+        ((int)VegetationType.Coniferous, Math.Max(0.0, ParseDouble(_coniferousBox?.Text, 30))),
+        ((int)VegetationType.Deciduous, Math.Max(0.0, ParseDouble(_deciduousBox?.Text, 20))),
+        ((int)VegetationType.Mixed, Math.Max(0.0, ParseDouble(_mixedBox?.Text, 25))),
+        ((int)VegetationType.Grass, Math.Max(0.0, ParseDouble(_grassBox?.Text, 15))),
+        ((int)VegetationType.Shrub, Math.Max(0.0, ParseDouble(_shrubBox?.Text, 10))),
+        ((int)VegetationType.Water, Math.Max(0.0, ParseDouble(_waterBox?.Text, 0))),
+        ((int)VegetationType.Bare, Math.Max(0.0, ParseDouble(_bareBox?.Text, 0)))
+    };
+
+        var total = raw.Sum(x => x.Probability);
+
+        if (total <= 0.000001)
+            return raw.Select(x => (x.VegetationType, 0.0)).ToList();
+
+        return raw
+            .Select(x => (x.VegetationType, x.Probability / total))
+            .ToList();
     }
 
     private static int ParseInt(string? text, int fallback)

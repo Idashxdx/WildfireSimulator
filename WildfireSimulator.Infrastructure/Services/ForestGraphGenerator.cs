@@ -204,13 +204,13 @@ public class ForestGraphGenerator : IForestGraphGenerator
     }
 
     private void BuildScenarioGridMaps(
-        int width,
-        int height,
-        SimulationParameters parameters,
-        Random random,
-        VegetationType[,] vegetationMap,
-        double[,] moistureMap,
-        double[,] elevationMap)
+     int width,
+     int height,
+     SimulationParameters parameters,
+     Random random,
+     VegetationType[,] vegetationMap,
+     double[,] moistureMap,
+     double[,] elevationMap)
     {
         var scenario = parameters.ScenarioType ?? MapScenarioType.MixedForest;
 
@@ -223,7 +223,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                     moistureCenter: parameters.InitialMoistureMin + 0.08,
                     moistureSpread: 0.08,
                     elevationBaseFactor: 0.15,
-                    vegetationPicker: r => PickByWeights(r,
+                    vegetationPicker: r => PickByWeights(r, parameters,
                         (VegetationType.Coniferous, 0.62),
                         (VegetationType.Mixed, 0.20),
                         (VegetationType.Shrub, 0.12),
@@ -238,7 +238,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                     moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0,
                     moistureSpread: 0.10,
                     elevationBaseFactor: 0.12,
-                    vegetationPicker: r => PickByWeights(r,
+                    vegetationPicker: r => PickByWeights(r, parameters,
                         (VegetationType.Mixed, 0.45),
                         (VegetationType.Deciduous, 0.28),
                         (VegetationType.Coniferous, 0.18),
@@ -254,7 +254,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                     moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0 + 0.03,
                     moistureSpread: 0.10,
                     elevationBaseFactor: 0.10,
-                    vegetationPicker: r => PickByWeights(r,
+                    vegetationPicker: r => PickByWeights(r, parameters,
                         (VegetationType.Mixed, 0.40),
                         (VegetationType.Deciduous, 0.30),
                         (VegetationType.Coniferous, 0.18),
@@ -270,7 +270,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                     moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0,
                     moistureSpread: 0.10,
                     elevationBaseFactor: 0.12,
-                    vegetationPicker: r => PickByWeights(r,
+                    vegetationPicker: r => PickByWeights(r, parameters,
                         (VegetationType.Mixed, 0.42),
                         (VegetationType.Coniferous, 0.28),
                         (VegetationType.Deciduous, 0.18),
@@ -286,7 +286,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                     moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0,
                     moistureSpread: 0.11,
                     elevationBaseFactor: 0.18,
-                    vegetationPicker: r => PickByWeights(r,
+                    vegetationPicker: r => PickByWeights(r, parameters,
                         (VegetationType.Mixed, 0.36),
                         (VegetationType.Coniferous, 0.26),
                         (VegetationType.Deciduous, 0.18),
@@ -304,7 +304,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                     moistureCenter: Math.Min(0.92, parameters.InitialMoistureMax + 0.10),
                     moistureSpread: 0.07,
                     elevationBaseFactor: 0.12,
-                    vegetationPicker: r => PickByWeights(r,
+                    vegetationPicker: r => PickByWeights(r, parameters,
                         (VegetationType.Mixed, 0.42),
                         (VegetationType.Deciduous, 0.30),
                         (VegetationType.Coniferous, 0.14),
@@ -321,7 +321,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                     moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0,
                     moistureSpread: 0.10,
                     elevationBaseFactor: 0.12,
-                    vegetationPicker: r => PickByWeights(r,
+                    vegetationPicker: r => PickByWeights(r, parameters,
                         (VegetationType.Mixed, 0.44),
                         (VegetationType.Deciduous, 0.24),
                         (VegetationType.Coniferous, 0.18),
@@ -335,13 +335,13 @@ public class ForestGraphGenerator : IForestGraphGenerator
     }
 
     private void BuildSemiManualGridMaps(
-        int width,
-        int height,
-        SimulationParameters parameters,
-        Random random,
-        VegetationType[,] vegetationMap,
-        double[,] moistureMap,
-        double[,] elevationMap)
+     int width,
+     int height,
+     SimulationParameters parameters,
+     Random random,
+     VegetationType[,] vegetationMap,
+     double[,] moistureMap,
+     double[,] elevationMap)
     {
         InitializeBaseLandscape(
             width, height, parameters, random,
@@ -349,7 +349,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
             moistureCenter: (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0,
             moistureSpread: 0.10,
             elevationBaseFactor: 0.10,
-            vegetationPicker: r => GetRandomCombustibleVegetation(parameters.VegetationDistributions, r));
+            vegetationPicker: r => GetRandomCombustibleVegetation(parameters.VegetationDistributions, r, parameters));
 
         var orderedObjects = (parameters.MapRegionObjects ?? new List<MapRegionObject>())
             .OrderBy(o => o.Priority)
@@ -392,23 +392,34 @@ public class ForestGraphGenerator : IForestGraphGenerator
         }
     }
 
-    private VegetationType PickByWeights(Random random, params (VegetationType Type, double Weight)[] items)
+    private VegetationType PickByWeights(
+      Random random,
+      SimulationParameters parameters,
+      params (VegetationType Type, double Weight)[] items)
     {
-        double total = items.Sum(i => Math.Max(0.0, i.Weight));
+        var fuelDensityFactor = GetNormalizedFuelDensity(parameters);
+
+        var adjusted = items
+            .Select(item => (
+                item.Type,
+                Weight: AdjustFuelWeightForDensity(item.Type, Math.Max(0.0, item.Weight), fuelDensityFactor)))
+            .ToList();
+
+        double total = adjusted.Sum(i => i.Weight);
         if (total <= 0.000001)
             return VegetationType.Mixed;
 
         double roll = random.NextDouble() * total;
         double cumulative = 0.0;
 
-        foreach (var item in items)
+        foreach (var item in adjusted)
         {
-            cumulative += Math.Max(0.0, item.Weight);
+            cumulative += item.Weight;
             if (roll <= cumulative)
                 return item.Type;
         }
 
-        return items[^1].Type;
+        return adjusted[^1].Type;
     }
 
     private void PaintRiver(
@@ -620,18 +631,19 @@ public class ForestGraphGenerator : IForestGraphGenerator
     }
 
     private void ApplyMapObject(
-        int width,
-        int height,
-        SimulationParameters parameters,
-        VegetationType[,] vegetationMap,
-        double[,] moistureMap,
-        double[,] elevationMap,
-        MapRegionObject mapObject)
+     int width,
+     int height,
+     SimulationParameters parameters,
+     VegetationType[,] vegetationMap,
+     double[,] moistureMap,
+     double[,] elevationMap,
+     MapRegionObject mapObject)
     {
         if (mapObject.Width <= 0 || mapObject.Height <= 0)
             return;
 
-        double baseElevationDelta = Math.Max(4.0, parameters.ElevationVariation * 0.55 * Math.Max(0.1, mapObject.Strength));
+        double effectiveElevationVariation = GetEffectiveElevationVariation(parameters.ElevationVariation, parameters);
+        double baseElevationDelta = Math.Max(4.0, effectiveElevationVariation * 0.55 * Math.Max(0.1, mapObject.Strength));
         double moistureDelta = 0.22 * Math.Max(0.1, mapObject.Strength);
 
         ForEachObjectCell(width, height, mapObject, (x, y, influence) =>
@@ -883,10 +895,10 @@ public class ForestGraphGenerator : IForestGraphGenerator
     }
 
     private VegetationType[,] BuildGridVegetationMap(
-        int width,
-        int height,
-        SimulationParameters parameters,
-        Random random)
+     int width,
+     int height,
+     SimulationParameters parameters,
+     Random random)
     {
         var map = new VegetationType[width, height];
 
@@ -894,7 +906,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
         {
             for (int y = 0; y < height; y++)
             {
-                map[x, y] = GetRandomCombustibleVegetation(parameters.VegetationDistributions, random);
+                map[x, y] = GetRandomCombustibleVegetation(parameters.VegetationDistributions, random, parameters);
             }
         }
 
