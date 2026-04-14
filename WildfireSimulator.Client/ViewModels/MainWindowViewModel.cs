@@ -840,9 +840,15 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (SelectedSimulationStatus == 0)
         {
+            if (!IsPreparedMapLoaded)
+            {
+                WorkflowStatusText = "Карта загружается или подготавливается...";
+                return;
+            }
+
             if (HasSavedIgnitionPreview)
             {
-                WorkflowStatusText = "Показаны сохранённые стартовые очаги";
+                WorkflowStatusText = "Сохранённые стартовые очаги показаны на карте. Можно запускать или очистить их.";
                 return;
             }
 
@@ -853,12 +859,12 @@ public partial class MainWindowViewModel : ObservableObject
                     : SelectedIgnitionNodes.Count;
 
                 WorkflowStatusText = selectedCount > 0
-                    ? "Очаги выбраны, можно запускать"
-                    : "Выберите стартовые очаги";
+                    ? $"Очаги выбраны: {selectedCount}. Можно запускать симуляцию."
+                    : "Карта подготовлена. Выберите стартовые очаги вручную.";
                 return;
             }
 
-            WorkflowStatusText = "Готово к запуску";
+            WorkflowStatusText = "Карта подготовлена. Изучите территорию и запускайте пожар.";
             return;
         }
 
