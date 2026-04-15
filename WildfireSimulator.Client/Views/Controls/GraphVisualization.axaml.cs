@@ -18,6 +18,7 @@ public partial class GraphVisualization : UserControl
     private ScrollViewer? _scrollHost;
     private INotifyCollectionChanged? _currentCollection;
     private bool _drawScheduled;
+    private Dictionary<(int X, int Y), GraphCellDto> _cellLookup = new();
 
     private const int PaddingSize = 24;
     private const int MinCellSize = 8;
@@ -138,6 +139,9 @@ public partial class GraphVisualization : UserControl
         _graphCanvas.Children.Clear();
 
         var cells = Cells?.ToList() ?? new List<GraphCellDto>();
+        _cellLookup = cells
+            .GroupBy(c => (c.X, c.Y))
+            .ToDictionary(g => g.Key, g => g.Last());
 
         var safeGridWidth = Math.Max(1, GridWidth);
         var safeGridHeight = Math.Max(1, GridHeight);
@@ -149,8 +153,13 @@ public partial class GraphVisualization : UserControl
         var viewportWidth = _scrollHost?.Bounds.Width ?? 0;
         var viewportHeight = _scrollHost?.Bounds.Height ?? 0;
 
-        var canvasWidth = Math.Max(contentWidth + PaddingSize * 2, viewportWidth > 0 ? viewportWidth : contentWidth + PaddingSize * 2);
-        var canvasHeight = Math.Max(contentHeight + PaddingSize * 2, viewportHeight > 0 ? viewportHeight : contentHeight + PaddingSize * 2);
+        var canvasWidth = Math.Max(
+            contentWidth + PaddingSize * 2,
+            viewportWidth > 0 ? viewportWidth : contentWidth + PaddingSize * 2);
+
+        var canvasHeight = Math.Max(
+            contentHeight + PaddingSize * 2,
+            viewportHeight > 0 ? viewportHeight : contentHeight + PaddingSize * 2);
 
         _graphCanvas.Width = canvasWidth;
         _graphCanvas.Height = canvasHeight;
@@ -166,8 +175,11 @@ public partial class GraphVisualization : UserControl
             return;
         }
 
-        foreach (var cell in cells.OrderBy(c => c.Y).ThenBy(c => c.X))
+        foreach (var cell in cells.Where(c => !IsWaterCell(c)).OrderBy(c => c.Y).ThenBy(c => c.X))
             DrawCell(cell, originX, originY, cellSize);
+
+        foreach (var cell in cells.Where(IsWaterCell).OrderBy(c => c.Y).ThenBy(c => c.X))
+            DrawWaterCell(cell, originX, originY, cellSize);
     }
 
     private int GetCellSize(int gridWidth, int gridHeight)
@@ -221,7 +233,6 @@ public partial class GraphVisualization : UserControl
 
         Canvas.SetLeft(background, originX);
         Canvas.SetTop(background, originY);
-
         _graphCanvas.Children.Add(background);
     }
 
@@ -275,6 +286,109 @@ public partial class GraphVisualization : UserControl
             DrawIgnitionSelectionGlow(x, y, cellSize);
             DrawIgnitionMarker(x, y, cellSize);
         }
+    }
+
+    private void DrawWaterCell(GraphCellDto cell, double originX, double originY, int cellSize)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var x = originX + cell.X * cellSize;
+        var y = originY + cell.Y * cellSize;
+
+        bool hasWaterNeighbor = HasDirectNeighborOfType(cell.X, cell.Y, "water");
+        bool touchesLand = HasDirectNeighborNotOfType(cell.X, cell.Y, "water");
+        bool isClickable = IsIgnitionSelectionEnabled && cell.IsIgnitable;
+
+        double glowInset = hasWaterNeighbor ? -1.0 : 1.0;
+        double waterInset = hasWaterNeighbor ? 0.5 : 2.0;
+
+        if (touchesLand)
+        {
+            var shoreGlow = new Ellipse
+            {
+                Width = cellSize - glowInset * 2,
+                Height = cellSize - glowInset * 2,
+                Fill = new SolidColorBrush(Color.FromArgb(90, 173, 223, 247)),
+                IsHitTestVisible = false
+            };
+
+            Canvas.SetLeft(shoreGlow, x + glowInset);
+            Canvas.SetTop(shoreGlow, y + glowInset);
+            _graphCanvas.Children.Add(shoreGlow);
+        }
+
+        var waterShape = new Ellipse
+        {
+            Width = cellSize - waterInset * 2,
+            Height = cellSize - waterInset * 2,
+            Fill = new SolidColorBrush(GetCellColor(cell)),
+            Stroke = new SolidColorBrush(Color.Parse("#D8F1FB")),
+            StrokeThickness = hasWaterNeighbor ? 0.8 : 1.3,
+            Cursor = isClickable
+                ? new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+                : new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Arrow)
+        };
+
+        ToolTip.SetTip(waterShape, GetCellTooltip(cell));
+
+        if (isClickable)
+        {
+            waterShape.PointerPressed += (_, _) =>
+            {
+                CellClicked?.Invoke(this, cell);
+            };
+        }
+
+        Canvas.SetLeft(waterShape, x + waterInset);
+        Canvas.SetTop(waterShape, y + waterInset);
+        _graphCanvas.Children.Add(waterShape);
+
+        if (cell.IsSelectedIgnition)
+        {
+            DrawIgnitionSelectionGlow(x, y, cellSize);
+            DrawIgnitionMarker(x, y, cellSize);
+        }
+    }
+
+    private bool IsWaterCell(GraphCellDto cell)
+    {
+        return string.Equals(cell.Vegetation?.Trim(), "Water", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool HasDirectNeighborOfType(int x, int y, string vegetation)
+    {
+        return TryGetCell(x - 1, y, out var left) && string.Equals(left.Vegetation, vegetation, StringComparison.OrdinalIgnoreCase)
+            || TryGetCell(x + 1, y, out var right) && string.Equals(right.Vegetation, vegetation, StringComparison.OrdinalIgnoreCase)
+            || TryGetCell(x, y - 1, out var top) && string.Equals(top.Vegetation, vegetation, StringComparison.OrdinalIgnoreCase)
+            || TryGetCell(x, y + 1, out var bottom) && string.Equals(bottom.Vegetation, vegetation, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool HasDirectNeighborNotOfType(int x, int y, string vegetation)
+    {
+        var neighbors = new (int X, int Y)[]
+        {
+            (x - 1, y),
+            (x + 1, y),
+            (x, y - 1),
+            (x, y + 1)
+        };
+
+        foreach (var (nx, ny) in neighbors)
+        {
+            if (!TryGetCell(nx, ny, out var neighbor))
+                return true;
+
+            if (!string.Equals(neighbor.Vegetation?.Trim(), vegetation, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool TryGetCell(int x, int y, out GraphCellDto cell)
+    {
+        return _cellLookup.TryGetValue((x, y), out cell!);
     }
 
     private void DrawIgnitionMarker(double x, double y, int cellSize)
