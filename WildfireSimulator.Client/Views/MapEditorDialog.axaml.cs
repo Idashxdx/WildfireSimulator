@@ -23,8 +23,10 @@ public partial class MapEditorDialog : Window
     private TextBox? _strengthBox;
     private TextBlock? _selectionInfoTextBlock;
     private TextBlock? _objectsSummaryTextBlock;
+    private ListBox? _objectsListBox;
 
     private Button? _undoButton;
+    private Button? _removeSelectedButton;
     private Button? _clearButton;
     private Button? _applyButton;
     private Button? _cancelButton;
@@ -35,6 +37,8 @@ public partial class MapEditorDialog : Window
     private int _dragStartY;
     private int _dragCurrentX;
     private int _dragCurrentY;
+
+    private Guid? _selectedObjectId;
 
     public int GridWidth { get; }
     public int GridHeight { get; }
@@ -52,7 +56,10 @@ public partial class MapEditorDialog : Window
         InitializeComponent();
         FindControls();
         AttachEvents();
+        NormalizePriorities();
+        RefreshObjectsList();
         UpdateSummaryText();
+        UpdateSelectionText();
         DrawMap();
     }
 
@@ -69,8 +76,10 @@ public partial class MapEditorDialog : Window
         _strengthBox = this.FindControl<TextBox>("StrengthBox");
         _selectionInfoTextBlock = this.FindControl<TextBlock>("SelectionInfoTextBlock");
         _objectsSummaryTextBlock = this.FindControl<TextBlock>("ObjectsSummaryTextBlock");
+        _objectsListBox = this.FindControl<ListBox>("ObjectsListBox");
 
         _undoButton = this.FindControl<Button>("UndoButton");
+        _removeSelectedButton = this.FindControl<Button>("RemoveSelectedButton");
         _clearButton = this.FindControl<Button>("ClearButton");
         _applyButton = this.FindControl<Button>("ApplyButton");
         _cancelButton = this.FindControl<Button>("CancelButton");
@@ -86,24 +95,79 @@ public partial class MapEditorDialog : Window
             _mapCanvas.PointerReleased += OnCanvasPointerReleased;
         }
 
+        if (_objectsListBox != null)
+        {
+            _objectsListBox.SelectionChanged += (_, _) =>
+            {
+                if (_objectsListBox.SelectedIndex >= 0 &&
+                    _objectsListBox.SelectedIndex < EditedObjects.Count)
+                {
+                    _selectedObjectId = EditedObjects[_objectsListBox.SelectedIndex].Id;
+                }
+                else
+                {
+                    _selectedObjectId = null;
+                }
+
+                UpdateSummaryText();
+                DrawMap();
+            };
+        }
+
         if (_undoButton != null)
+        {
             _undoButton.Click += (_, _) =>
             {
                 if (EditedObjects.Count == 0)
                     return;
 
+                var removed = EditedObjects[^1];
                 EditedObjects.RemoveAt(EditedObjects.Count - 1);
+
+                if (_selectedObjectId == removed.Id)
+                    _selectedObjectId = null;
+
+                NormalizePriorities();
+                RefreshObjectsList();
                 UpdateSummaryText();
+                UpdateSelectionText();
                 DrawMap();
             };
+        }
+
+        if (_removeSelectedButton != null)
+        {
+            _removeSelectedButton.Click += (_, _) =>
+            {
+                if (_selectedObjectId == null)
+                    return;
+
+                var removed = EditedObjects.RemoveAll(x => x.Id == _selectedObjectId.Value);
+                if (removed == 0)
+                    return;
+
+                _selectedObjectId = null;
+                NormalizePriorities();
+                RefreshObjectsList();
+                UpdateSummaryText();
+                UpdateSelectionText();
+                DrawMap();
+            };
+        }
 
         if (_clearButton != null)
+        {
             _clearButton.Click += (_, _) =>
             {
                 EditedObjects.Clear();
+                _selectedObjectId = null;
+                NormalizePriorities();
+                RefreshObjectsList();
                 UpdateSummaryText();
+                UpdateSelectionText();
                 DrawMap();
             };
+        }
 
         if (_applyButton != null)
             _applyButton.Click += (_, _) => Close(true);
@@ -160,6 +224,7 @@ public partial class MapEditorDialog : Window
         var normalized = GetNormalizedSelection();
         if (normalized.Width <= 0 || normalized.Height <= 0)
         {
+            UpdateSelectionText();
             DrawMap();
             return;
         }
@@ -178,6 +243,10 @@ public partial class MapEditorDialog : Window
         };
 
         EditedObjects.Add(newObject);
+        _selectedObjectId = newObject.Id;
+
+        NormalizePriorities();
+        RefreshObjectsList();
         UpdateSummaryText();
         UpdateSelectionText();
         DrawMap();
@@ -216,11 +285,44 @@ public partial class MapEditorDialog : Window
             }
         }
 
+        foreach (var obj in EditedObjects.OrderBy(o => o.Priority))
+            DrawObjectOutline(obj, cellSize);
+
         if (_isDragging)
         {
             var normalized = GetNormalizedSelection();
             DrawSelectionOverlay(normalized.StartX, normalized.StartY, normalized.Width, normalized.Height, cellSize);
         }
+    }
+
+    private void DrawObjectOutline(MapRegionObjectDto obj, int cellSize)
+    {
+        if (_mapCanvas == null)
+            return;
+
+        bool isSelected = _selectedObjectId == obj.Id;
+
+        Shape overlay;
+
+        if (obj.Shape == MapObjectShape.Ellipse)
+        {
+            overlay = new Ellipse();
+        }
+        else
+        {
+            overlay = new Rectangle();
+        }
+
+        overlay.Width = obj.Width * cellSize;
+        overlay.Height = obj.Height * cellSize;
+        overlay.Fill = Brushes.Transparent;
+        overlay.Stroke = new SolidColorBrush(isSelected ? Color.Parse("#3F345C") : Color.Parse("#6E6A78"));
+        overlay.StrokeThickness = isSelected ? 2.6 : 1.2;
+        overlay.IsHitTestVisible = false;
+
+        Canvas.SetLeft(overlay, CanvasPadding + obj.StartX * cellSize);
+        Canvas.SetTop(overlay, CanvasPadding + obj.StartY * cellSize);
+        _mapCanvas.Children.Add(overlay);
     }
 
     private void DrawSelectionOverlay(int startX, int startY, int width, int height, int cellSize)
@@ -234,7 +336,8 @@ public partial class MapEditorDialog : Window
             Height = height * cellSize,
             Fill = new SolidColorBrush(Color.FromArgb(70, 142, 124, 195)),
             Stroke = new SolidColorBrush(Color.Parse("#8E7CC3")),
-            StrokeThickness = 2
+            StrokeThickness = 2,
+            IsHitTestVisible = false
         };
 
         Canvas.SetLeft(overlay, CanvasPadding + startX * cellSize);
@@ -244,7 +347,7 @@ public partial class MapEditorDialog : Window
 
     private IBrush GetPreviewBrush(int x, int y)
     {
-        var cellColor = Color.Parse("#6C8B55"); // базовый смешанный лес
+        var cellColor = Color.Parse("#6C8B55");
 
         foreach (var obj in EditedObjects.OrderBy(o => o.Priority))
         {
@@ -311,21 +414,105 @@ public partial class MapEditorDialog : Window
         if (_selectionInfoTextBlock == null)
             return;
 
-        if (!_isDragging)
+        if (_isDragging)
         {
-            _selectionInfoTextBlock.Text = "Выделение завершено. Можно продолжать добавлять области.";
+            var selection = GetNormalizedSelection();
+            _selectionInfoTextBlock.Text =
+                $"Выделение: X={selection.StartX}, Y={selection.StartY}, ширина={selection.Width}, высота={selection.Height}";
             return;
         }
 
-        var selection = GetNormalizedSelection();
-        _selectionInfoTextBlock.Text =
-            $"Выделение: X={selection.StartX}, Y={selection.StartY}, ширина={selection.Width}, высота={selection.Height}";
+        if (_selectedObjectId != null)
+        {
+            var selected = EditedObjects.FirstOrDefault(x => x.Id == _selectedObjectId.Value);
+            if (selected != null)
+            {
+                _selectionInfoTextBlock.Text = $"Выбран объект: {BuildObjectDescription(selected)}";
+                return;
+            }
+        }
+
+        _selectionInfoTextBlock.Text = "Выделение завершено. Можно продолжать добавлять области.";
     }
 
     private void UpdateSummaryText()
     {
-        if (_objectsSummaryTextBlock != null)
-            _objectsSummaryTextBlock.Text = $"Добавленных объектов: {EditedObjects.Count}";
+        if (_objectsSummaryTextBlock == null)
+            return;
+
+        if (EditedObjects.Count == 0)
+        {
+            _objectsSummaryTextBlock.Text = "Добавленных объектов: 0";
+            return;
+        }
+
+        var grouped = EditedObjects
+            .GroupBy(x => GetObjectTypeName(x.ObjectType))
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => g.Key)
+            .Select(g => $"{g.Key}: {g.Count()}")
+            .ToList();
+
+        var selectedText = _selectedObjectId == null
+            ? "объект не выбран"
+            : "объект выбран";
+
+        _objectsSummaryTextBlock.Text =
+            $"Добавленных объектов: {EditedObjects.Count} ({selectedText}){Environment.NewLine}" +
+            string.Join(" • ", grouped);
+    }
+
+    private void RefreshObjectsList()
+    {
+        if (_objectsListBox == null)
+            return;
+
+        var items = EditedObjects
+            .OrderBy(x => x.Priority)
+            .Select(BuildObjectDescription)
+            .ToList();
+
+        _objectsListBox.ItemsSource = items;
+
+        if (_selectedObjectId == null)
+        {
+            _objectsListBox.SelectedIndex = -1;
+            return;
+        }
+
+        var selectedIndex = EditedObjects.FindIndex(x => x.Id == _selectedObjectId.Value);
+        _objectsListBox.SelectedIndex = selectedIndex;
+    }
+
+    private void NormalizePriorities()
+    {
+        for (int i = 0; i < EditedObjects.Count; i++)
+            EditedObjects[i].Priority = i;
+    }
+
+    private string BuildObjectDescription(MapRegionObjectDto obj)
+    {
+        var shape = obj.Shape == MapObjectShape.Ellipse ? "эллипс" : "прямоугольник";
+        return $"{GetObjectTypeName(obj.ObjectType)} • {shape} • X={obj.StartX}, Y={obj.StartY}, W={obj.Width}, H={obj.Height}, S={obj.Strength:F1}";
+    }
+
+    private string GetObjectTypeName(MapObjectType type)
+    {
+        return type switch
+        {
+            MapObjectType.ConiferousArea => "Хвойный лес",
+            MapObjectType.DeciduousArea => "Лиственный лес",
+            MapObjectType.MixedForestArea => "Смешанный лес",
+            MapObjectType.GrassArea => "Трава",
+            MapObjectType.ShrubArea => "Кустарник",
+            MapObjectType.WaterBody => "Водоём",
+            MapObjectType.Firebreak => "Просека",
+            MapObjectType.WetZone => "Влажная зона",
+            MapObjectType.DryZone => "Сухая зона",
+            MapObjectType.Hill => "Холм",
+            MapObjectType.Lowland => "Низина",
+            _ => "Объект"
+        };
     }
 
     private MapObjectType GetSelectedTool()

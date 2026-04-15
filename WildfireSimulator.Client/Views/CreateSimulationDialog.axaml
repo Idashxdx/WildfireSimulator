@@ -2,7 +2,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d" d:DesignWidth="620" d:DesignHeight="1080"
+    mc:Ignorable="d" d:DesignWidth="620" d:DesignHeight="1000"
     x:Class="WildfireSimulator.Client.Views.CreateSimulationDialog"
     Title="Создание новой симуляции"
     Width="620"
@@ -31,11 +31,58 @@
 
         <ScrollViewer Grid.Row="0">
             <StackPanel Spacing="14">
-
                 <TextBlock Text="Создание симуляции"
                     Foreground="#2F2A3A"
                     FontSize="24"
                     FontWeight="Bold" />
+
+                <Border Background="#F5FBFF"
+                    BorderBrush="#D7E6F2"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="12">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Быстрые сценарии"
+                            FontWeight="Bold"
+                            Foreground="#2F2A3A" />
+
+                        <TextBlock Text="Готовые настройки для демонстрации"
+                            Foreground="#6E6A78"
+                            FontSize="12" />
+
+                        <WrapPanel>
+                            <Button Content="Сухой хвойный + ветер"
+                                Tag="dry-coniferous"
+                                Click="OnPresetClicked"
+                                Background="#FFE4E1"
+                                Margin="0,0,8,8" />
+
+                            <Button Content="Река как барьер"
+                                Tag="river"
+                                Click="OnPresetClicked"
+                                Background="#E1F0FF"
+                                Margin="0,0,8,8" />
+
+                            <Button Content="Влажный лес"
+                                Tag="wet"
+                                Click="OnPresetClicked"
+                                Background="#E6FFE6"
+                                Margin="0,0,8,8" />
+
+                            <Button Content="Просека"
+                                Tag="firebreak"
+                                Click="OnPresetClicked"
+                                Background="#FFF4E1"
+                                Margin="0,0,8,8" />
+
+                            <Button Content="Холмы"
+                                Tag="hills"
+                                Click="OnPresetClicked"
+                                Background="#F0E6FF"
+                                Margin="0,0,8,8" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
 
                 <Border Background="#F3F7FF"
                     BorderBrush="#D7E4FF"

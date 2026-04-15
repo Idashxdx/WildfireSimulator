@@ -5,13 +5,13 @@
         mc:Ignorable="d"
         x:Class="WildfireSimulator.Client.Views.MapEditorDialog"
         Title="Полуручное создание карты"
-        Width="1100"
-        Height="760"
-        MinWidth="980"
-        MinHeight="680"
+        Width="1180"
+        Height="780"
+        MinWidth="1020"
+        MinHeight="700"
         Background="#FAF8F2">
 
-    <Grid ColumnDefinitions="300,*" RowDefinitions="*,Auto" Margin="16">
+    <Grid ColumnDefinitions="340,*" RowDefinitions="*,Auto" Margin="16">
         <Border Grid.Column="0"
                 Grid.Row="0"
                 Background="#FFFDF8"
@@ -110,18 +110,58 @@
                         </StackPanel>
                     </Border>
 
-                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                    <Border Background="#FFFDF8"
+                            BorderBrush="#E7E0F2"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Добавленные объекты"
+                                       Foreground="#2F2A3A"
+                                       FontWeight="Bold"/>
+                            <ListBox x:Name="ObjectsListBox"
+                                     MinHeight="180"
+                                     MaxHeight="240"
+                                     Background="#FBF9F4"
+                                     BorderBrush="#E6DFEE"
+                                     BorderThickness="1">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="4"
+                                                Padding="8"
+                                                Background="#FFFDF8"
+                                                BorderBrush="#EEE7F6"
+                                                BorderThickness="1"
+                                                CornerRadius="8">
+                                            <TextBlock Text="{Binding}"
+                                                       Foreground="#2F2A3A"
+                                                       TextWrapping="Wrap"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </Border>
+
+                    <Grid ColumnDefinitions="*,*"
+                          ColumnSpacing="8">
                         <Button Grid.Column="0"
                                 x:Name="UndoButton"
                                 Content="Отменить последнее"
                                 Background="#ECE6FA"
                                 Foreground="#2F2A3A"/>
+
                         <Button Grid.Column="1"
-                                x:Name="ClearButton"
-                                Content="Очистить всё"
-                                Background="#F5E2DE"
+                                x:Name="RemoveSelectedButton"
+                                Content="Удалить выбранное"
+                                Background="#F7DDD7"
                                 Foreground="#7A4037"/>
                     </Grid>
+
+                    <Button x:Name="ClearButton"
+                            Content="Очистить всё"
+                            Background="#F5E2DE"
+                            Foreground="#7A4037"/>
 
                     <Border Background="#FFFDF8"
                             BorderBrush="#E7E0F2"
@@ -136,12 +176,17 @@
                                        Foreground="#4F6B3C"/>
                             <TextBlock Text="Зелёный — лиственный/смешанный лес"
                                        Foreground="#567A48"/>
+                            <TextBlock Text="Жёлто-зелёный — трава / кустарник"
+                                       Foreground="#88974D"/>
                             <TextBlock Text="Голубой — вода / влажная зона"
                                        Foreground="#3D6F97"/>
                             <TextBlock Text="Бежевый / серый — сухая зона / просека"
                                        Foreground="#8A6E4D"/>
-                            <TextBlock Text="Тёплый коричневый — холм, холодный — низина"
+                            <TextBlock Text="Тёплый коричневый — холм, холодный зелёно-синий — низина"
                                        Foreground="#7A5B46"/>
+                            <TextBlock Text="Фиолетовая рамка — текущее выделение, тёмная рамка — выбранный объект"
+                                       Foreground="#6E6A78"
+                                       TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -160,8 +205,8 @@
                           VerticalScrollBarVisibility="Auto">
                 <Canvas x:Name="MapCanvas"
                         Background="#FBF9F4"
-                        MinWidth="500"
-                        MinHeight="500"/>
+                        MinWidth="520"
+                        MinHeight="520"/>
             </ScrollViewer>
         </Border>
 
@@ -174,23 +219,28 @@
                 CornerRadius="12"
                 Padding="12"
                 Margin="0,12,0,0">
-            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+            <Grid ColumnDefinitions="*,*,*"
+                  ColumnSpacing="10">
                 <Button Grid.Column="0"
+                        x:Name="ApplyButton"
+                        Content="Применить"
+                        Background="#CDECBF"
+                        Foreground="#2F2A3A"
+                        FontWeight="SemiBold"/>
+
+                <Button Grid.Column="1"
                         x:Name="CancelButton"
                         Content="Отмена"
                         Background="#ECE6FA"
-                        Foreground="#2F2A3A"/>
-                <Button Grid.Column="1"
-                        x:Name="ApplyButton"
-                        Content="Сохранить карту"
-                        Background="#B7E4A8"
                         Foreground="#2F2A3A"
-                        FontWeight="Bold"/>
+                        FontWeight="SemiBold"/>
+
                 <Button Grid.Column="2"
                         x:Name="CloseOnlyButton"
-                        Content="Закрыть без сохранения"
-                        Background="#F3ECE8"
-                        Foreground="#6E6A78"/>
+                        Content="Закрыть без изменений"
+                        Background="#F5E2DE"
+                        Foreground="#7A4037"
+                        FontWeight="SemiBold"/>
             </Grid>
         </Border>
     </Grid>
