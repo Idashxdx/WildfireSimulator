@@ -631,7 +631,7 @@ public partial class CreateSimulationDialog : Window
 
         if (width < 5 || height < 5)
         {
-            ShowError("Сначала задайте корректные размеры карты.");
+            ShowError("Сначала задайте корректные размеры территории.");
             return;
         }
 
@@ -662,7 +662,24 @@ public partial class CreateSimulationDialog : Window
         UpdateStructurePreview();
         ClearErrors();
     }
-
+    private string GetMapObjectTypeName(MapObjectType type)
+    {
+        return type switch
+        {
+            MapObjectType.ConiferousArea => "Хвойная зона",
+            MapObjectType.DeciduousArea => "Лиственная зона",
+            MapObjectType.MixedForestArea => "Смешанный лес",
+            MapObjectType.GrassArea => "Трава",
+            MapObjectType.ShrubArea => "Кустарник",
+            MapObjectType.WaterBody => "Водоём",
+            MapObjectType.Firebreak => "Просека",
+            MapObjectType.WetZone => "Влажная зона",
+            MapObjectType.DryZone => "Сухая зона",
+            MapObjectType.Hill => "Холм",
+            MapObjectType.Lowland => "Низина",
+            _ => type.ToString()
+        };
+    }
     private void ApplyDefaults()
     {
         if (_nameBox == null ||
@@ -756,46 +773,53 @@ public partial class CreateSimulationDialog : Window
 
     private void ApplyModeTexts()
     {
-        if (_typeInfoTextBlock == null ||
-            _typeHintTextBlock == null ||
-            _widthLabelTextBlock == null ||
-            _heightLabelTextBlock == null ||
-            _widthHintTextBlock == null ||
-            _heightHintTextBlock == null ||
-            _fireCellsHintTextBlock == null)
+        bool isGrid = _page == AppPage.Grid;
+        bool isClustered = _page == AppPage.Graph && _mode == GraphCreationMode.Clustered;
+        bool isRegion = _page == AppPage.Graph && _mode == GraphCreationMode.RegionCluster;
+
+        if (_typeInfoTextBlock != null)
         {
-            return;
+            _typeInfoTextBlock.Text = isGrid
+                ? "Сеточная симуляция"
+                : isClustered
+                    ? "Кластерный граф"
+                    : "Региональный граф";
         }
 
-        if (_page == AppPage.Grid)
+        if (_typeHintTextBlock != null)
         {
-            _typeInfoTextBlock.Text = "Сеточная симуляция";
-            _typeHintTextBlock.Text = "Карта задаётся на регулярной сетке. Это лучший режим для сценариев и полуручного построения.";
-            _widthLabelTextBlock.Text = "Ширина";
-            _heightLabelTextBlock.Text = "Высота";
-            _widthHintTextBlock.Text = "Минимум 5, максимум 100.";
-            _heightHintTextBlock.Text = "Минимум 5, максимум 100.";
-            _fireCellsHintTextBlock.Text = "Минимум 1.";
+            _typeHintTextBlock.Text = isGrid
+                ? "Будет создана клеточная модель лесной территории. Сценарии и полуручное создание напрямую формируют карту клеток."
+                : isClustered
+                    ? "Будет создан кластерный граф поверх исходной территории. Сценарии и полуручное создание сначала задают территорию, а затем она агрегируется в патчи."
+                    : "Будет создан региональный граф поверх исходной территории. Сценарии и полуручное создание сначала задают территорию, а затем она агрегируется в регионы и межрегиональные связи.";
         }
-        else if (_mode == GraphCreationMode.RegionCluster)
+
+        if (_widthLabelTextBlock != null)
+            _widthLabelTextBlock.Text = isGrid ? "Ширина сетки" : "Ширина территории";
+
+        if (_heightLabelTextBlock != null)
+            _heightLabelTextBlock.Text = isGrid ? "Высота сетки" : "Высота территории";
+
+        if (_widthHintTextBlock != null)
         {
-            _typeInfoTextBlock.Text = "Региональный граф";
-            _typeHintTextBlock.Text = "Территория делится на регионы с плотными внутренними связями.";
-            _widthLabelTextBlock.Text = "Ширина территории";
-            _heightLabelTextBlock.Text = "Высота территории";
-            _widthHintTextBlock.Text = "Используется для построения регионов.";
-            _heightHintTextBlock.Text = "Используется для построения регионов.";
-            _fireCellsHintTextBlock.Text = "Обычно достаточно 1 очага.";
+            _widthHintTextBlock.Text = isGrid
+                ? "Минимум 5, максимум 100. Определяет число столбцов клеточной карты."
+                : "Минимум 5, максимум 100. Определяет ширину базовой территории, из которой будет построено графовое представление.";
         }
-        else
+
+        if (_heightHintTextBlock != null)
         {
-            _typeInfoTextBlock.Text = "Кластерный граф";
-            _typeHintTextBlock.Text = "Будет построен граф с локально связанными кластерами.";
-            _widthLabelTextBlock.Text = "Ширина области";
-            _heightLabelTextBlock.Text = "Высота области";
-            _widthHintTextBlock.Text = "Влияет на геометрию кластеров.";
-            _heightHintTextBlock.Text = "Влияет на геометрию кластеров.";
-            _fireCellsHintTextBlock.Text = "Обычно достаточно 1 очага.";
+            _heightHintTextBlock.Text = isGrid
+                ? "Минимум 5, максимум 100. Определяет число строк клеточной карты."
+                : "Минимум 5, максимум 100. Определяет высоту базовой территории, из которой будет построено графовое представление.";
+        }
+
+        if (_fireCellsHintTextBlock != null)
+        {
+            _fireCellsHintTextBlock.Text = isGrid
+                ? "Минимум 1. Очаги задаются на клеточной карте."
+                : "Минимум 1. Очаги будут выбраны на итоговом графовом представлении после построения территории.";
         }
     }
 
@@ -814,29 +838,60 @@ public partial class CreateSimulationDialog : Window
         if (_semiManualPanel != null)
             _semiManualPanel.IsVisible = SelectedMapCreationMode == MapCreationMode.SemiManual;
 
+        bool isGrid = _page == AppPage.Grid;
+        bool isClustered = _page == AppPage.Graph && _mode == GraphCreationMode.Clustered;
+        bool isRegion = _page == AppPage.Graph && _mode == GraphCreationMode.RegionCluster;
+
         if (_mapModeDescriptionTextBlock != null)
         {
             _mapModeDescriptionTextBlock.Text = SelectedMapCreationMode switch
             {
-                MapCreationMode.Random =>
-                    "Карта создаётся автоматически по распределениям растительности и общим параметрам. Подходит для быстрого запуска экспериментов и серии сравнений.",
+                MapCreationMode.Random => isGrid
+                    ? "Карта будет сформирована автоматически по параметрам влажности, рельефа и распределениям растительности."
+                    : "Сначала будет автоматически сформирована базовая территория, после чего из неё будет построено выбранное графовое представление.",
 
-                MapCreationMode.Scenario =>
-                    "Карта создаётся по готовому демонстрационному сценарию. Сценарий заранее задаёт характер ландшафта, влажности, рельефа и барьеров.",
+                MapCreationMode.Scenario => isGrid
+                    ? "Будет использован готовый сценарий клеточной карты: река, озеро, просека, холмы или другой тип местности."
+                    : "Будет использован готовый сценарий территории. Затем эта территория будет преобразована в кластерный или региональный граф.",
 
-                MapCreationMode.SemiManual =>
-                    "Вы сами задаёте крупные области территории: лес, воду, просеки, влажные и сухие зоны, холмы и низины. Режим подходит для демонстрации влияния особенностей местности на пожар.",
+                MapCreationMode.SemiManual => isGrid
+                    ? "Вы задаёте области территории вручную: воду, просеки, влажные и сухие зоны, холмы и другие объекты. Они сразу формируют клеточную карту."
+                    : isClustered
+                        ? "Вы задаёте области исходной территории вручную. Затем эта территория агрегируется в патчи и строится кластерный граф."
+                        : "Вы задаёте области исходной территории вручную. Затем эта территория агрегируется в регионы и строится региональный граф.",
 
-                _ => "Карта будет создана автоматически."
+                _ => "Карта будет сформирована автоматически."
             };
         }
 
         if (_semiManualDescriptionTextBlock != null)
         {
-            _semiManualDescriptionTextBlock.Text = MapRegionObjects.Count == 0
-                ? "Объекты карты ещё не добавлены. Откройте редактор и создайте области вручную."
-                : BuildMapObjectsDetailedSummary();
+            if (SelectedMapCreationMode != MapCreationMode.SemiManual)
+            {
+                _semiManualDescriptionTextBlock.Text = string.Empty;
+            }
+            else if (MapRegionObjects.Count == 0)
+            {
+                _semiManualDescriptionTextBlock.Text = isGrid
+                    ? "Объекты карты ещё не добавлены. Откройте редактор и создайте области вручную."
+                    : isClustered
+                        ? "Объекты территории ещё не добавлены. Откройте редактор территории и задайте области, из которых потом будут построены патчи."
+                        : "Объекты территории ещё не добавлены. Откройте редактор территории и задайте области, из которых потом будут построены регионы.";
+            }
+            else
+            {
+                var prefix = isGrid
+                    ? "Созданные области напрямую изменят клеточную карту."
+                    : isClustered
+                        ? "Созданные области сначала изменят базовую территорию, а затем повлияют на состав патчей и связи кластерного графа."
+                        : "Созданные области сначала изменят базовую территорию, а затем повлияют на состав регионов и межрегиональные связи.";
+
+                _semiManualDescriptionTextBlock.Text = $"{prefix} {BuildMapObjectsDetailedSummary()}";
+            }
         }
+
+        if (_openMapEditorButton != null)
+            _openMapEditorButton.Content = isGrid ? "Открыть редактор карты" : "Открыть редактор территории";
 
         UpdateScenarioDescription();
         UpdateMapEditorSummary();
@@ -863,46 +918,38 @@ public partial class CreateSimulationDialog : Window
             $"Состав: {string.Join(" • ", grouped)}";
     }
 
-    private string GetMapObjectTypeName(MapObjectType type)
-    {
-        return type switch
-        {
-            MapObjectType.ConiferousArea => "Хвойный лес",
-            MapObjectType.DeciduousArea => "Лиственный лес",
-            MapObjectType.MixedForestArea => "Смешанный лес",
-            MapObjectType.GrassArea => "Трава",
-            MapObjectType.ShrubArea => "Кустарник",
-            MapObjectType.WaterBody => "Водоём",
-            MapObjectType.Firebreak => "Просека",
-            MapObjectType.WetZone => "Влажная зона",
-            MapObjectType.DryZone => "Сухая зона",
-            MapObjectType.Hill => "Холм",
-            MapObjectType.Lowland => "Низина",
-            _ => "Объект"
-        };
-    }
+
 
     private void UpdateMapEditorSummary()
     {
         if (_mapEditorSummaryTextBlock == null)
             return;
 
-        if (SelectedMapCreationMode != MapCreationMode.SemiManual)
+        bool isGrid = _page == AppPage.Grid;
+        int count = MapRegionObjects?.Count ?? 0;
+
+        if (count == 0)
         {
-            _mapEditorSummaryTextBlock.Text = string.Empty;
+            _mapEditorSummaryTextBlock.Text = isGrid
+                ? "Объекты карты ещё не добавлены."
+                : "Объекты территории ещё не добавлены.";
             return;
         }
 
-        if (_page != AppPage.Grid)
-        {
-            _mapEditorSummaryTextBlock.Text = "Редактор доступен для сеточного режима.";
-            return;
-        }
+        var grouped = MapRegionObjects
+            .GroupBy(x => x.ObjectType)
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => g.Key.ToString())
+            .Select(g => $"{GetMapObjectTypeName(g.Key)}: {g.Count()}")
+            .ToList();
 
-        _mapEditorSummaryTextBlock.Text = MapRegionObjects.Count == 0
-            ? "Пока не добавлено ни одной области."
-            : BuildMapObjectsDetailedSummary();
+        string prefix = isGrid
+            ? $"Добавлено объектов карты: {count}."
+            : $"Добавлено объектов территории: {count}.";
+
+        _mapEditorSummaryTextBlock.Text = $"{prefix} {string.Join(" • ", grouped)}";
     }
+
 
     private void UpdateScenarioDescription()
     {
@@ -952,62 +999,35 @@ public partial class CreateSimulationDialog : Window
     {
         int width = ParseInt(_widthBox?.Text, 20);
         int height = ParseInt(_heightBox?.Text, 20);
-        int fireCells = ParseInt(_fireCellsBox?.Text, 3);
+        int initialFireCells = ParseInt(_fireCellsBox?.Text, 3);
 
-        double dryness = ParseDouble(_mapDrynessBox?.Text, 1.0);
-        double relief = ParseDouble(_reliefStrengthBox?.Text, 1.0);
-        double fuel = ParseDouble(_fuelDensityBox?.Text, 1.0);
+        width = Math.Max(1, width);
+        height = Math.Max(1, height);
+        initialFireCells = Math.Max(1, initialFireCells);
+
+        bool isGrid = _page == AppPage.Grid;
+        bool isClustered = _page == AppPage.Graph && _mode == GraphCreationMode.Clustered;
+        bool isRegion = _page == AppPage.Graph && _mode == GraphCreationMode.RegionCluster;
+
+        int area = width * height;
+        int estimatedClusterNodes = Math.Max(1, area / 2);
 
         if (_structureSummaryTextBlock != null)
         {
-            var graphName = _page == AppPage.Grid
-                ? "Сетка"
-                : _mode == GraphCreationMode.RegionCluster
-                    ? "Региональный граф"
-                    : "Кластерный граф";
-
-            _structureSummaryTextBlock.Text = $"{graphName} • {width}×{height} • стартовых очагов: {fireCells}";
+            _structureSummaryTextBlock.Text = isGrid
+                ? $"Сетка {width}×{height} = {area} клеток. Начальных очагов: {initialFireCells}."
+                : isClustered
+                    ? $"Территория {width}×{height} = {area} ячеек-основания. Ожидаемое число узлов кластерного графа: около {estimatedClusterNodes}. Начальных очагов: {initialFireCells}."
+                    : $"Территория {width}×{height} = {area} ячеек-основания. На её основе будут агрегированы регионы и межрегиональные связи. Начальных очагов: {initialFireCells}.";
         }
 
         if (_structureDetailTextBlock != null)
         {
-            var modeText = SelectedMapCreationMode switch
-            {
-                MapCreationMode.Random => "случайная генерация",
-                MapCreationMode.Scenario => "готовый сценарий",
-                MapCreationMode.SemiManual => "полуручное создание",
-                _ => "случайная генерация"
-            };
-
-            var scenarioText = SelectedMapCreationMode == MapCreationMode.Scenario
-                ? SelectedScenarioType switch
-                {
-                    MapScenarioType.MixedForest => "смешанный лес",
-                    MapScenarioType.DryConiferousMassif => "сухой хвойный массив",
-                    MapScenarioType.ForestWithRiver => "лес с рекой",
-                    MapScenarioType.ForestWithLake => "лес с озером",
-                    MapScenarioType.ForestWithFirebreak => "лес с просекой",
-                    MapScenarioType.HillyTerrain => "холмистая местность",
-                    MapScenarioType.WetForestAfterRain => "влажный лес после дождя",
-                    _ => "смешанный лес"
-                }
-                : null;
-
-            var semiManualPart = SelectedMapCreationMode == MapCreationMode.SemiManual
-                ? $"объектов на карте: {MapRegionObjects.Count}"
-                : null;
-
-            var parts = new List<string>
-            {
-                $"режим: {modeText}",
-                string.IsNullOrWhiteSpace(scenarioText) ? string.Empty : $"сценарий: {scenarioText}",
-                semiManualPart ?? string.Empty,
-                $"сухость: {dryness:F2}",
-                $"рельеф: {relief:F2}",
-                $"горючий покров: {fuel:F2}"
-            };
-
-            _structureDetailTextBlock.Text = string.Join(" • ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
+            _structureDetailTextBlock.Text = isGrid
+                ? "Параметры напрямую определяют размер клеточной карты и количество участков леса."
+                : isClustered
+                    ? "Размер территории влияет на число патчей, плотность узлов и характер связей в кластерном графе."
+                    : "Размер территории влияет на число регионов, их состав, внутреннюю плотность и межрегиональные мосты.";
         }
     }
 

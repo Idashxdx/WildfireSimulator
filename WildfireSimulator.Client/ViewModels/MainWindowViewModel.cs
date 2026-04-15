@@ -395,6 +395,30 @@ public partial class MainWindowViewModel : ObservableObject
             null => "Нет данных",
             _ => SelectedGraphNode?.Vegetation ?? "Нет данных"
         };
+    public string SelectedGraphNodeGroupCaption =>
+SelectedSimulationGraphType == GraphType.RegionClusterGraph
+    ? "Region ID"
+    : "Cluster ID";
+
+    public string SelectedGraphNodeDegreeSummaryText =>
+        SelectedGraphNode == null
+            ? "—"
+            : $"{SelectedGraphNodeNeighborCountText} • сильных: {SelectedGraphNodeStrongEdgesText} • средних: {SelectedGraphNodeMediumEdgesText} • слабых: {SelectedGraphNodeWeakEdgesText}";
+
+    public string SelectedGraphNodeFireSummaryText =>
+        SelectedGraphNode == null
+            ? "—"
+            : $"{SelectedGraphNodeFireStageText} • интенсивность {SelectedGraphNodeFireIntensityText}";
+
+    public string SelectedGraphNodeFuelSummaryText =>
+        SelectedGraphNode == null
+            ? "—"
+            : $"{SelectedGraphNodeCurrentFuelLoadText} / {SelectedGraphNodeFuelLoadText} • остаток {SelectedGraphNodeFuelRatioText}";
+
+    public string SelectedGraphNodeThermalSummaryText =>
+        SelectedGraphNode == null
+            ? "—"
+            : $"{SelectedGraphNodeAccumulatedHeatText} • горение {SelectedGraphNodeBurningElapsedText}";
 
     public string SelectedGraphNodeMoistureText =>
         SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.Moisture:F2}";
@@ -641,7 +665,24 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsClusteredGraphCreationMode));
         OnPropertyChanged(nameof(IsRegionClusterGraphCreationMode));
     }
+    partial void OnSelectedSimulationGraphTypeChanged(GraphType value)
+    {
+        OnPropertyChanged(nameof(GraphTypeText));
+        OnPropertyChanged(nameof(IsGridSelected));
+        OnPropertyChanged(nameof(IsClusteredGraphSelected));
+        OnPropertyChanged(nameof(IsRegionClusterGraphSelected));
+        OnPropertyChanged(nameof(VisualizationMeaningText));
+        OnPropertyChanged(nameof(StructureScaleText));
+        OnPropertyChanged(nameof(SpreadBehaviorText));
 
+        OnPropertyChanged(nameof(SelectedGraphNodeGroupCaption));
+        OnPropertyChanged(nameof(SelectedGraphNodeTitle));
+        OnPropertyChanged(nameof(SelectedGraphNodeGroupText));
+        OnPropertyChanged(nameof(SelectedGraphNodeDegreeSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFireSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFuelSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeThermalSummaryText));
+    }
     partial void OnSelectedSimulationChanged(SimulationDto? value)
     {
         ResetStreamAnalysisState();
@@ -1039,6 +1080,7 @@ public partial class MainWindowViewModel : ObservableObject
             RefreshWorkflowStatus();
         }
     }
+    public bool HasNoSelectedGraphNode => !HasSelectedGraphNode;
     partial void OnSelectedGraphNodeChanged(SimulationGraphNodeDto? value)
     {
         OnPropertyChanged(nameof(HasSelectedGraphNode));
@@ -1048,19 +1090,25 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedGraphNodeMoistureText));
         OnPropertyChanged(nameof(SelectedGraphNodeElevationText));
         OnPropertyChanged(nameof(SelectedGraphNodeProbabilityText));
+        OnPropertyChanged(nameof(SelectedGraphNodeGroupCaption));
         OnPropertyChanged(nameof(SelectedGraphNodeGroupText));
         OnPropertyChanged(nameof(SelectedGraphNodeRenderPositionText));
         OnPropertyChanged(nameof(SelectedGraphNodeNeighborCountText));
         OnPropertyChanged(nameof(SelectedGraphNodeStrongEdgesText));
         OnPropertyChanged(nameof(SelectedGraphNodeMediumEdgesText));
         OnPropertyChanged(nameof(SelectedGraphNodeWeakEdgesText));
+        OnPropertyChanged(nameof(SelectedGraphNodeDegreeSummaryText));
         OnPropertyChanged(nameof(SelectedGraphNodeFireStageText));
         OnPropertyChanged(nameof(SelectedGraphNodeFireIntensityText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFireSummaryText));
         OnPropertyChanged(nameof(SelectedGraphNodeCurrentFuelLoadText));
         OnPropertyChanged(nameof(SelectedGraphNodeFuelLoadText));
         OnPropertyChanged(nameof(SelectedGraphNodeFuelRatioText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFuelSummaryText));
         OnPropertyChanged(nameof(SelectedGraphNodeAccumulatedHeatText));
         OnPropertyChanged(nameof(SelectedGraphNodeBurningElapsedText));
+        OnPropertyChanged(nameof(SelectedGraphNodeThermalSummaryText));
+        OnPropertyChanged(nameof(HasNoSelectedGraphNode));
     }
 
     partial void OnIsConnectedChanged(bool value)
@@ -1357,7 +1405,6 @@ public partial class MainWindowViewModel : ObservableObject
             SetTransientStatus($"Список симуляций обновлён: {Simulations.Count}", true);
         });
     }
-
     [RelayCommand]
     private async Task CreateSimulationAsync()
     {
@@ -1392,14 +1439,6 @@ public partial class MainWindowViewModel : ObservableObject
 
         var graphType = GetCreateGraphType();
 
-        var graphTypeText = graphType switch
-        {
-            GraphType.Grid => "Сетка",
-            GraphType.ClusteredGraph => "Кластерный граф",
-            GraphType.RegionClusterGraph => "Региональный граф",
-            _ => "Сетка"
-        };
-
         var mapModeText = dialog.SelectedMapCreationMode switch
         {
             MapCreationMode.Random => "Случайная генерация",
@@ -1420,14 +1459,22 @@ public partial class MainWindowViewModel : ObservableObject
             _ => string.Empty
         };
 
+        var baseShapeText = graphType switch
+        {
+            GraphType.Grid => $"Сетка {dialog.GridWidth}x{dialog.GridHeight}",
+            GraphType.ClusteredGraph => $"Территория {dialog.GridWidth}x{dialog.GridHeight} → Кластерный граф",
+            GraphType.RegionClusterGraph => $"Территория {dialog.GridWidth}x{dialog.GridHeight} → Региональный граф",
+            _ => $"Сетка {dialog.GridWidth}x{dialog.GridHeight}"
+        };
+
         var description =
-            $"{graphTypeText} {dialog.GridWidth}x{dialog.GridHeight} | Режим карты: {mapModeText}" +
+            $"{baseShapeText} | Режим карты: {mapModeText}" +
             (string.IsNullOrWhiteSpace(scenarioText) ? string.Empty : $" | Сценарий: {scenarioText}") +
             $" | Сухость: {dialog.MapDrynessFactor:F2}" +
             $" | Рельеф: {dialog.ReliefStrengthFactor:F2}" +
             $" | Горючий покров: {dialog.FuelDensityFactor:F2}" +
             $" | Ветер: {dialog.WindSpeed} м/с, {GetWindDirectionName(dialog.WindDirection)}" +
-            $" | Осадки: {dialog.Precipitation} мм/ч" +
+            $" | Осадки: {dialog.Precipitation:F1} мм/ч" +
             (dialog.RandomSeed.HasValue ? $" | Seed: {dialog.RandomSeed.Value}" : string.Empty);
 
         var dto = new CreateSimulationDto
@@ -1454,13 +1501,13 @@ public partial class MainWindowViewModel : ObservableObject
             ReliefStrengthFactor = dialog.ReliefStrengthFactor,
             FuelDensityFactor = dialog.FuelDensityFactor,
             MapRegionObjects = dialog.MapRegionObjects?.ToList() ?? new List<MapRegionObjectDto>(),
-            VegetationDistributions = dialog.VegetationDistributions?
+            VegetationDistributions = (dialog.VegetationDistributions ?? new List<(int VegetationType, double Probability)>())
                 .Select(v => new VegetationDistributionDto
                 {
                     VegetationType = v.VegetationType,
                     Probability = v.Probability
                 })
-                .ToList() ?? new List<VegetationDistributionDto>()
+                .ToList()
         };
 
         var simulationId = await _apiService.CreateSimulationAsync(
@@ -1478,22 +1525,18 @@ public partial class MainWindowViewModel : ObservableObject
 
         await LoadSimulationsAsync();
 
-        var createdSimulation = Simulations.FirstOrDefault(s => s.Id == simulationId.Value)
-            ?? GridSimulations.FirstOrDefault(s => s.Id == simulationId.Value)
-            ?? GraphSimulations.FirstOrDefault(s => s.Id == simulationId.Value);
+        var created = Simulations.FirstOrDefault(s => s.Id == simulationId.Value);
+        if (created != null)
+        {
+            var fitsCurrentPage =
+                (CurrentPage == AppPage.Grid && created.GraphType == GraphType.Grid) ||
+                (CurrentPage == AppPage.Graph && created.GraphType != GraphType.Grid);
 
-        if (createdSimulation != null)
-        {
-            SelectedSimulation = createdSimulation;
-            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Создана симуляция {createdSimulation.Name}");
-            SetTransientStatus("Симуляция создана", true);
-        }
-        else
-        {
-            SetTransientStatus("Симуляция создана, но не найдена в списке", true);
+            if (fitsCurrentPage)
+                SelectedSimulation = created;
         }
 
-        RefreshWorkflowStatus();
+        SetTransientStatus($"Симуляция создана: {dto.Name}", true);
     }
 
     [RelayCommand]

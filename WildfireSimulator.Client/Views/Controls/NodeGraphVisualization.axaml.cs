@@ -747,11 +747,11 @@ public partial class NodeGraphVisualization : UserControl
     }
 
     private void DrawEdge(
-        SimulationGraphEdgeDto edge,
-        Dictionary<Guid, Point> points,
-        Guid? selectedNodeId,
-        HashSet<Guid> selectedEdgeIds,
-        bool isBridge)
+     SimulationGraphEdgeDto edge,
+     Dictionary<Guid, Point> points,
+     Guid? selectedNodeId,
+     HashSet<Guid> selectedEdgeIds,
+     bool isBridge)
     {
         if (_graphCanvas == null)
             return;
@@ -786,19 +786,35 @@ public partial class NodeGraphVisualization : UserControl
             Stroke = new SolidColorBrush(isBridge ? GetBridgeColor(edge) : GetEdgeColor(edge)),
             StrokeThickness = thickness,
             Opacity = opacity,
-            IsHitTestVisible = false
+            IsHitTestVisible = true
         };
+
+        ToolTip.SetTip(line, BuildEdgeTooltip(edge, isBridge));
 
         _graphCanvas.Children.Add(line);
     }
+    private string BuildEdgeTooltip(SimulationGraphEdgeDto edge, bool isBridge)
+    {
+        var edgeType = isBridge
+            ? "Межрегиональное / межкластерное ребро"
+            : "Локальное ребро";
+
+        return $"{edgeType}\n" +
+               $"От: ({edge.FromX}, {edge.FromY})\n" +
+               $"К: ({edge.ToX}, {edge.ToY})\n" +
+               $"Расстояние: {edge.Distance:F3}\n" +
+               $"Уклон: {edge.Slope:F6}\n" +
+               $"Fire spread modifier: {edge.FireSpreadModifier:F6}";
+    }
+
 
     private void DrawNode(
-        SimulationGraphNodeDto node,
-        List<SimulationGraphEdgeDto> edges,
-        Dictionary<Guid, Point> points,
-        Guid? selectedNodeId,
-        HashSet<Guid> neighborIds,
-        bool useMapStyle)
+     SimulationGraphNodeDto node,
+     List<SimulationGraphEdgeDto> edges,
+     Dictionary<Guid, Point> points,
+     Guid? selectedNodeId,
+     HashSet<Guid> neighborIds,
+     bool useMapStyle)
     {
         if (_graphCanvas == null)
             return;
@@ -832,7 +848,10 @@ public partial class NodeGraphVisualization : UserControl
             Height = radius * 2,
             RadiusX = useMapStyle ? 3.0 : radius,
             RadiusY = useMapStyle ? 3.0 : radius,
-            Fill = new SolidColorBrush(isIgnitionSelected ? Color.Parse("#9EC5FE") : (useMapStyle ? GetMapCellColor(node) : GetNodeColor(node))),
+            Fill = new SolidColorBrush(
+                isIgnitionSelected
+                    ? Color.Parse("#9EC5FE")
+                    : (useMapStyle ? GetMapCellColor(node) : GetNodeColor(node))),
             Stroke = new SolidColorBrush(
                 isIgnitionSelected
                     ? Color.Parse("#D6402B")
@@ -841,25 +860,25 @@ public partial class NodeGraphVisualization : UserControl
                         : isNeighbor
                             ? Color.Parse("#B45A4A")
                             : Color.Parse("#F8F5EE")),
-            StrokeThickness = isIgnitionSelected ? 2.6 : isSelected ? 2.2 : isNeighbor ? 1.8 : 0.9,
+            StrokeThickness = isIgnitionSelected ? 2.6 : isSelected ? 2.2 : isNeighbor ? 1.8 : 1.2,
             Opacity = opacity,
             Cursor = new Cursor(StandardCursorType.Hand)
         };
 
         ToolTip.SetTip(shape, BuildTooltip(node, edges));
 
-        shape.PointerPressed += (_, _) =>
+        shape.PointerPressed += (_, e) =>
         {
-            SelectedNode = node;
-            NodeClicked?.Invoke(this, node);
+            if (e.GetCurrentPoint(shape).Properties.IsLeftButtonPressed)
+            {
+                NodeClicked?.Invoke(this, node);
+                e.Handled = true;
+            }
         };
 
         Canvas.SetLeft(shape, point.X - radius);
         Canvas.SetTop(shape, point.Y - radius);
         _graphCanvas.Children.Add(shape);
-
-        if (isIgnitionSelected)
-            DrawIgnitionMarker(point, radius, useMapStyle);
     }
 
     private void DrawIgnitionGlow(Point point, double radius, bool useMapStyle)
@@ -1205,6 +1224,7 @@ public partial class NodeGraphVisualization : UserControl
         var strong = nodeEdges.Count(e => e.FireSpreadModifier >= 0.70);
         var medium = nodeEdges.Count(e => e.FireSpreadModifier >= 0.35 && e.FireSpreadModifier < 0.70);
         var weak = nodeEdges.Count(e => e.FireSpreadModifier < 0.35);
+
         var ignitionText = node.IsSelectedIgnition ? "\nСтартовый очаг: Да" : string.Empty;
 
         var vegetationText = node.Vegetation?.Trim() switch
@@ -1216,7 +1236,7 @@ public partial class NodeGraphVisualization : UserControl
             "Shrub" => "Кустарник",
             "Water" => "Вода",
             "Bare" => "Пустая поверхность",
-            _ => node.Vegetation
+            _ => node.Vegetation ?? "Неизвестно"
         };
 
         var stateText = node.State?.Trim() switch
@@ -1224,20 +1244,48 @@ public partial class NodeGraphVisualization : UserControl
             "Burning" => "Горит",
             "Burned" => "Сгорела",
             "Normal" => "Нормальная",
-            _ => node.State
+            _ => node.State ?? "Неизвестно"
         };
 
-        return $"Координаты модели: ({node.X}, {node.Y})\n" +
+        var fireStageText = node.FireStage?.Trim() switch
+        {
+            "Unburned" => "Не горела",
+            "Ignition" => "Воспламенение",
+            "Active" => "Активное горение",
+            "Intense" => "Интенсивное горение",
+            "Smoldering" => "Тление",
+            "BurnedOut" => "Полностью выгорела",
+            _ => node.FireStage ?? "—"
+        };
+
+        var territoryUnitLabel = LayoutHint.Contains("region-cluster", StringComparison.OrdinalIgnoreCase)
+            ? "Region ID"
+            : "Cluster ID";
+
+        var graphNodeType = LayoutHint.Contains("region-cluster", StringComparison.OrdinalIgnoreCase)
+            ? "Региональная вершина"
+            : "Кластерная вершина";
+
+        return $"{graphNodeType}\n" +
+               $"Координаты модели: ({node.X}, {node.Y})\n" +
                $"Координаты на схеме: ({node.RenderX:F2}, {node.RenderY:F2})\n" +
-               $"Группа: {node.GroupKey}\n" +
+               $"{territoryUnitLabel}: {node.GroupKey}\n" +
                $"Тип поверхности: {vegetationText}\n" +
                $"Состояние: {stateText}\n" +
+               $"Стадия огня: {fireStageText}\n" +
                $"Влажность: {node.Moisture:F2}\n" +
-               $"Высота: {node.Elevation:F0} м\n" +
-               $"Вероятность возгорания: {node.BurnProbability:F3}" +
+               $"Высота: {node.Elevation:F1} м\n" +
+               $"Вероятность возгорания: {node.BurnProbability:F3}\n" +
+               $"Интенсивность огня: {node.FireIntensity:F2}\n" +
+               $"Текущее топливо: {node.CurrentFuelLoad:F3}\n" +
+               $"Базовый запас топлива: {node.FuelLoad:F3}\n" +
+               $"Накопленное тепло: {node.AccumulatedHeatJ:F2} Дж\n" +
+               $"Время горения: {node.BurningElapsedSeconds:F0} с" +
                ignitionText + "\n" +
-               $"Количество связей: {degree}\n" +
-               $"Сильных: {strong}, средних: {medium}, слабых: {weak}";
+               $"Степень узла: {degree}\n" +
+               $"Сильных связей: {strong}\n" +
+               $"Средних связей: {medium}\n" +
+               $"Слабых связей: {weak}";
     }
 
     private sealed class PlacedRegion
