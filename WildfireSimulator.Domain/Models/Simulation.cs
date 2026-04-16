@@ -327,7 +327,6 @@ public class Simulation
         public int Y { get; set; }
     }
 }
-
 public enum SimulationStatus
 {
     Created = 0,
@@ -352,6 +351,16 @@ public enum MapScenarioType
     ForestWithFirebreak = 4,
     HillyTerrain = 5,
     WetForestAfterRain = 6
+}
+
+public enum ClusteredScenarioType
+{
+    DenseDryConiferous = 0,
+    WaterBarrier = 1,
+    FirebreakGap = 2,
+    HillyClusters = 3,
+    WetAfterRain = 4,
+    MixedDryHotspots = 5
 }
 
 public enum MapObjectType
@@ -388,6 +397,47 @@ public class MapRegionObject
     public int Priority { get; set; } = 0;
 }
 
+public class ClusteredGraphBlueprint
+{
+    public int CanvasWidth { get; set; } = 24;
+    public int CanvasHeight { get; set; } = 24;
+
+    public List<ClusteredCandidateNode> Candidates { get; set; } = new();
+    public List<ClusteredNodeDraft> Nodes { get; set; } = new();
+    public List<ClusteredEdgeDraft> Edges { get; set; } = new();
+}
+
+public class ClusteredCandidateNode
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public int X { get; set; }
+    public int Y { get; set; }
+}
+
+public class ClusteredNodeDraft
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public int X { get; set; }
+    public int Y { get; set; }
+
+    public string ClusterId { get; set; } = string.Empty;
+
+    public VegetationType Vegetation { get; set; } = VegetationType.Mixed;
+    public double Moisture { get; set; } = 0.45;
+    public double Elevation { get; set; } = 0.0;
+}
+
+public class ClusteredEdgeDraft
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    public Guid FromNodeId { get; set; }
+    public Guid ToNodeId { get; set; }
+
+    public double? DistanceOverride { get; set; }
+    public double FireSpreadModifier { get; set; } = 1.0;
+}
+
 public class SimulationParameters
 {
     public int GridWidth { get; set; }
@@ -414,13 +464,20 @@ public class SimulationParameters
     public int? RandomSeed { get; set; }
 
     public MapCreationMode MapCreationMode { get; set; }
+
+    // Только для Grid
     public MapScenarioType? ScenarioType { get; set; }
+
+    // Только для ClusteredGraph
+    public ClusteredScenarioType? ClusteredScenarioType { get; set; }
+
     public double MapNoiseStrength { get; set; }
 
     public double MapDrynessFactor { get; set; }
     public double ReliefStrengthFactor { get; set; }
     public double FuelDensityFactor { get; set; }
 
+    // Только для Grid SemiManual
     [NotMapped]
     public List<MapRegionObject> MapRegionObjects { get; set; } = new();
 
@@ -430,6 +487,18 @@ public class SimulationParameters
         set => MapRegionObjects = string.IsNullOrWhiteSpace(value)
             ? new List<MapRegionObject>()
             : JsonSerializer.Deserialize<List<MapRegionObject>>(value) ?? new List<MapRegionObject>();
+    }
+
+    // Только для ClusteredGraph SemiManual
+    [NotMapped]
+    public ClusteredGraphBlueprint? ClusteredBlueprint { get; set; }
+
+    public string? ClusteredBlueprintJson
+    {
+        get => ClusteredBlueprint == null ? null : JsonSerializer.Serialize(ClusteredBlueprint);
+        set => ClusteredBlueprint = string.IsNullOrWhiteSpace(value)
+            ? null
+            : JsonSerializer.Deserialize<ClusteredGraphBlueprint>(value);
     }
 
     public SimulationParameters()
@@ -446,7 +515,10 @@ public class SimulationParameters
         RandomSeed = null;
 
         MapCreationMode = MapCreationMode.Random;
+
         ScenarioType = null;
+        ClusteredScenarioType = null;
+
         MapNoiseStrength = 0.08;
 
         MapDrynessFactor = 1.0;

@@ -40,6 +40,16 @@ public enum MapScenarioType
     WetForestAfterRain = 6
 }
 
+public enum ClusteredScenarioType
+{
+    DenseDryConiferous = 0,
+    WaterBarrier = 1,
+    FirebreakGap = 2,
+    HillyClusters = 3,
+    WetAfterRain = 4,
+    MixedDryHotspots = 5
+}
+
 public enum MapObjectType
 {
     ConiferousArea = 0,
@@ -126,7 +136,7 @@ public class CreateSimulationDto
     public double InitialMoistureMax { get; set; } = 0.7;
 
     [JsonPropertyName("elevationVariation")]
-    public double ElevationVariation { get; set; } = 50;
+    public double ElevationVariation { get; set; } = 50.0;
 
     [JsonPropertyName("initialFireCellsCount")]
     public int InitialFireCellsCount { get; set; } = 3;
@@ -135,19 +145,21 @@ public class CreateSimulationDto
     public int SimulationSteps { get; set; } = 100;
 
     [JsonPropertyName("stepDurationSeconds")]
-    public int StepDurationSeconds { get; set; } = 900;
+    public int StepDurationSeconds { get; set; } = 60;
 
     [JsonPropertyName("randomSeed")]
     public int? RandomSeed { get; set; }
 
-    [JsonPropertyName("precipitation")]
-    public double Precipitation { get; set; } = 0.0;
-
     [JsonPropertyName("mapCreationMode")]
     public MapCreationMode MapCreationMode { get; set; } = MapCreationMode.Random;
 
+    // Только для Grid
     [JsonPropertyName("scenarioType")]
     public MapScenarioType? ScenarioType { get; set; }
+
+    // Только для ClusteredGraph
+    [JsonPropertyName("clusteredScenarioType")]
+    public ClusteredScenarioType? ClusteredScenarioType { get; set; }
 
     [JsonPropertyName("mapNoiseStrength")]
     public double MapNoiseStrength { get; set; } = 0.08;
@@ -161,17 +173,46 @@ public class CreateSimulationDto
     [JsonPropertyName("fuelDensityFactor")]
     public double FuelDensityFactor { get; set; } = 1.0;
 
+    // Только для Grid SemiManual
     [JsonPropertyName("mapRegionObjects")]
     public List<MapRegionObjectDto> MapRegionObjects { get; set; } = new();
 
+    // Только для ClusteredGraph SemiManual
+    [JsonPropertyName("clusteredBlueprint")]
+    public ClusteredGraphBlueprintDto? ClusteredBlueprint { get; set; }
+
     [JsonPropertyName("vegetationDistributions")]
     public List<VegetationDistributionDto> VegetationDistributions { get; set; } = new();
+
+    [JsonPropertyName("initialFirePositions")]
+    public List<InitialFirePositionDto> InitialFirePositions { get; set; } = new();
+
+    [JsonPropertyName("precipitation")]
+    public double Precipitation { get; set; } = 0.0;
+}
+
+public class VegetationDistributionDto
+{
+    [JsonPropertyName("vegetationType")]
+    public VegetationType VegetationType { get; set; }
+
+    [JsonPropertyName("probability")]
+    public double Probability { get; set; }
+}
+
+public class InitialFirePositionDto
+{
+    [JsonPropertyName("x")]
+    public int X { get; set; }
+
+    [JsonPropertyName("y")]
+    public int Y { get; set; }
 }
 
 public class MapRegionObjectDto
 {
     [JsonPropertyName("id")]
-    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid Id { get; set; }
 
     [JsonPropertyName("objectType")]
     public MapObjectType ObjectType { get; set; }
@@ -198,7 +239,37 @@ public class MapRegionObjectDto
     public int Priority { get; set; } = 0;
 }
 
-public class GraphCellDto
+public class ClusteredGraphBlueprintDto
+{
+    [JsonPropertyName("canvasWidth")]
+    public int CanvasWidth { get; set; } = 24;
+
+    [JsonPropertyName("canvasHeight")]
+    public int CanvasHeight { get; set; } = 24;
+
+    [JsonPropertyName("candidates")]
+    public List<ClusteredCandidateNodeDto> Candidates { get; set; } = new();
+
+    [JsonPropertyName("nodes")]
+    public List<ClusteredNodeDraftDto> Nodes { get; set; } = new();
+
+    [JsonPropertyName("edges")]
+    public List<ClusteredEdgeDraftDto> Edges { get; set; } = new();
+}
+
+public class ClusteredCandidateNodeDto
+{
+    [JsonPropertyName("id")]
+    public Guid Id { get; set; }
+
+    [JsonPropertyName("x")]
+    public int X { get; set; }
+
+    [JsonPropertyName("y")]
+    public int Y { get; set; }
+}
+
+public class ClusteredNodeDraftDto
 {
     [JsonPropertyName("id")]
     public Guid Id { get; set; }
@@ -209,110 +280,33 @@ public class GraphCellDto
     [JsonPropertyName("y")]
     public int Y { get; set; }
 
+    [JsonPropertyName("clusterId")]
+    public string ClusterId { get; set; } = string.Empty;
+
     [JsonPropertyName("vegetation")]
-    public string Vegetation { get; set; } = string.Empty;
+    public VegetationType Vegetation { get; set; } = VegetationType.Mixed;
 
     [JsonPropertyName("moisture")]
-    public double Moisture { get; set; }
+    public double Moisture { get; set; } = 0.45;
 
     [JsonPropertyName("elevation")]
-    public double Elevation { get; set; }
-
-    [JsonPropertyName("state")]
-    public string State { get; set; } = string.Empty;
-
-    [JsonPropertyName("burnProbability")]
-    public double BurnProbability { get; set; }
-
-    [JsonPropertyName("fireStage")]
-    public string FireStage { get; set; } = string.Empty;
-
-    [JsonPropertyName("fireIntensity")]
-    public double FireIntensity { get; set; }
-
-    [JsonPropertyName("currentFuelLoad")]
-    public double CurrentFuelLoad { get; set; }
-
-    [JsonPropertyName("fuelLoad")]
-    public double FuelLoad { get; set; }
-
-    [JsonPropertyName("burningElapsedSeconds")]
-    public double BurningElapsedSeconds { get; set; }
-
-    [JsonPropertyName("accumulatedHeatJ")]
-    public double AccumulatedHeatJ { get; set; }
-
-    [JsonPropertyName("isIgnitable")]
-    public bool IsIgnitable { get; set; } = true;
-
-    public bool IsSelectedIgnition { get; set; }
-
-    public bool IsBurning => State == "Burning";
-    public bool IsBurned => State == "Burned";
-    public bool IsNormal => State == "Normal";
+    public double Elevation { get; set; } = 0.0;
 }
 
-public class SimulationStatusDto
+public class ClusteredEdgeDraftDto
 {
+    [JsonPropertyName("id")]
     public Guid Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public int Status { get; set; }
-    public int CurrentStep { get; set; }
-    public bool IsRunning { get; set; }
-    public int TotalBurnedCells { get; set; }
-    public int TotalBurningCells { get; set; }
-    public double FireArea { get; set; }
-    public double Precipitation { get; set; }
-    public GraphType GraphType { get; set; } = GraphType.Grid;
-    public string? Warning { get; set; }
 
-    public double Temperature { get; set; }
-    public double Humidity { get; set; }
-    public double WindSpeed { get; set; }
-    public string WindDirection { get; set; } = "—";
-    public double WindDirectionDegrees { get; set; }
+    [JsonPropertyName("fromNodeId")]
+    public Guid FromNodeId { get; set; }
 
-    public string StatusText => Status switch
-    {
-        0 => "Создана",
-        1 => "Запущена",
-        2 => "Завершена",
-        3 => "Отменена",
-        _ => "Неизвестно"
-    };
+    [JsonPropertyName("toNodeId")]
+    public Guid ToNodeId { get; set; }
 
-    public string GraphTypeText => GraphType switch
-    {
-        GraphType.Grid => "Сетка",
-        GraphType.ClusteredGraph => "Кластерный граф",
-        GraphType.RegionClusterGraph => "Региональный кластерный граф",
-        _ => "Неизвестно"
-    };
-}
+    [JsonPropertyName("distanceOverride")]
+    public double? DistanceOverride { get; set; }
 
-public class StepResultDto
-{
-    [JsonPropertyName("step")]
-    public int Step { get; set; }
-
-    [JsonPropertyName("burningCellsCount")]
-    public int BurningCellsCount { get; set; }
-
-    [JsonPropertyName("burnedCellsCount")]
-    public int BurnedCellsCount { get; set; }
-
-    [JsonPropertyName("newlyIgnitedCells")]
-    public int NewlyIgnitedCells { get; set; }
-
-    [JsonPropertyName("fireArea")]
-    public double FireArea { get; set; }
-}
-
-public class VegetationDistributionDto
-{
-    [JsonPropertyName("vegetationType")]
-    public int VegetationType { get; set; }
-
-    [JsonPropertyName("probability")]
-    public double Probability { get; set; }
+    [JsonPropertyName("fireSpreadModifier")]
+    public double FireSpreadModifier { get; set; } = 1.0;
 }

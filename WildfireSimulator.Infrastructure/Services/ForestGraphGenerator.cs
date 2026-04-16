@@ -1469,11 +1469,11 @@ public class ForestGraphGenerator : IForestGraphGenerator
     public async Task<ForestGraph> GenerateClusteredGraphAsync(int nodeCount, SimulationParameters parameters)
     {
         _logger.LogInformation(
-            "Генерация кластерного графа с {NodeCount} узлами. Режим карты: {Mode}, сценарий: {Scenario}, объектов: {ObjectsCount}",
+            "Генерация кластерного графа с {NodeCount} узлами. Режим карты: {Mode}, clustered-сценарий: {ClusteredScenario}, grid-сценарий: {GridScenario}",
             nodeCount,
             parameters.MapCreationMode,
-            parameters.ScenarioType,
-            parameters.MapRegionObjects?.Count ?? 0);
+            parameters.ClusteredScenarioType,
+            parameters.ScenarioType);
 
         var random = CreateRandom(parameters);
         var placementScale = GetClusteredPlacementScale(nodeCount);
@@ -1486,15 +1486,58 @@ public class ForestGraphGenerator : IForestGraphGenerator
             StepDurationSeconds = parameters.StepDurationSeconds
         };
 
-        var territoryDraft = BuildTerritoryDraft(graph.Width, graph.Height, parameters, random);
+        switch (parameters.MapCreationMode)
+        {
+            case MapCreationMode.SemiManual:
+                BuildClusteredGraphFromBlueprint(
+                    graph,
+                    nodeCount,
+                    parameters,
+                    random,
+                    maxDegree);
+                break;
 
-        var patches = CreateClusteredPatches(
+            case MapCreationMode.Scenario:
+                BuildClusteredScenarioGraph(
+                    graph,
+                    nodeCount,
+                    parameters,
+                    random,
+                    maxDegree);
+                break;
+
+            default:
+                BuildClusteredRandomGraph(
+                    graph,
+                    nodeCount,
+                    parameters,
+                    random,
+                    maxDegree);
+                break;
+        }
+
+        _logger.LogInformation(
+            "Кластерный граф создан: {Cells} узлов, {Edges} рёбер, режим={Mode}, clustered-сценарий={Scenario}",
+            graph.Cells.Count,
+            graph.Edges.Count,
+            parameters.MapCreationMode,
+            parameters.ClusteredScenarioType);
+
+        return await Task.FromResult(graph);
+    }
+    private void BuildClusteredRandomGraph(
+    ForestGraph graph,
+    int nodeCount,
+    SimulationParameters parameters,
+    Random random,
+    int maxDegree)
+    {
+        var patches = CreateClusteredPatchesRandomOnly(
             GetClusteredPatchCount(nodeCount),
             graph.Width,
             graph.Height,
             parameters,
-            random,
-            territoryDraft);
+            random);
 
         var coordinates = GeneratePatchDrivenClusteredCoordinates(
             nodeCount,
@@ -1507,25 +1550,17 @@ public class ForestGraphGenerator : IForestGraphGenerator
         {
             var patch = GetBestPatchForPoint(x, y, patches);
 
-            var territoryVegetation = territoryDraft.VegetationMap[x, y];
-            var territoryMoisture = territoryDraft.MoistureMap[x, y];
-            var territoryElevation = territoryDraft.ElevationMap[x, y];
-
-            var vegetation = territoryVegetation == VegetationType.Water || territoryVegetation == VegetationType.Bare
+            var vegetation = random.NextDouble() < 0.78
                 ? patch.DominantVegetation
-                : random.NextDouble() < 0.84
-                    ? territoryVegetation
-                    : patch.DominantVegetation;
-
-            if (vegetation == VegetationType.Water || vegetation == VegetationType.Bare)
-                vegetation = patch.DominantVegetation;
+                : GetRandomCombustibleVegetation(parameters.VegetationDistributions, random, parameters);
 
             var moisture = Math.Clamp(
-                territoryMoisture * 0.72 + patch.BaseMoisture * 0.28 + (random.NextDouble() * 0.08 - 0.04),
-                0.0,
-                1.0);
+                patch.BaseMoisture + (random.NextDouble() * 2.0 - 1.0) * 0.08,
+                0.02,
+                0.98);
 
-            var elevation = territoryElevation * 0.76 + patch.BaseElevation * 0.24 + (random.NextDouble() * 6.0 - 3.0);
+            var elevation = patch.BaseElevation
+                + (random.NextDouble() * 2.0 - 1.0) * Math.Max(2.0, parameters.ElevationVariation * 0.10);
 
             var cell = new ForestCell(
                 x,
@@ -1533,45 +1568,13 @@ public class ForestGraphGenerator : IForestGraphGenerator
                 vegetation,
                 moisture,
                 elevation,
-                clusterId: $"patch-{patch.Index}");
+                $"patch-{patch.Index}");
 
             graph.Cells.Add(cell);
         }
 
-        var edgeKeys = new HashSet<(Guid A, Guid B)>();
-        var degreeMap = graph.Cells.ToDictionary(c => c.Id, _ => 0);
-
-        CreateEdgesForClusteredGraph(graph, edgeKeys, degreeMap);
-        EnsureGraphConnectivity(graph, edgeKeys, degreeMap, maxDegree);
-
-        var closeRadius = GetClusteredCloseRadius(graph.Cells.Count);
-        var supportRadius = GetClusteredSupportRadius(graph.Cells.Count);
-        var extendedRadius = GetClusteredExtendedRadius(graph.Cells.Count);
-
-        var requiredCloseNeighbors = graph.Cells.Count <= 40 ? 3 : 2;
-
-        EnsureCloseNeighborSupport(
-            graph,
-            edgeKeys,
-            degreeMap,
-            closeRadius,
-            requiredCloseNeighbors,
-            maxDegree);
-
-        EnsureMinimumDegree(
-            graph,
-            edgeKeys,
-            degreeMap,
-            minDegree: 3,
-            preferredMaxDegree: maxDegree);
-
-        int addedExtendedEdges = AddClusteredExtendedEdges(
-            graph,
-            edgeKeys,
-            degreeMap,
-            maxDegree,
-            supportRadius,
-            extendedRadius);
+        CreateDenseLocalEdges(graph, maxDegree);
+        CreateClusterBridges(graph, patches, random);
 
         ApplyConnectedGraphSurfaceZones(
             graph,
@@ -1580,22 +1583,649 @@ public class ForestGraphGenerator : IForestGraphGenerator
             groupSelector: cell => cell.ClusterId);
 
         ApplySurfaceBarrierEdgeModifiers(graph);
+    }
+    private void CreateClusterBridges(
+    ForestGraph graph,
+    List<ClusteredPatch> patches,
+    Random random)
+{
+    if (graph.Cells.Count <= 1 || patches.Count <= 1)
+        return;
 
-        _logger.LogInformation(
-            "Сгенерирован кластерный граф: {Cells} узлов, {Edges} ребер, поле {Width}x{Height}, avgDegree={AvgDegree:F2}, minDegree={MinDegree}, maxDegreeActual={MaxDegreeActual}, longEdges={LongEdges}, patches={PatchCount}, режим={Mode}",
-            graph.Cells.Count,
-            graph.Edges.Count,
+    var cellsByCluster = graph.Cells
+        .Where(c => !string.IsNullOrWhiteSpace(c.ClusterId))
+        .GroupBy(c => c.ClusterId!)
+        .ToDictionary(g => g.Key, g => g.ToList());
+
+    var patchByClusterId = patches.ToDictionary(
+        p => $"patch-{p.Index}",
+        p => p);
+
+    var orderedPatchPairs = new List<(ClusteredPatch A, ClusteredPatch B, double Distance)>();
+
+    for (int i = 0; i < patches.Count; i++)
+    {
+        for (int j = i + 1; j < patches.Count; j++)
+        {
+            var a = patches[i];
+            var b = patches[j];
+
+            var distance = CalculateDistance(a.CenterX, a.CenterY, b.CenterX, b.CenterY);
+            orderedPatchPairs.Add((a, b, distance));
+        }
+    }
+
+    orderedPatchPairs = orderedPatchPairs
+        .OrderBy(x => x.Distance)
+        .ToList();
+
+    var connectedClusters = new HashSet<string>();
+
+    foreach (var pair in orderedPatchPairs)
+    {
+        string clusterA = $"patch-{pair.A.Index}";
+        string clusterB = $"patch-{pair.B.Index}";
+
+        if (!cellsByCluster.TryGetValue(clusterA, out var firstCells) ||
+            !cellsByCluster.TryGetValue(clusterB, out var secondCells))
+        {
+            continue;
+        }
+
+        var bestPair = firstCells
+            .SelectMany(a => secondCells.Select(b => new
+            {
+                A = a,
+                B = b,
+                Distance = CalculateDistance(a.X, a.Y, b.X, b.Y)
+            }))
+            .OrderBy(x => x.Distance)
+            .FirstOrDefault();
+
+        if (bestPair == null)
+            continue;
+
+        if (!EdgeExists(graph, bestPair.A, bestPair.B))
+        {
+            TryAddEdge(graph, bestPair.A, bestPair.B);
+
+            var createdEdge = graph.Edges.LastOrDefault(e =>
+                (e.FromCellId == bestPair.A.Id && e.ToCellId == bestPair.B.Id) ||
+                (e.FromCellId == bestPair.B.Id && e.ToCellId == bestPair.A.Id));
+
+            if (createdEdge != null)
+            {
+                double bridgeBoost = 0.82 + random.NextDouble() * 0.24;
+                SetEdgeFireSpreadModifier(createdEdge, Math.Clamp(createdEdge.FireSpreadModifier * bridgeBoost, 0.02, 1.35));
+            }
+        }
+
+        connectedClusters.Add(clusterA);
+        connectedClusters.Add(clusterB);
+    }
+
+    var isolatedClusters = cellsByCluster.Keys
+        .Where(clusterId => !connectedClusters.Contains(clusterId))
+        .ToList();
+
+    foreach (var isolatedCluster in isolatedClusters)
+    {
+        if (!cellsByCluster.TryGetValue(isolatedCluster, out var isolatedCells) || isolatedCells.Count == 0)
+            continue;
+
+        if (!patchByClusterId.TryGetValue(isolatedCluster, out var isolatedPatch))
+            continue;
+
+        var nearestOtherPatch = patches
+            .Where(p => $"patch-{p.Index}" != isolatedCluster)
+            .OrderBy(p => CalculateDistance(isolatedPatch.CenterX, isolatedPatch.CenterY, p.CenterX, p.CenterY))
+            .FirstOrDefault();
+
+        if (nearestOtherPatch == null)
+            continue;
+
+        string targetCluster = $"patch-{nearestOtherPatch.Index}";
+        if (!cellsByCluster.TryGetValue(targetCluster, out var targetCells) || targetCells.Count == 0)
+            continue;
+
+        var bestPair = isolatedCells
+            .SelectMany(a => targetCells.Select(b => new
+            {
+                A = a,
+                B = b,
+                Distance = CalculateDistance(a.X, a.Y, b.X, b.Y)
+            }))
+            .OrderBy(x => x.Distance)
+            .FirstOrDefault();
+
+        if (bestPair == null || EdgeExists(graph, bestPair.A, bestPair.B))
+            continue;
+
+        TryAddEdge(graph, bestPair.A, bestPair.B);
+
+        var createdEdge = graph.Edges.LastOrDefault(e =>
+            (e.FromCellId == bestPair.A.Id && e.ToCellId == bestPair.B.Id) ||
+            (e.FromCellId == bestPair.B.Id && e.ToCellId == bestPair.A.Id));
+
+        if (createdEdge != null)
+        {
+            SetEdgeFireSpreadModifier(createdEdge, Math.Clamp(createdEdge.FireSpreadModifier * 0.78, 0.02, 1.10));
+        }
+    }
+}
+    private void BuildClusteredScenarioGraph(
+        ForestGraph graph,
+        int nodeCount,
+        SimulationParameters parameters,
+        Random random,
+        int maxDegree)
+    {
+        var scenario = parameters.ClusteredScenarioType ?? ClusteredScenarioType.DenseDryConiferous;
+
+        var patches = CreateScenarioDrivenClusteredPatches(
+            scenario,
+            nodeCount,
             graph.Width,
             graph.Height,
-            degreeMap.Count > 0 ? degreeMap.Values.Average() : 0.0,
-            degreeMap.Count > 0 ? degreeMap.Values.Min() : 0,
-            degreeMap.Count > 0 ? degreeMap.Values.Max() : 0,
-            addedExtendedEdges,
-            patches.Count,
-            parameters.MapCreationMode);
+            parameters,
+            random);
 
-        return await Task.FromResult(graph);
+        var coordinates = GeneratePatchDrivenClusteredCoordinates(
+            nodeCount,
+            graph.Width,
+            graph.Height,
+            patches,
+            random);
+
+        foreach (var (x, y) in coordinates)
+        {
+            var patch = GetBestPatchForPoint(x, y, patches);
+
+            var moistureJitter = scenario switch
+            {
+                ClusteredScenarioType.WetAfterRain => 0.04,
+                ClusteredScenarioType.DenseDryConiferous => 0.05,
+                ClusteredScenarioType.MixedDryHotspots => 0.10,
+                _ => 0.07
+            };
+
+            var elevationJitter = scenario switch
+            {
+                ClusteredScenarioType.HillyClusters => Math.Max(4.0, parameters.ElevationVariation * 0.16),
+                _ => Math.Max(2.0, parameters.ElevationVariation * 0.08)
+            };
+
+            var vegetation = SelectScenarioVegetationForPatch(
+                patch,
+                scenario,
+                parameters,
+                random);
+
+            var moisture = Math.Clamp(
+                patch.BaseMoisture + (random.NextDouble() * 2.0 - 1.0) * moistureJitter,
+                0.02,
+                0.98);
+
+            var elevation = patch.BaseElevation
+                + (random.NextDouble() * 2.0 - 1.0) * elevationJitter;
+
+            var cell = new ForestCell(
+                x,
+                y,
+                vegetation,
+                moisture,
+                elevation,
+                $"patch-{patch.Index}");
+
+            graph.Cells.Add(cell);
+        }
+
+        CreateDenseLocalEdges(graph, maxDegree);
+        ApplyClusteredScenarioBridgePolicy(graph, patches, scenario, random);
+        ApplyClusteredScenarioNodeAdjustments(graph, scenario, parameters, random);
+        ApplySurfaceBarrierEdgeModifiers(graph);
     }
+    private void BuildClusteredGraphFromBlueprint(
+        ForestGraph graph,
+        int nodeCount,
+        SimulationParameters parameters,
+        Random random,
+        int maxDegree)
+    {
+        var blueprint = parameters.ClusteredBlueprint;
+
+        if (blueprint == null || blueprint.Nodes.Count == 0)
+        {
+            _logger.LogWarning(
+                "Для ClusteredGraph выбран SemiManual, но blueprint пустой. Используем fallback random.");
+            BuildClusteredRandomGraph(graph, nodeCount, parameters, random, maxDegree);
+            return;
+        }
+
+        graph.Width = Math.Max(8, blueprint.CanvasWidth);
+        graph.Height = Math.Max(8, blueprint.CanvasHeight);
+
+        var nodeMap = new Dictionary<Guid, ForestCell>();
+
+        foreach (var draft in blueprint.Nodes)
+        {
+            var moisture = Math.Clamp(draft.Moisture, 0.02, 0.98);
+
+            var cell = new ForestCell(
+                ClampToRange(draft.X, 0, graph.Width - 1),
+                ClampToRange(draft.Y, 0, graph.Height - 1),
+                draft.Vegetation,
+                moisture,
+                draft.Elevation,
+                string.IsNullOrWhiteSpace(draft.ClusterId) ? null : draft.ClusterId);
+
+            graph.Cells.Add(cell);
+            nodeMap[draft.Id] = cell;
+        }
+
+        var usedPairs = new HashSet<string>();
+
+        foreach (var edgeDraft in blueprint.Edges)
+        {
+            if (!nodeMap.TryGetValue(edgeDraft.FromNodeId, out var fromCell) ||
+                !nodeMap.TryGetValue(edgeDraft.ToNodeId, out var toCell))
+            {
+                continue;
+            }
+
+            if (fromCell.Id == toCell.Id)
+                continue;
+
+            var pairKey = fromCell.Id.CompareTo(toCell.Id) < 0
+                ? $"{fromCell.Id}:{toCell.Id}"
+                : $"{toCell.Id}:{fromCell.Id}";
+
+            if (!usedPairs.Add(pairKey))
+                continue;
+
+            var distance = edgeDraft.DistanceOverride.HasValue && edgeDraft.DistanceOverride.Value > 0.0
+                ? edgeDraft.DistanceOverride.Value
+                : CalculateDistance(fromCell.X, fromCell.Y, toCell.X, toCell.Y);
+
+            var slope = (toCell.Elevation - fromCell.Elevation) / Math.Max(1.0, distance);
+
+            var edge = new ForestEdge(fromCell, toCell, distance, slope);
+            SetEdgeFireSpreadModifier(edge, Math.Clamp(edgeDraft.FireSpreadModifier, 0.02, 1.85));
+
+            graph.Edges.Add(edge);
+        }
+
+        if (graph.Edges.Count == 0 && graph.Cells.Count > 1)
+        {
+            _logger.LogInformation(
+                "В blueprint нет рёбер. Добавляем fallback локальные связи для связности clustered graph.");
+            CreateDenseLocalEdges(graph, maxDegree);
+        }
+
+        ApplySurfaceBarrierEdgeModifiers(graph);
+    }
+    private void CreateDenseLocalEdges(ForestGraph graph, int maxDegree)
+    {
+        if (graph.Cells.Count <= 1)
+            return;
+
+        int localTargetDegree = GetClusteredLocalTargetDegree(graph.Cells.Count);
+        int effectiveMaxDegree = Math.Max(localTargetDegree, maxDegree);
+
+        double closeRadius = GetClusteredCloseRadius(graph.Cells.Count);
+        double supportRadius = GetClusteredSupportRadius(graph.Cells.Count);
+        double extendedRadius = GetClusteredExtendedRadius(graph.Cells.Count);
+        int extendedBudget = GetClusteredExtendedEdgeBudget(graph.Cells.Count);
+
+        foreach (var source in graph.Cells)
+        {
+            int currentDegree = graph.GetIncidentEdges(source).Count;
+            if (currentDegree >= effectiveMaxDegree)
+                continue;
+
+            var candidates = graph.Cells
+                .Where(c => c.Id != source.Id)
+                .Where(c => !EdgeExists(graph, source, c))
+                .Select(target => new
+                {
+                    Cell = target,
+                    Distance = CalculateDistance(source.X, source.Y, target.X, target.Y),
+                    SameCluster = string.Equals(source.ClusterId, target.ClusterId, StringComparison.Ordinal)
+                })
+                .OrderBy(x => x.Distance)
+                .ThenByDescending(x => x.SameCluster)
+                .ToList();
+
+            foreach (var candidate in candidates)
+            {
+                if (graph.GetIncidentEdges(source).Count >= localTargetDegree)
+                    break;
+
+                if (graph.GetIncidentEdges(candidate.Cell).Count >= effectiveMaxDegree)
+                    continue;
+
+                bool allow =
+                    (candidate.SameCluster && candidate.Distance <= supportRadius) ||
+                    (!candidate.SameCluster && candidate.Distance <= closeRadius);
+
+                if (!allow)
+                    continue;
+
+                TryAddEdge(graph, source, candidate.Cell);
+            }
+        }
+
+        if (extendedBudget <= 0)
+            return;
+
+        foreach (var source in graph.Cells)
+        {
+            int addedForSource = 0;
+
+            var candidates = graph.Cells
+                .Where(c => c.Id != source.Id)
+                .Where(c => !EdgeExists(graph, source, c))
+                .Select(target => new
+                {
+                    Cell = target,
+                    Distance = CalculateDistance(source.X, source.Y, target.X, target.Y),
+                    SameCluster = string.Equals(source.ClusterId, target.ClusterId, StringComparison.Ordinal)
+                })
+                .Where(x => x.Distance <= extendedRadius)
+                .OrderByDescending(x => x.SameCluster)
+                .ThenBy(x => x.Distance)
+                .ToList();
+
+            foreach (var candidate in candidates)
+            {
+                if (addedForSource >= extendedBudget)
+                    break;
+
+                if (graph.GetIncidentEdges(source).Count >= effectiveMaxDegree)
+                    break;
+
+                if (graph.GetIncidentEdges(candidate.Cell).Count >= effectiveMaxDegree)
+                    continue;
+
+                TryAddEdge(graph, source, candidate.Cell);
+                addedForSource++;
+            }
+        }
+    }
+
+    private List<ClusteredPatch> CreateClusteredPatchesRandomOnly(
+        int patchCount,
+        int width,
+        int height,
+        SimulationParameters parameters,
+        Random random)
+    {
+        var patches = new List<ClusteredPatch>();
+        var minDistance = Math.Max(3.0, Math.Min(width, height) / 4.2);
+
+        for (int i = 0; i < patchCount; i++)
+        {
+            for (int attempt = 0; attempt < 80; attempt++)
+            {
+                var centerX = random.Next(1, Math.Max(2, width - 1));
+                var centerY = random.Next(1, Math.Max(2, height - 1));
+
+                var ok = patches.All(p => CalculateDistance(p.CenterX, p.CenterY, centerX, centerY) >= minDistance);
+                if (!ok)
+                    continue;
+
+                var dominantVegetation = GetRandomCombustibleVegetation(parameters.VegetationDistributions, random, parameters);
+
+                var (minMoisture, maxMoisture) = GetEffectiveMoistureRange(parameters);
+                var baseMoisture = minMoisture + random.NextDouble() * Math.Max(0.02, maxMoisture - minMoisture);
+
+                var effectiveElevationVariation = GetEffectiveElevationVariation(parameters.ElevationVariation, parameters);
+                var baseElevation = (random.NextDouble() * 2.0 - 1.0) * Math.Max(4.0, effectiveElevationVariation * 0.35);
+
+                var radius = Math.Clamp(
+                    2.4 + random.NextDouble() * 1.6,
+                    2.2,
+                    Math.Max(3.4, Math.Min(width, height) / 2.4));
+
+                var weight = Math.Clamp(
+                    0.75 + random.NextDouble() * 0.70,
+                    0.45,
+                    1.85);
+
+                patches.Add(new ClusteredPatch(
+                    i,
+                    centerX,
+                    centerY,
+                    radius,
+                    weight,
+                    dominantVegetation,
+                    baseMoisture,
+                    baseElevation));
+
+                break;
+            }
+        }
+
+        if (patches.Count == 0)
+        {
+            patches.Add(new ClusteredPatch(
+                0,
+                width / 2.0,
+                height / 2.0,
+                3.2,
+                1.0,
+                VegetationType.Mixed,
+                0.45,
+                0.0));
+        }
+
+        return patches;
+    }
+    private List<ClusteredPatch> CreateScenarioDrivenClusteredPatches(
+        ClusteredScenarioType scenario,
+        int nodeCount,
+        int width,
+        int height,
+        SimulationParameters parameters,
+        Random random)
+    {
+        var patches = new List<ClusteredPatch>();
+
+        int patchCount = scenario switch
+        {
+            ClusteredScenarioType.DenseDryConiferous => Math.Max(4, GetClusteredPatchCount(nodeCount)),
+            ClusteredScenarioType.WaterBarrier => Math.Max(5, GetClusteredPatchCount(nodeCount)),
+            ClusteredScenarioType.FirebreakGap => Math.Max(4, GetClusteredPatchCount(nodeCount)),
+            ClusteredScenarioType.HillyClusters => Math.Max(5, GetClusteredPatchCount(nodeCount)),
+            ClusteredScenarioType.WetAfterRain => Math.Max(4, GetClusteredPatchCount(nodeCount)),
+            ClusteredScenarioType.MixedDryHotspots => Math.Max(5, GetClusteredPatchCount(nodeCount)),
+            _ => GetClusteredPatchCount(nodeCount)
+        };
+
+        for (int i = 0; i < patchCount; i++)
+        {
+            var sideBias = scenario switch
+            {
+                ClusteredScenarioType.WaterBarrier => i < patchCount / 2 ? 0.28 : 0.72,
+                ClusteredScenarioType.FirebreakGap => i < patchCount / 2 ? 0.30 : 0.70,
+                _ => 0.18 + random.NextDouble() * 0.64
+            };
+
+            double centerX = width * sideBias + (random.NextDouble() * 2.0 - 1.0) * Math.Max(1.5, width * 0.08);
+            double centerY = height * (0.18 + random.NextDouble() * 0.64);
+
+            centerX = ClampToRange((int)Math.Round(centerX), 1, Math.Max(1, width - 2));
+            centerY = ClampToRange((int)Math.Round(centerY), 1, Math.Max(1, height - 2));
+
+            var dominantVegetation = scenario switch
+            {
+                ClusteredScenarioType.DenseDryConiferous => random.NextDouble() < 0.82 ? VegetationType.Coniferous : VegetationType.Mixed,
+                ClusteredScenarioType.WaterBarrier => random.NextDouble() < 0.45 ? VegetationType.Deciduous : VegetationType.Mixed,
+                ClusteredScenarioType.FirebreakGap => random.NextDouble() < 0.55 ? VegetationType.Mixed : VegetationType.Coniferous,
+                ClusteredScenarioType.HillyClusters => random.NextDouble() < 0.45 ? VegetationType.Coniferous : VegetationType.Shrub,
+                ClusteredScenarioType.WetAfterRain => random.NextDouble() < 0.50 ? VegetationType.Deciduous : VegetationType.Mixed,
+                ClusteredScenarioType.MixedDryHotspots => i % 3 == 0 ? VegetationType.Coniferous : VegetationType.Mixed,
+                _ => VegetationType.Mixed
+            };
+
+            var baseMoisture = scenario switch
+            {
+                ClusteredScenarioType.DenseDryConiferous => 0.12 + random.NextDouble() * 0.10,
+                ClusteredScenarioType.WaterBarrier => 0.32 + random.NextDouble() * 0.18,
+                ClusteredScenarioType.FirebreakGap => 0.24 + random.NextDouble() * 0.16,
+                ClusteredScenarioType.HillyClusters => 0.20 + random.NextDouble() * 0.18,
+                ClusteredScenarioType.WetAfterRain => 0.62 + random.NextDouble() * 0.16,
+                ClusteredScenarioType.MixedDryHotspots => i % 3 == 0
+                    ? 0.12 + random.NextDouble() * 0.10
+                    : 0.34 + random.NextDouble() * 0.16,
+                _ => 0.40
+            };
+
+            var baseElevation = scenario switch
+            {
+                ClusteredScenarioType.HillyClusters => (random.NextDouble() * 2.0 - 1.0) * Math.Max(20.0, parameters.ElevationVariation * 0.75),
+                _ => (random.NextDouble() * 2.0 - 1.0) * Math.Max(6.0, parameters.ElevationVariation * 0.20)
+            };
+
+            var radius = scenario switch
+            {
+                ClusteredScenarioType.DenseDryConiferous => 3.1 + random.NextDouble() * 0.8,
+                ClusteredScenarioType.WaterBarrier => 2.6 + random.NextDouble() * 0.9,
+                ClusteredScenarioType.FirebreakGap => 2.8 + random.NextDouble() * 0.8,
+                ClusteredScenarioType.HillyClusters => 2.7 + random.NextDouble() * 1.0,
+                ClusteredScenarioType.WetAfterRain => 2.8 + random.NextDouble() * 0.9,
+                ClusteredScenarioType.MixedDryHotspots => 2.5 + random.NextDouble() * 1.1,
+                _ => 3.0
+            };
+
+            var weight = scenario switch
+            {
+                ClusteredScenarioType.DenseDryConiferous => 1.25 + random.NextDouble() * 0.35,
+                ClusteredScenarioType.WetAfterRain => 0.95 + random.NextDouble() * 0.25,
+                _ => 0.90 + random.NextDouble() * 0.45
+            };
+
+            patches.Add(new ClusteredPatch(
+                i,
+                centerX,
+                centerY,
+                radius,
+                weight,
+                dominantVegetation,
+                Math.Clamp(baseMoisture, 0.02, 0.98),
+                baseElevation));
+        }
+
+        return patches;
+    }
+    private VegetationType SelectScenarioVegetationForPatch(
+    ClusteredPatch patch,
+    ClusteredScenarioType scenario,
+    SimulationParameters parameters,
+    Random random)
+    {
+        return scenario switch
+        {
+            ClusteredScenarioType.DenseDryConiferous =>
+                random.NextDouble() < 0.86 ? patch.DominantVegetation : VegetationType.Mixed,
+
+            ClusteredScenarioType.WaterBarrier =>
+                random.NextDouble() < 0.72 ? patch.DominantVegetation : VegetationType.Deciduous,
+
+            ClusteredScenarioType.FirebreakGap =>
+                random.NextDouble() < 0.76 ? patch.DominantVegetation : GetRandomCombustibleVegetation(parameters.VegetationDistributions, random, parameters),
+
+            ClusteredScenarioType.HillyClusters =>
+                random.NextDouble() < 0.72 ? patch.DominantVegetation : VegetationType.Shrub,
+
+            ClusteredScenarioType.WetAfterRain =>
+                random.NextDouble() < 0.74 ? patch.DominantVegetation : VegetationType.Deciduous,
+
+            ClusteredScenarioType.MixedDryHotspots =>
+                random.NextDouble() < 0.68 ? patch.DominantVegetation : GetRandomCombustibleVegetation(parameters.VegetationDistributions, random, parameters),
+
+            _ =>
+                patch.DominantVegetation
+        };
+    }
+    private void ApplyClusteredScenarioBridgePolicy(
+        ForestGraph graph,
+        List<ClusteredPatch> patches,
+        ClusteredScenarioType scenario,
+        Random random)
+    {
+        CreateClusterBridges(graph, patches, random);
+
+        foreach (var edge in graph.Edges.ToList())
+        {
+            var fromCell = graph.Cells.FirstOrDefault(c => c.Id == edge.FromCellId);
+            var toCell = graph.Cells.FirstOrDefault(c => c.Id == edge.ToCellId);
+
+            if (fromCell == null || toCell == null)
+                continue;
+
+            bool samePatch = string.Equals(fromCell.ClusterId, toCell.ClusterId, StringComparison.Ordinal);
+
+            double modifier = edge.FireSpreadModifier;
+
+            switch (scenario)
+            {
+                case ClusteredScenarioType.DenseDryConiferous:
+                    modifier *= samePatch ? 1.18 : 1.12;
+                    break;
+
+                case ClusteredScenarioType.WaterBarrier:
+                    modifier *= samePatch ? 1.0 : 0.42;
+                    break;
+
+                case ClusteredScenarioType.FirebreakGap:
+                    modifier *= samePatch ? 1.0 : 0.35;
+                    break;
+
+                case ClusteredScenarioType.HillyClusters:
+                    modifier *= samePatch ? 1.05 : 0.82;
+                    break;
+
+                case ClusteredScenarioType.WetAfterRain:
+                    modifier *= samePatch ? 0.86 : 0.74;
+                    break;
+
+                case ClusteredScenarioType.MixedDryHotspots:
+                    modifier *= samePatch ? 1.08 : 0.92;
+                    break;
+            }
+
+            SetEdgeFireSpreadModifier(edge, Math.Clamp(modifier, 0.02, 1.85));
+        }
+    }
+    
+    private void ApplyClusteredScenarioNodeAdjustments(
+        ForestGraph graph,
+        ClusteredScenarioType scenario,
+        SimulationParameters parameters,
+        Random random)
+    {
+        foreach (var cell in graph.Cells)
+        {
+            switch (scenario)
+            {
+                case ClusteredScenarioType.DenseDryConiferous:
+                    if (cell.Vegetation == VegetationType.Coniferous || cell.Vegetation == VegetationType.Mixed)
+                        cell.UpdateMoisture(Math.Clamp(cell.Moisture - 0.06, 0.02, 0.98));
+                    break;
+
+                case ClusteredScenarioType.WetAfterRain:
+                    cell.UpdateMoisture(Math.Clamp(cell.Moisture + 0.10, 0.02, 0.98));
+                    break;
+
+                case ClusteredScenarioType.MixedDryHotspots:
+                    if (cell.ClusterId != null && cell.ClusterId.EndsWith("0", StringComparison.Ordinal))
+                        cell.UpdateMoisture(Math.Clamp(cell.Moisture - 0.10, 0.02, 0.98));
+                    break;
+            }
+        }
+    }
+
 
     public async Task<ForestGraph> GenerateRegionClusterGraphAsync(SimulationParameters parameters)
     {

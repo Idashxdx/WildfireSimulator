@@ -1447,24 +1447,62 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
             _ => "Случайная генерация"
         };
 
-        var scenarioText = dialog.SelectedScenarioType switch
+        var scenarioText = graphType switch
         {
-            MapScenarioType.MixedForest => "Смешанный лес",
-            MapScenarioType.DryConiferousMassif => "Сухой хвойный массив",
-            MapScenarioType.ForestWithRiver => "Лес с рекой",
-            MapScenarioType.ForestWithLake => "Лес с озером",
-            MapScenarioType.ForestWithFirebreak => "Лес с просекой",
-            MapScenarioType.HillyTerrain => "Холмистая местность",
-            MapScenarioType.WetForestAfterRain => "Влажный лес после дождя",
+            GraphType.Grid => dialog.SelectedScenarioType switch
+            {
+                MapScenarioType.MixedForest => "Смешанный лес",
+                MapScenarioType.DryConiferousMassif => "Сухой хвойный массив",
+                MapScenarioType.ForestWithRiver => "Лес с рекой",
+                MapScenarioType.ForestWithLake => "Лес с озером",
+                MapScenarioType.ForestWithFirebreak => "Лес с просекой",
+                MapScenarioType.HillyTerrain => "Холмистая местность",
+                MapScenarioType.WetForestAfterRain => "Влажный лес после дождя",
+                _ => string.Empty
+            },
+
+            GraphType.ClusteredGraph => dialog.SelectedClusteredScenarioType switch
+            {
+                ClusteredScenarioType.DenseDryConiferous => "Плотный сухой хвойный массив",
+                ClusteredScenarioType.WaterBarrier => "Кластеры, разделённые водным барьером",
+                ClusteredScenarioType.FirebreakGap => "Кластеры с просекой / разрывом",
+                ClusteredScenarioType.HillyClusters => "Холмистые кластеры",
+                ClusteredScenarioType.WetAfterRain => "Влажные патчи после дождя",
+                ClusteredScenarioType.MixedDryHotspots => "Смешанные патчи с очагами сухости",
+                _ => string.Empty
+            },
+
             _ => string.Empty
         };
 
         var baseShapeText = graphType switch
         {
-            GraphType.Grid => $"Сетка {dialog.GridWidth}x{dialog.GridHeight}",
-            GraphType.ClusteredGraph => $"Территория {dialog.GridWidth}x{dialog.GridHeight} → Кластерный граф",
-            GraphType.RegionClusterGraph => $"Территория {dialog.GridWidth}x{dialog.GridHeight} → Региональный граф",
-            _ => $"Сетка {dialog.GridWidth}x{dialog.GridHeight}"
+            GraphType.Grid =>
+                $"Сетка {dialog.GridWidth}x{dialog.GridHeight}",
+
+            GraphType.ClusteredGraph => dialog.SelectedMapCreationMode switch
+            {
+                MapCreationMode.Random =>
+                    $"Кластерный граф в области {dialog.GridWidth}x{dialog.GridHeight}",
+
+                MapCreationMode.Scenario =>
+                    $"Сценарный кластерный граф в области {dialog.GridWidth}x{dialog.GridHeight}",
+
+                MapCreationMode.SemiManual when dialog.ClusteredBlueprint != null =>
+                    $"Clustered blueprint: узлов {dialog.ClusteredBlueprint.Nodes.Count}, рёбер {dialog.ClusteredBlueprint.Edges.Count}",
+
+                MapCreationMode.SemiManual =>
+                    $"Полуручной кластерный граф в области {dialog.GridWidth}x{dialog.GridHeight}",
+
+                _ =>
+                    $"Кластерный граф {dialog.GridWidth}x{dialog.GridHeight}"
+            },
+
+            GraphType.RegionClusterGraph =>
+                $"Региональный граф {dialog.GridWidth}x{dialog.GridHeight}",
+
+            _ =>
+                $"Сетка {dialog.GridWidth}x{dialog.GridHeight}"
         };
 
         var description =
@@ -1480,8 +1518,8 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
         var dto = new CreateSimulationDto
         {
             Name = string.IsNullOrWhiteSpace(dialog.SimulationName)
-                ? $"Симуляция {DateTime.Now:dd.MM HH:mm}"
-                : dialog.SimulationName.Trim(),
+         ? $"Симуляция {DateTime.Now:dd.MM HH:mm}"
+         : dialog.SimulationName.Trim(),
             Description = description,
             GridWidth = dialog.GridWidth,
             GridHeight = dialog.GridHeight,
@@ -1495,19 +1533,35 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
             RandomSeed = dialog.RandomSeed,
             Precipitation = dialog.Precipitation,
             MapCreationMode = dialog.SelectedMapCreationMode,
-            ScenarioType = dialog.SelectedScenarioType,
+
+            ScenarioType = graphType == GraphType.Grid
+         ? dialog.SelectedScenarioType
+         : null,
+
+            ClusteredScenarioType = graphType == GraphType.ClusteredGraph
+         ? dialog.SelectedClusteredScenarioType
+         : null,
+
             MapNoiseStrength = dialog.MapNoiseStrength,
             MapDrynessFactor = dialog.MapDrynessFactor,
             ReliefStrengthFactor = dialog.ReliefStrengthFactor,
             FuelDensityFactor = dialog.FuelDensityFactor,
-            MapRegionObjects = dialog.MapRegionObjects?.ToList() ?? new List<MapRegionObjectDto>(),
+
+            MapRegionObjects = graphType == GraphType.Grid
+         ? dialog.MapRegionObjects?.ToList() ?? new List<MapRegionObjectDto>()
+         : new List<MapRegionObjectDto>(),
+
+            ClusteredBlueprint = graphType == GraphType.ClusteredGraph
+         ? dialog.ClusteredBlueprint
+         : null,
+
             VegetationDistributions = (dialog.VegetationDistributions ?? new List<(int VegetationType, double Probability)>())
-                .Select(v => new VegetationDistributionDto
-                {
-                    VegetationType = v.VegetationType,
-                    Probability = v.Probability
-                })
-                .ToList()
+         .Select(v => new VegetationDistributionDto
+         {
+             VegetationType = (VegetationType)v.VegetationType,
+             Probability = v.Probability
+         })
+         .ToList()
         };
 
         var simulationId = await _apiService.CreateSimulationAsync(

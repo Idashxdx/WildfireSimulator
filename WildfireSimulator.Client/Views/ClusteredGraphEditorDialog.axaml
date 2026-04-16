@@ -1,0 +1,291 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="WildfireSimulator.Client.Views.ClusteredGraphEditorDialog"
+        Title="Редактор кластерного графа"
+        Width="1360"
+        Height="860"
+        MinWidth="1200"
+        MinHeight="760"
+        Background="#FAF8F2">
+
+    <Grid ColumnDefinitions="390,*" RowDefinitions="*,Auto" Margin="16">
+        <Border Grid.Column="0"
+                Grid.Row="0"
+                Background="#FFFDF8"
+                BorderBrush="#E7E0F2"
+                BorderThickness="1"
+                CornerRadius="14"
+                Padding="14"
+                Margin="0,0,12,0">
+            <ScrollViewer>
+                <StackPanel Spacing="12">
+
+                    <TextBlock Text="Редактор кластерного графа"
+                               Foreground="#2F2A3A"
+                               FontSize="22"
+                               FontWeight="Bold"/>
+
+                    <TextBlock Text="Выбирайте узлы, соединяйте их рёбрами и задавайте свойства. Для clustered graph важны топология, длины связей и барьеры между группами."
+                               Foreground="#6E6A78"
+                               TextWrapping="Wrap"/>
+
+                    <Border Background="#F8F5FF"
+                            BorderBrush="#E6DFF1"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Режим редактирования"
+                                       Foreground="#2F2A3A"
+                                       FontWeight="Bold"/>
+                            <ComboBox x:Name="ModeBox" SelectedIndex="0">
+                                <ComboBoxItem Content="Выбор узлов"/>
+                                <ComboBoxItem Content="Создание связей"/>
+                                <ComboBoxItem Content="Удаление связей"/>
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#F8FCF5"
+                            BorderBrush="#D7E8C8"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Подложка кандидатов"
+                                       Foreground="#2F2A3A"
+                                       FontWeight="Bold"/>
+                            <TextBlock Text="Количество точек-кандидатов"
+                                       Foreground="#6E6A78"/>
+                            <TextBox x:Name="CandidateCountBox" Text="90"/>
+
+                            <Grid ColumnDefinitions="*,*"
+                                  ColumnSpacing="8">
+                                <Button x:Name="RegenerateCandidatesButton"
+                                        Grid.Column="0"
+                                        Content="Перегенерировать"
+                                        Background="#E7E1D8"
+                                        Foreground="#2F2A3A"/>
+                                <Button x:Name="AutoConnectButton"
+                                        Grid.Column="1"
+                                        Content="Автосвязать"
+                                        Background="#DDEFD5"
+                                        Foreground="#2F2A3A"/>
+                            </Grid>
+
+                            <TextBlock Text="Автосвязка добавляет рёбра между ближайшими выбранными узлами."
+                                       Foreground="#8A8793"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#FFF8EF"
+                            BorderBrush="#ECD8B8"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Группы и topology tools"
+                                       Foreground="#2F2A3A"
+                                       FontWeight="Bold"/>
+
+                            <TextBlock Text="Количество групп для авторазбиения"
+                                       Foreground="#6E6A78"/>
+                            <TextBox x:Name="AutoGroupCountBox" Text="4"/>
+
+                            <Grid ColumnDefinitions="*,*"
+                                  ColumnSpacing="8">
+                                <Button x:Name="AutoGroupButton"
+                                        Grid.Column="0"
+                                        Content="Авторазбить на группы"
+                                        Background="#F1E2C8"
+                                        Foreground="#2F2A3A"/>
+                                <Button x:Name="NormalizeEdgesButton"
+                                        Grid.Column="1"
+                                        Content="Нормализовать рёбра"
+                                        Background="#E6EEF8"
+                                        Foreground="#2F2A3A"/>
+                            </Grid>
+
+                            <Grid ColumnDefinitions="*,*"
+                                  ColumnSpacing="8">
+                                <Button x:Name="WeakenBridgesButton"
+                                        Grid.Column="0"
+                                        Content="Ослабить мосты"
+                                        Background="#E6F0FF"
+                                        Foreground="#2F2A3A"/>
+                                <Button x:Name="BoostLocalEdgesButton"
+                                        Grid.Column="1"
+                                        Content="Усилить локальные"
+                                        Background="#E7F6E2"
+                                        Foreground="#2F2A3A"/>
+                            </Grid>
+
+                            <TextBlock Text="Эти действия помогают быстрее получить clustered graph с читаемой структурой: плотные локальные связи и слабые переходы между группами."
+                                       Foreground="#8A8793"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#FFF8EF"
+                            BorderBrush="#ECD8B8"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Выбранный узел"
+                                       Foreground="#2F2A3A"
+                                       FontWeight="Bold"/>
+                            <TextBlock x:Name="SelectedNodeSummaryTextBlock"
+                                       Text="Узел не выбран"
+                                       Foreground="#6A5A44"
+                                       TextWrapping="Wrap"/>
+
+                            <TextBlock Text="Cluster ID"
+                                       Foreground="#6E6A78"/>
+                            <TextBox x:Name="NodeClusterIdBox" Text="patch-manual-1"/>
+
+                            <TextBlock Text="Тип растительности"
+                                       Foreground="#6E6A78"/>
+                            <ComboBox x:Name="NodeVegetationBox" SelectedIndex="4">
+                                <ComboBoxItem Content="Трава"/>
+                                <ComboBoxItem Content="Кустарник"/>
+                                <ComboBoxItem Content="Лиственный лес"/>
+                                <ComboBoxItem Content="Хвойный лес"/>
+                                <ComboBoxItem Content="Смешанный лес"/>
+                                <ComboBoxItem Content="Вода"/>
+                                <ComboBoxItem Content="Пустая поверхность"/>
+                            </ComboBox>
+
+                            <Grid ColumnDefinitions="*,*"
+                                  ColumnSpacing="8">
+                                <StackPanel Grid.Column="0" Spacing="4">
+                                    <TextBlock Text="Влажность"
+                                               Foreground="#6E6A78"/>
+                                    <TextBox x:Name="NodeMoistureBox" Text="0.45"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Text="Высота"
+                                               Foreground="#6E6A78"/>
+                                    <TextBox x:Name="NodeElevationBox" Text="0"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <Button x:Name="ApplyNodeButton"
+                                    Content="Применить к узлу"
+                                    Background="#EFD9B5"
+                                    Foreground="#2F2A3A"
+                                    FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#F5FBFF"
+                            BorderBrush="#D7E6F2"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Выбранное ребро"
+                                       Foreground="#2F2A3A"
+                                       FontWeight="Bold"/>
+                            <TextBlock x:Name="SelectedEdgeSummaryTextBlock"
+                                       Text="Ребро не выбрано"
+                                       Foreground="#5A6670"
+                                       TextWrapping="Wrap"/>
+
+                            <Grid ColumnDefinitions="*,*"
+                                  ColumnSpacing="8">
+                                <StackPanel Grid.Column="0" Spacing="4">
+                                    <TextBlock Text="Distance override"
+                                               Foreground="#6E6A78"/>
+                                    <TextBox x:Name="EdgeDistanceBox" Text=""/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Text="Fire spread modifier"
+                                               Foreground="#6E6A78"/>
+                                    <TextBox x:Name="EdgeModifierBox" Text="1.00"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <Button x:Name="ApplyEdgeButton"
+                                    Content="Применить к ребру"
+                                    Background="#DCEBFA"
+                                    Foreground="#2F2A3A"
+                                    FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#FBF9F4"
+                            BorderBrush="#E7E0F2"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Сводка"
+                                       Foreground="#2F2A3A"
+                                       FontWeight="Bold"/>
+                            <TextBlock x:Name="SummaryTextBlock"
+                                       Text="Выбрано узлов: 0 • рёбер: 0"
+                                       Foreground="#554E63"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock x:Name="HintTextBlock"
+                                       Text="В режиме выбора узлов кликайте по серым точкам. В режиме связей кликните по двум выбранным узлам."
+                                       Foreground="#7C7689"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <Border Grid.Column="1"
+                Grid.Row="0"
+                Background="#FFFDF8"
+                BorderBrush="#E7E0F2"
+                BorderThickness="1"
+                CornerRadius="14"
+                Padding="12">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto">
+                <Canvas x:Name="GraphCanvas"
+                        Width="900"
+                        Height="790"
+                        Background="#FBF9F4"/>
+            </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Column="0"
+              Grid.ColumnSpan="2"
+              Grid.Row="1"
+              ColumnDefinitions="*,Auto,Auto"
+              ColumnSpacing="10"
+              Margin="0,12,0,0">
+            <TextBlock VerticalAlignment="Center"
+                       Text="Сначала выбирайте узлы, затем строите связи и только потом тонко настраивайте свойства."
+                       Foreground="#6E6A78"/>
+
+            <Button x:Name="CancelButton"
+                    Grid.Column="1"
+                    Content="Отмена"
+                    MinWidth="120"
+                    Background="#E7E1D8"
+                    Foreground="#2F2A3A"/>
+
+            <Button x:Name="ApplyButton"
+                    Grid.Column="2"
+                    Content="Применить"
+                    MinWidth="160"
+                    Background="#8E7CC3"
+                    Foreground="White"
+                    FontWeight="Bold"/>
+        </Grid>
+    </Grid>
+</Window>

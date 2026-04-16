@@ -122,7 +122,17 @@ public class SimulationsController : ControllerBase
                 StepDurationSeconds = request.StepDurationSeconds,
                 RandomSeed = request.RandomSeed,
                 MapCreationMode = request.MapCreationMode,
-                ScenarioType = request.ScenarioType,
+
+                // Grid-only
+                ScenarioType = request.GraphType == GraphType.Grid
+                    ? request.ScenarioType
+                    : null,
+
+                // Clustered-only
+                ClusteredScenarioType = request.GraphType == GraphType.ClusteredGraph
+                    ? request.ClusteredScenarioType
+                    : null,
+
                 MapNoiseStrength = request.MapNoiseStrength,
                 MapDrynessFactor = request.MapDrynessFactor,
                 ReliefStrengthFactor = request.ReliefStrengthFactor,
@@ -140,7 +150,9 @@ public class SimulationsController : ControllerBase
                     .ToList();
             }
 
-            if (request.MapRegionObjects != null && request.MapRegionObjects.Any())
+            if (request.GraphType == GraphType.Grid &&
+                request.MapRegionObjects != null &&
+                request.MapRegionObjects.Any())
             {
                 parameters.MapRegionObjects = request.MapRegionObjects
                     .Select(x => new MapRegionObject
@@ -156,6 +168,47 @@ public class SimulationsController : ControllerBase
                         Priority = x.Priority
                     })
                     .ToList();
+            }
+
+            if (request.GraphType == GraphType.ClusteredGraph &&
+                request.ClusteredBlueprint != null &&
+                request.ClusteredBlueprint.Nodes.Any())
+            {
+                parameters.ClusteredBlueprint = new ClusteredGraphBlueprint
+                {
+                    CanvasWidth = request.ClusteredBlueprint.CanvasWidth,
+                    CanvasHeight = request.ClusteredBlueprint.CanvasHeight,
+                    Candidates = request.ClusteredBlueprint.Candidates
+                        .Select(x => new ClusteredCandidateNode
+                        {
+                            Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
+                            X = x.X,
+                            Y = x.Y
+                        })
+                        .ToList(),
+                    Nodes = request.ClusteredBlueprint.Nodes
+                        .Select(x => new ClusteredNodeDraft
+                        {
+                            Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
+                            X = x.X,
+                            Y = x.Y,
+                            ClusterId = x.ClusterId ?? string.Empty,
+                            Vegetation = x.Vegetation,
+                            Moisture = x.Moisture,
+                            Elevation = x.Elevation
+                        })
+                        .ToList(),
+                    Edges = request.ClusteredBlueprint.Edges
+                        .Select(x => new ClusteredEdgeDraft
+                        {
+                            Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
+                            FromNodeId = x.FromNodeId,
+                            ToNodeId = x.ToNodeId,
+                            DistanceOverride = x.DistanceOverride,
+                            FireSpreadModifier = x.FireSpreadModifier
+                        })
+                        .ToList()
+                };
             }
 
             var simulation = new Simulation(request.Name, request.Description, parameters);
@@ -184,15 +237,14 @@ public class SimulationsController : ControllerBase
             await _simulationRepository.AddAsync(simulation, cancellationToken);
 
             _logger.LogInformation(
-                "Создана симуляция {Id} со статусом {Status}. Режим карты: {Mode}, сценарий: {Scenario}, объектов: {ObjectsCount}, dry={Dryness:F2}, relief={Relief:F2}, fuel={Fuel:F2}",
+                "Создана симуляция {Id}. GraphType={GraphType}, Mode={Mode}, GridScenario={GridScenario}, ClusteredScenario={ClusteredScenario}, GridObjects={ObjectsCount}, ClusteredNodes={ClusteredNodesCount}",
                 simulation.Id,
-                simulation.Status,
+                simulation.Parameters.GraphType,
                 simulation.Parameters.MapCreationMode,
                 simulation.Parameters.ScenarioType,
+                simulation.Parameters.ClusteredScenarioType,
                 simulation.Parameters.MapRegionObjects.Count,
-                simulation.Parameters.MapDrynessFactor,
-                simulation.Parameters.ReliefStrengthFactor,
-                simulation.Parameters.FuelDensityFactor);
+                simulation.Parameters.ClusteredBlueprint?.Nodes.Count ?? 0);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -295,14 +347,25 @@ public class CreateSimulationWithWeatherRequest
     public int? RandomSeed { get; set; }
 
     public MapCreationMode MapCreationMode { get; set; } = MapCreationMode.Random;
+
+    // Только для Grid
     public MapScenarioType? ScenarioType { get; set; }
+
+    // Только для ClusteredGraph
+    public ClusteredScenarioType? ClusteredScenarioType { get; set; }
+
     public double MapNoiseStrength { get; set; } = 0.08;
 
     public double MapDrynessFactor { get; set; } = 1.0;
     public double ReliefStrengthFactor { get; set; } = 1.0;
     public double FuelDensityFactor { get; set; } = 1.0;
 
+    // Только для Grid SemiManual
     public List<MapRegionObjectRequest> MapRegionObjects { get; set; } = new();
+
+    // Только для ClusteredGraph SemiManual
+    public ClusteredBlueprintRequest? ClusteredBlueprint { get; set; }
+
     public List<InitialFirePositionDto> InitialFirePositions { get; set; } = new();
 
     public double Temperature { get; set; } = 25.0;
@@ -337,4 +400,41 @@ public class MapRegionObjectRequest
     public int Height { get; set; }
     public double Strength { get; set; } = 1.0;
     public int Priority { get; set; } = 0;
+}
+
+public class ClusteredBlueprintRequest
+{
+    public int CanvasWidth { get; set; } = 24;
+    public int CanvasHeight { get; set; } = 24;
+
+    public List<ClusteredCandidateNodeRequest> Candidates { get; set; } = new();
+    public List<ClusteredNodeDraftRequest> Nodes { get; set; } = new();
+    public List<ClusteredEdgeDraftRequest> Edges { get; set; } = new();
+}
+
+public class ClusteredCandidateNodeRequest
+{
+    public Guid Id { get; set; }
+    public int X { get; set; }
+    public int Y { get; set; }
+}
+
+public class ClusteredNodeDraftRequest
+{
+    public Guid Id { get; set; }
+    public int X { get; set; }
+    public int Y { get; set; }
+    public string? ClusterId { get; set; }
+    public VegetationType Vegetation { get; set; } = VegetationType.Mixed;
+    public double Moisture { get; set; } = 0.45;
+    public double Elevation { get; set; } = 0.0;
+}
+
+public class ClusteredEdgeDraftRequest
+{
+    public Guid Id { get; set; }
+    public Guid FromNodeId { get; set; }
+    public Guid ToNodeId { get; set; }
+    public double? DistanceOverride { get; set; }
+    public double FireSpreadModifier { get; set; } = 1.0;
 }

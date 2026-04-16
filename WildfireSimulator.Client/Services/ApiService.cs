@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using WildfireSimulator.Client.Models;
 
+
 namespace WildfireSimulator.Client.Services;
 
 public class ApiService
@@ -89,12 +90,25 @@ public class ApiService
                 vegetationDistributions = dto.VegetationDistributions,
 
                 mapCreationMode = dto.MapCreationMode,
+
+                // grid-only
                 scenarioType = dto.ScenarioType,
+
+                // clustered-only
+                clusteredScenarioType = dto.ClusteredScenarioType,
+
                 mapNoiseStrength = dto.MapNoiseStrength,
                 mapDrynessFactor = dto.MapDrynessFactor,
                 reliefStrengthFactor = dto.ReliefStrengthFactor,
                 fuelDensityFactor = dto.FuelDensityFactor,
+
+                // grid-only
                 mapRegionObjects = dto.MapRegionObjects,
+
+                // clustered-only
+                clusteredBlueprint = dto.ClusteredBlueprint,
+
+                initialFirePositions = dto.InitialFirePositions,
 
                 temperature = temperature,
                 humidity = humidity,
@@ -114,6 +128,9 @@ public class ApiService
                 var simulation = JsonSerializer.Deserialize<SimulationDto>(responseJson, _jsonOptions);
                 return simulation?.Id;
             }
+
+            var errorText = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"CreateSimulation failed: {response.StatusCode} {errorText}");
         }
         catch (Exception ex)
         {

@@ -38,6 +38,17 @@ public partial class CreateSimulationDialog : Window
     public List<MapRegionObjectDto> MapRegionObjects { get; private set; } = new();
 
     public List<(int VegetationType, double Probability)> VegetationDistributions { get; private set; } = new();
+    public ClusteredScenarioType? SelectedClusteredScenarioType { get; private set; }
+    public ClusteredGraphBlueprintDto? ClusteredBlueprint { get; private set; }
+    private bool IsGridDialog()
+    {
+        return _page == AppPage.Grid;
+    }
+
+    private bool IsClusteredDialog()
+    {
+        return _page == AppPage.Graph && _mode == GraphCreationMode.Clustered;
+    }
 
     private readonly AppPage _page;
     private readonly GraphCreationMode _mode;
@@ -233,166 +244,338 @@ public partial class CreateSimulationDialog : Window
 
         ClearErrors();
         MapRegionObjects = new List<MapRegionObjectDto>();
+        ClusteredBlueprint = null;
 
-        switch (preset)
+        bool isGrid = IsGridDialog();
+        bool isClustered = IsClusteredDialog();
+
+        if (isGrid)
         {
-            case "dry-coniferous":
-                if (_nameBox != null) _nameBox.Text = "Демо: Сухой хвойный массив + сильный ветер";
-                if (_mapCreationModeBox != null) _mapCreationModeBox.SelectedIndex = 1;
-                if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 1;
+            switch (preset)
+            {
+                case "dry-coniferous":
+                    if (_nameBox != null) _nameBox.Text = "Демо: Сухой хвойный массив + сильный ветер";
+                    if (_mapCreationModeBox != null) _mapCreationModeBox.SelectedIndex = 1;
+                    if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 1;
 
-                if (_widthBox != null) _widthBox.Text = "24";
-                if (_heightBox != null) _heightBox.Text = "24";
-                if (_fireCellsBox != null) _fireCellsBox.Text = "2";
+                    if (_widthBox != null) _widthBox.Text = "24";
+                    if (_heightBox != null) _heightBox.Text = "24";
+                    if (_fireCellsBox != null) _fireCellsBox.Text = "2";
 
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.10";
-                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.24";
-                if (_elevationBox != null) _elevationBox.Text = "70";
+                    if (_moistureMinBox != null) _moistureMinBox.Text = "0.10";
+                    if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.24";
+                    if (_elevationBox != null) _elevationBox.Text = "70";
 
-                if (_stepsBox != null) _stepsBox.Text = "90";
-                if (_stepDurationBox != null) _stepDurationBox.Text = "900";
+                    if (_stepsBox != null) _stepsBox.Text = "90";
+                    if (_stepDurationBox != null) _stepDurationBox.Text = "900";
 
-                if (_tempBox != null) _tempBox.Text = "31";
-                if (_humidityBox != null) _humidityBox.Text = "24";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "11";
-                if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
-                if (_precipitationBox != null) _precipitationBox.Text = "0";
+                    if (_tempBox != null) _tempBox.Text = "31";
+                    if (_humidityBox != null) _humidityBox.Text = "24";
+                    if (_windSpeedBox != null) _windSpeedBox.Text = "11";
+                    if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
+                    if (_precipitationBox != null) _precipitationBox.Text = "0";
 
-                if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.10";
-                if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.30";
-                if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.05";
-                if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.25";
-                if (_randomSeedBox != null) _randomSeedBox.Text = "101";
+                    if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.10";
+                    if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.30";
+                    if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.05";
+                    if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.25";
+                    if (_randomSeedBox != null) _randomSeedBox.Text = "101";
 
-                SetVegetationDistributionTexts(0.55, 0.08, 0.18, 0.07, 0.07, 0.03, 0.02);
-                break;
+                    SetVegetationDistributionTexts(0.55, 0.08, 0.18, 0.07, 0.07, 0.03, 0.02);
+                    break;
 
-            case "river":
-                if (_nameBox != null) _nameBox.Text = "Демо: Лес с рекой как барьер";
-                if (_mapCreationModeBox != null) _mapCreationModeBox.SelectedIndex = 1;
-                if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 2;
+                case "river":
+                    if (_nameBox != null) _nameBox.Text = "Демо: Лес с рекой как барьер";
+                    if (_mapCreationModeBox != null) _mapCreationModeBox.SelectedIndex = 1;
+                    if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 2;
 
-                if (_widthBox != null) _widthBox.Text = "26";
-                if (_heightBox != null) _heightBox.Text = "20";
-                if (_fireCellsBox != null) _fireCellsBox.Text = "2";
+                    if (_widthBox != null) _widthBox.Text = "26";
+                    if (_heightBox != null) _heightBox.Text = "20";
+                    if (_fireCellsBox != null) _fireCellsBox.Text = "2";
 
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.26";
-                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.62";
-                if (_elevationBox != null) _elevationBox.Text = "55";
+                    if (_moistureMinBox != null) _moistureMinBox.Text = "0.26";
+                    if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.62";
+                    if (_elevationBox != null) _elevationBox.Text = "55";
 
-                if (_stepsBox != null) _stepsBox.Text = "100";
-                if (_stepDurationBox != null) _stepDurationBox.Text = "900";
+                    if (_stepsBox != null) _stepsBox.Text = "100";
+                    if (_stepDurationBox != null) _stepDurationBox.Text = "900";
 
-                if (_tempBox != null) _tempBox.Text = "26";
-                if (_humidityBox != null) _humidityBox.Text = "42";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "6";
-                if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
-                if (_precipitationBox != null) _precipitationBox.Text = "0";
+                    if (_tempBox != null) _tempBox.Text = "26";
+                    if (_humidityBox != null) _humidityBox.Text = "42";
+                    if (_windSpeedBox != null) _windSpeedBox.Text = "6";
+                    if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
+                    if (_precipitationBox != null) _precipitationBox.Text = "0";
 
-                if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.08";
-                if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.00";
-                if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.00";
-                if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.00";
-                if (_randomSeedBox != null) _randomSeedBox.Text = "202";
+                    if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.08";
+                    if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.00";
+                    if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.00";
+                    if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.00";
+                    if (_randomSeedBox != null) _randomSeedBox.Text = "202";
 
-                SetVegetationDistributionTexts(0.20, 0.22, 0.28, 0.10, 0.10, 0.06, 0.04);
-                break;
+                    SetVegetationDistributionTexts(0.20, 0.22, 0.28, 0.10, 0.10, 0.06, 0.04);
+                    break;
 
-            case "wet":
-                if (_nameBox != null) _nameBox.Text = "Демо: Влажный лес после дождя";
-                if (_mapCreationModeBox != null) _mapCreationModeBox.SelectedIndex = 1;
-                if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 6;
+                case "wet":
+                    if (_nameBox != null) _nameBox.Text = "Демо: Влажный лес после дождя";
+                    if (_mapCreationModeBox != null) _mapCreationModeBox.SelectedIndex = 1;
+                    if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 6;
 
-                if (_widthBox != null) _widthBox.Text = "22";
-                if (_heightBox != null) _heightBox.Text = "22";
-                if (_fireCellsBox != null) _fireCellsBox.Text = "1";
+                    if (_widthBox != null) _widthBox.Text = "22";
+                    if (_heightBox != null) _heightBox.Text = "22";
+                    if (_fireCellsBox != null) _fireCellsBox.Text = "1";
 
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.48";
-                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.88";
-                if (_elevationBox != null) _elevationBox.Text = "45";
+                    if (_moistureMinBox != null) _moistureMinBox.Text = "0.48";
+                    if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.88";
+                    if (_elevationBox != null) _elevationBox.Text = "45";
 
-                if (_stepsBox != null) _stepsBox.Text = "80";
-                if (_stepDurationBox != null) _stepDurationBox.Text = "900";
+                    if (_stepsBox != null) _stepsBox.Text = "80";
+                    if (_stepDurationBox != null) _stepDurationBox.Text = "900";
 
-                if (_tempBox != null) _tempBox.Text = "20";
-                if (_humidityBox != null) _humidityBox.Text = "78";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "3";
-                if (_windDirBox != null) _windDirBox.SelectedIndex = 1;
-                if (_precipitationBox != null) _precipitationBox.Text = "2.5";
+                    if (_tempBox != null) _tempBox.Text = "20";
+                    if (_humidityBox != null) _humidityBox.Text = "78";
+                    if (_windSpeedBox != null) _windSpeedBox.Text = "3";
+                    if (_windDirBox != null) _windDirBox.SelectedIndex = 1;
+                    if (_precipitationBox != null) _precipitationBox.Text = "2.5";
 
-                if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.06";
-                if (_mapDrynessBox != null) _mapDrynessBox.Text = "0.80";
-                if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "0.95";
-                if (_fuelDensityBox != null) _fuelDensityBox.Text = "0.95";
-                if (_randomSeedBox != null) _randomSeedBox.Text = "303";
+                    if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.06";
+                    if (_mapDrynessBox != null) _mapDrynessBox.Text = "0.80";
+                    if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "0.95";
+                    if (_fuelDensityBox != null) _fuelDensityBox.Text = "0.95";
+                    if (_randomSeedBox != null) _randomSeedBox.Text = "303";
 
-                SetVegetationDistributionTexts(0.18, 0.24, 0.28, 0.08, 0.10, 0.07, 0.05);
-                break;
+                    SetVegetationDistributionTexts(0.18, 0.24, 0.28, 0.08, 0.10, 0.07, 0.05);
+                    break;
 
-            case "firebreak":
-                if (_nameBox != null) _nameBox.Text = "Демо: Лес с просекой";
-                if (_mapCreationModeBox != null) _mapCreationModeBox.SelectedIndex = 1;
-                if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 4;
+                case "firebreak":
+                    if (_nameBox != null) _nameBox.Text = "Демо: Лес с просекой";
+                    if (_mapCreationModeBox != null) _mapCreationModeBox.SelectedIndex = 1;
+                    if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 4;
 
-                if (_widthBox != null) _widthBox.Text = "24";
-                if (_heightBox != null) _heightBox.Text = "20";
-                if (_fireCellsBox != null) _fireCellsBox.Text = "2";
+                    if (_widthBox != null) _widthBox.Text = "24";
+                    if (_heightBox != null) _heightBox.Text = "20";
+                    if (_fireCellsBox != null) _fireCellsBox.Text = "2";
 
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.24";
-                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.58";
-                if (_elevationBox != null) _elevationBox.Text = "50";
+                    if (_moistureMinBox != null) _moistureMinBox.Text = "0.24";
+                    if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.58";
+                    if (_elevationBox != null) _elevationBox.Text = "50";
 
-                if (_stepsBox != null) _stepsBox.Text = "90";
-                if (_stepDurationBox != null) _stepDurationBox.Text = "900";
+                    if (_stepsBox != null) _stepsBox.Text = "90";
+                    if (_stepDurationBox != null) _stepDurationBox.Text = "900";
 
-                if (_tempBox != null) _tempBox.Text = "28";
-                if (_humidityBox != null) _humidityBox.Text = "36";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "7";
-                if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
-                if (_precipitationBox != null) _precipitationBox.Text = "0";
+                    if (_tempBox != null) _tempBox.Text = "28";
+                    if (_humidityBox != null) _humidityBox.Text = "36";
+                    if (_windSpeedBox != null) _windSpeedBox.Text = "7";
+                    if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
+                    if (_precipitationBox != null) _precipitationBox.Text = "0";
 
-                if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.08";
-                if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.05";
-                if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.00";
-                if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.05";
-                if (_randomSeedBox != null) _randomSeedBox.Text = "404";
+                    if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.08";
+                    if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.05";
+                    if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.00";
+                    if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.05";
+                    if (_randomSeedBox != null) _randomSeedBox.Text = "404";
 
-                SetVegetationDistributionTexts(0.22, 0.20, 0.24, 0.12, 0.10, 0.04, 0.08);
-                break;
+                    SetVegetationDistributionTexts(0.22, 0.20, 0.24, 0.12, 0.10, 0.04, 0.08);
+                    break;
 
-            case "hills":
-                if (_nameBox != null) _nameBox.Text = "Демо: Холмистая местность";
-                if (_mapCreationModeBox != null) _mapCreationModeBox.SelectedIndex = 1;
-                if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 5;
+                case "hills":
+                    if (_nameBox != null) _nameBox.Text = "Демо: Холмистая местность";
+                    if (_mapCreationModeBox != null) _mapCreationModeBox.SelectedIndex = 1;
+                    if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 5;
 
-                if (_widthBox != null) _widthBox.Text = "24";
-                if (_heightBox != null) _heightBox.Text = "24";
-                if (_fireCellsBox != null) _fireCellsBox.Text = "2";
+                    if (_widthBox != null) _widthBox.Text = "24";
+                    if (_heightBox != null) _heightBox.Text = "24";
+                    if (_fireCellsBox != null) _fireCellsBox.Text = "2";
 
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.22";
-                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.60";
-                if (_elevationBox != null) _elevationBox.Text = "110";
+                    if (_moistureMinBox != null) _moistureMinBox.Text = "0.22";
+                    if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.60";
+                    if (_elevationBox != null) _elevationBox.Text = "110";
 
-                if (_stepsBox != null) _stepsBox.Text = "100";
-                if (_stepDurationBox != null) _stepDurationBox.Text = "900";
+                    if (_stepsBox != null) _stepsBox.Text = "100";
+                    if (_stepDurationBox != null) _stepDurationBox.Text = "900";
 
-                if (_tempBox != null) _tempBox.Text = "27";
-                if (_humidityBox != null) _humidityBox.Text = "38";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "6";
-                if (_windDirBox != null) _windDirBox.SelectedIndex = 3;
-                if (_precipitationBox != null) _precipitationBox.Text = "0";
+                    if (_tempBox != null) _tempBox.Text = "27";
+                    if (_humidityBox != null) _humidityBox.Text = "38";
+                    if (_windSpeedBox != null) _windSpeedBox.Text = "6";
+                    if (_windDirBox != null) _windDirBox.SelectedIndex = 3;
+                    if (_precipitationBox != null) _precipitationBox.Text = "0";
 
-                if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.10";
-                if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.00";
-                if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.35";
-                if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.00";
-                if (_randomSeedBox != null) _randomSeedBox.Text = "505";
+                    if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.10";
+                    if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.00";
+                    if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.35";
+                    if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.00";
+                    if (_randomSeedBox != null) _randomSeedBox.Text = "505";
 
-                SetVegetationDistributionTexts(0.22, 0.18, 0.24, 0.14, 0.12, 0.05, 0.05);
-                break;
+                    SetVegetationDistributionTexts(0.22, 0.18, 0.24, 0.14, 0.12, 0.05, 0.05);
+                    break;
 
-            default:
-                return;
+                default:
+                    return;
+            }
+        }
+        else if (isClustered)
+        {
+            if (_mapCreationModeBox != null)
+                _mapCreationModeBox.SelectedIndex = 1;
+
+            switch (preset)
+            {
+                case "dry-coniferous":
+                    if (_nameBox != null) _nameBox.Text = "Демо: Плотный сухой хвойный кластерный граф";
+                    if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 0;
+
+                    if (_widthBox != null) _widthBox.Text = "26";
+                    if (_heightBox != null) _heightBox.Text = "22";
+                    if (_fireCellsBox != null) _fireCellsBox.Text = "2";
+
+                    if (_moistureMinBox != null) _moistureMinBox.Text = "0.10";
+                    if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.22";
+                    if (_elevationBox != null) _elevationBox.Text = "60";
+
+                    if (_stepsBox != null) _stepsBox.Text = "90";
+                    if (_stepDurationBox != null) _stepDurationBox.Text = "900";
+
+                    if (_tempBox != null) _tempBox.Text = "31";
+                    if (_humidityBox != null) _humidityBox.Text = "25";
+                    if (_windSpeedBox != null) _windSpeedBox.Text = "9";
+                    if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
+                    if (_precipitationBox != null) _precipitationBox.Text = "0";
+
+                    if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.06";
+                    if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.28";
+                    if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.00";
+                    if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.25";
+                    if (_randomSeedBox != null) _randomSeedBox.Text = "601";
+
+                    SetVegetationDistributionTexts(0.56, 0.08, 0.20, 0.06, 0.07, 0.02, 0.01);
+                    break;
+
+                case "river":
+                    if (_nameBox != null) _nameBox.Text = "Демо: Кластеры, разделённые водным барьером";
+                    if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 1;
+
+                    if (_widthBox != null) _widthBox.Text = "28";
+                    if (_heightBox != null) _heightBox.Text = "20";
+                    if (_fireCellsBox != null) _fireCellsBox.Text = "2";
+
+                    if (_moistureMinBox != null) _moistureMinBox.Text = "0.28";
+                    if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.58";
+                    if (_elevationBox != null) _elevationBox.Text = "45";
+
+                    if (_stepsBox != null) _stepsBox.Text = "100";
+                    if (_stepDurationBox != null) _stepDurationBox.Text = "900";
+
+                    if (_tempBox != null) _tempBox.Text = "26";
+                    if (_humidityBox != null) _humidityBox.Text = "42";
+                    if (_windSpeedBox != null) _windSpeedBox.Text = "6";
+                    if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
+                    if (_precipitationBox != null) _precipitationBox.Text = "0";
+
+                    if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.04";
+                    if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.00";
+                    if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "0.95";
+                    if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.00";
+                    if (_randomSeedBox != null) _randomSeedBox.Text = "602";
+
+                    SetVegetationDistributionTexts(0.20, 0.24, 0.30, 0.08, 0.10, 0.05, 0.03);
+                    break;
+
+                case "wet":
+                    if (_nameBox != null) _nameBox.Text = "Демо: Влажные патчи после дождя";
+                    if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 4;
+
+                    if (_widthBox != null) _widthBox.Text = "24";
+                    if (_heightBox != null) _heightBox.Text = "22";
+                    if (_fireCellsBox != null) _fireCellsBox.Text = "1";
+
+                    if (_moistureMinBox != null) _moistureMinBox.Text = "0.52";
+                    if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.88";
+                    if (_elevationBox != null) _elevationBox.Text = "40";
+
+                    if (_stepsBox != null) _stepsBox.Text = "80";
+                    if (_stepDurationBox != null) _stepDurationBox.Text = "900";
+
+                    if (_tempBox != null) _tempBox.Text = "19";
+                    if (_humidityBox != null) _humidityBox.Text = "76";
+                    if (_windSpeedBox != null) _windSpeedBox.Text = "3";
+                    if (_windDirBox != null) _windDirBox.SelectedIndex = 1;
+                    if (_precipitationBox != null) _precipitationBox.Text = "2.0";
+
+                    if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.03";
+                    if (_mapDrynessBox != null) _mapDrynessBox.Text = "0.78";
+                    if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "0.92";
+                    if (_fuelDensityBox != null) _fuelDensityBox.Text = "0.95";
+                    if (_randomSeedBox != null) _randomSeedBox.Text = "603";
+
+                    SetVegetationDistributionTexts(0.14, 0.28, 0.30, 0.08, 0.10, 0.06, 0.04);
+                    break;
+
+                case "firebreak":
+                    if (_nameBox != null) _nameBox.Text = "Демо: Кластеры с просекой / разрывом";
+                    if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 2;
+
+                    if (_widthBox != null) _widthBox.Text = "26";
+                    if (_heightBox != null) _heightBox.Text = "20";
+                    if (_fireCellsBox != null) _fireCellsBox.Text = "2";
+
+                    if (_moistureMinBox != null) _moistureMinBox.Text = "0.22";
+                    if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.52";
+                    if (_elevationBox != null) _elevationBox.Text = "45";
+
+                    if (_stepsBox != null) _stepsBox.Text = "90";
+                    if (_stepDurationBox != null) _stepDurationBox.Text = "900";
+
+                    if (_tempBox != null) _tempBox.Text = "28";
+                    if (_humidityBox != null) _humidityBox.Text = "35";
+                    if (_windSpeedBox != null) _windSpeedBox.Text = "7";
+                    if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
+                    if (_precipitationBox != null) _precipitationBox.Text = "0";
+
+                    if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.05";
+                    if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.05";
+                    if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.00";
+                    if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.08";
+                    if (_randomSeedBox != null) _randomSeedBox.Text = "604";
+
+                    SetVegetationDistributionTexts(0.26, 0.18, 0.26, 0.10, 0.10, 0.05, 0.05);
+                    break;
+
+                case "hills":
+                    if (_nameBox != null) _nameBox.Text = "Демо: Холмистые кластеры";
+                    if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 3;
+
+                    if (_widthBox != null) _widthBox.Text = "24";
+                    if (_heightBox != null) _heightBox.Text = "24";
+                    if (_fireCellsBox != null) _fireCellsBox.Text = "2";
+
+                    if (_moistureMinBox != null) _moistureMinBox.Text = "0.20";
+                    if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.56";
+                    if (_elevationBox != null) _elevationBox.Text = "125";
+
+                    if (_stepsBox != null) _stepsBox.Text = "100";
+                    if (_stepDurationBox != null) _stepDurationBox.Text = "900";
+
+                    if (_tempBox != null) _tempBox.Text = "27";
+                    if (_humidityBox != null) _humidityBox.Text = "37";
+                    if (_windSpeedBox != null) _windSpeedBox.Text = "6";
+                    if (_windDirBox != null) _windDirBox.SelectedIndex = 3;
+                    if (_precipitationBox != null) _precipitationBox.Text = "0";
+
+                    if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.06";
+                    if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.00";
+                    if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.35";
+                    if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.00";
+                    if (_randomSeedBox != null) _randomSeedBox.Text = "605";
+
+                    SetVegetationDistributionTexts(0.24, 0.18, 0.24, 0.12, 0.14, 0.04, 0.04);
+                    break;
+
+                default:
+                    return;
+            }
+        }
+        else
+        {
+            return;
         }
 
         UpdateMapModeUi();
@@ -449,7 +632,7 @@ public partial class CreateSimulationDialog : Window
         double reliefStrengthFactor = ParseDouble(_reliefStrengthBox?.Text, 1.0);
         double fuelDensityFactor = ParseDouble(_fuelDensityBox?.Text, 1.0);
 
-        if (_page == AppPage.Grid)
+        if (IsGridDialog())
         {
             if (width < 5 || height < 5)
             {
@@ -589,18 +772,37 @@ public partial class CreateSimulationDialog : Window
             _ => MapCreationMode.Random
         };
 
-        SelectedScenarioType = SelectedMapCreationMode == MapCreationMode.Scenario
-            ? _scenarioTypeBox?.SelectedIndex switch
+        SelectedScenarioType = null;
+        SelectedClusteredScenarioType = null;
+
+        if (SelectedMapCreationMode == MapCreationMode.Scenario)
+        {
+            if (IsGridDialog())
             {
-                1 => MapScenarioType.DryConiferousMassif,
-                2 => MapScenarioType.ForestWithRiver,
-                3 => MapScenarioType.ForestWithLake,
-                4 => MapScenarioType.ForestWithFirebreak,
-                5 => MapScenarioType.HillyTerrain,
-                6 => MapScenarioType.WetForestAfterRain,
-                _ => MapScenarioType.MixedForest
+                SelectedScenarioType = _scenarioTypeBox?.SelectedIndex switch
+                {
+                    1 => MapScenarioType.DryConiferousMassif,
+                    2 => MapScenarioType.ForestWithRiver,
+                    3 => MapScenarioType.ForestWithLake,
+                    4 => MapScenarioType.ForestWithFirebreak,
+                    5 => MapScenarioType.HillyTerrain,
+                    6 => MapScenarioType.WetForestAfterRain,
+                    _ => MapScenarioType.MixedForest
+                };
             }
-            : null;
+            else if (IsClusteredDialog())
+            {
+                SelectedClusteredScenarioType = _scenarioTypeBox?.SelectedIndex switch
+                {
+                    1 => ClusteredScenarioType.WaterBarrier,
+                    2 => ClusteredScenarioType.FirebreakGap,
+                    3 => ClusteredScenarioType.HillyClusters,
+                    4 => ClusteredScenarioType.WetAfterRain,
+                    5 => ClusteredScenarioType.MixedDryHotspots,
+                    _ => ClusteredScenarioType.DenseDryConiferous
+                };
+            }
+        }
 
         WindDirection = _windDirBox?.SelectedIndex switch
         {
@@ -615,52 +817,94 @@ public partial class CreateSimulationDialog : Window
             _ => 45
         };
 
-        if (SelectedMapCreationMode == MapCreationMode.SemiManual && MapRegionObjects.Count == 0)
+        if (SelectedMapCreationMode == MapCreationMode.SemiManual)
         {
-            ShowError("Для полуручного режима нужно добавить хотя бы один объект карты.");
-            return;
+            if (IsGridDialog())
+            {
+                if (MapRegionObjects.Count == 0)
+                {
+                    ShowError("Для полуручного режима сетки нужно добавить хотя бы один объект карты.");
+                    return;
+                }
+            }
+            else if (IsClusteredDialog())
+            {
+                if (ClusteredBlueprint == null || ClusteredBlueprint.Nodes.Count == 0)
+                {
+                    ShowError("Для кластерного графа нужен отдельный редактор узлов и связей. Пока clustered blueprint ещё не задан.");
+                    return;
+                }
+            }
         }
 
         Close(true);
     }
-
     private async Task OpenMapEditorAsync()
     {
         int width = ParseInt(_widthBox?.Text, 20);
         int height = ParseInt(_heightBox?.Text, 20);
 
-        if (width < 5 || height < 5)
+        if (IsGridDialog())
         {
-            ShowError("Сначала задайте корректные размеры территории.");
+            if (width < 5 || height < 5)
+            {
+                ShowError("Сначала задайте корректные размеры территории.");
+                return;
+            }
+
+            var editor = new MapEditorDialog(width, height, MapRegionObjects);
+            var result = await editor.ShowDialog<bool>(this);
+
+            if (!result)
+                return;
+
+            MapRegionObjects = editor.EditedObjects
+                .Select(x => new MapRegionObjectDto
+                {
+                    Id = x.Id,
+                    ObjectType = x.ObjectType,
+                    Shape = x.Shape,
+                    StartX = x.StartX,
+                    StartY = x.StartY,
+                    Width = x.Width,
+                    Height = x.Height,
+                    Strength = x.Strength,
+                    Priority = x.Priority
+                })
+                .OrderBy(x => x.Priority)
+                .ToList();
+
+            UpdateMapEditorSummary();
+            UpdateMapModeUi();
+            UpdateStructurePreview();
+            ClearErrors();
             return;
         }
 
-        var editor = new MapEditorDialog(width, height, MapRegionObjects);
-        var result = await editor.ShowDialog<bool>(this);
-
-        if (!result)
-            return;
-
-        MapRegionObjects = editor.EditedObjects
-            .Select(x => new MapRegionObjectDto
+        if (IsClusteredDialog())
+        {
+            if (width < 3 || height < 3)
             {
-                Id = x.Id,
-                ObjectType = x.ObjectType,
-                Shape = x.Shape,
-                StartX = x.StartX,
-                StartY = x.StartY,
-                Width = x.Width,
-                Height = x.Height,
-                Strength = x.Strength,
-                Priority = x.Priority
-            })
-            .OrderBy(x => x.Priority)
-            .ToList();
+                ShowError("Сначала задайте корректные размеры рабочей области clustered graph.");
+                return;
+            }
 
-        UpdateMapEditorSummary();
-        UpdateMapModeUi();
-        UpdateStructurePreview();
-        ClearErrors();
+            var editor = new ClusteredGraphEditorDialog(width, height, ClusteredBlueprint);
+            var result = await editor.ShowDialog<bool>(this);
+
+            if (!result)
+                return;
+
+            ClusteredBlueprint = editor.EditedBlueprint;
+
+            UpdateMapEditorSummary();
+            UpdateMapModeUi();
+            UpdateStructurePreview();
+            ClearErrors();
+            return;
+        }
+
+        ShowError("Для этого режима редактор пока не подключён.");
     }
     private string GetMapObjectTypeName(MapObjectType type)
     {
@@ -773,8 +1017,8 @@ public partial class CreateSimulationDialog : Window
 
     private void ApplyModeTexts()
     {
-        bool isGrid = _page == AppPage.Grid;
-        bool isClustered = _page == AppPage.Graph && _mode == GraphCreationMode.Clustered;
+        bool isGrid = IsGridDialog();
+        bool isClustered = IsClusteredDialog();
         bool isRegion = _page == AppPage.Graph && _mode == GraphCreationMode.RegionCluster;
 
         if (_typeInfoTextBlock != null)
@@ -791,40 +1035,83 @@ public partial class CreateSimulationDialog : Window
             _typeHintTextBlock.Text = isGrid
                 ? "Будет создана клеточная модель лесной территории. Сценарии и полуручное создание напрямую формируют карту клеток."
                 : isClustered
-                    ? "Будет создан кластерный граф поверх исходной территории. Сценарии и полуручное создание сначала задают территорию, а затем она агрегируется в патчи."
-                    : "Будет создан региональный граф поверх исходной территории. Сценарии и полуручное создание сначала задают территорию, а затем она агрегируется в регионы и межрегиональные связи.";
+                    ? "Будет создан самостоятельный кластерный граф. Сценарии для него задают патчи, узлы, плотность внутренних связей и межкластерные переходы."
+                    : "Будет создан региональный граф. Эта ветка пока не перерабатывается в рамках текущего этапа.";
         }
 
         if (_widthLabelTextBlock != null)
-            _widthLabelTextBlock.Text = isGrid ? "Ширина сетки" : "Ширина территории";
+            _widthLabelTextBlock.Text = isGrid ? "Ширина сетки" : "Ширина рабочей области";
 
         if (_heightLabelTextBlock != null)
-            _heightLabelTextBlock.Text = isGrid ? "Высота сетки" : "Высота территории";
+            _heightLabelTextBlock.Text = isGrid ? "Высота сетки" : "Высота рабочей области";
 
         if (_widthHintTextBlock != null)
         {
             _widthHintTextBlock.Text = isGrid
-                ? "Минимум 5, максимум 100. Определяет число столбцов клеточной карты."
-                : "Минимум 5, максимум 100. Определяет ширину базовой территории, из которой будет построено графовое представление.";
+                ? "Количество клеток по горизонтали."
+                : isClustered
+                    ? "Размер условной области размещения патчей и узлов."
+                    : "Размер условной области регионов.";
         }
 
         if (_heightHintTextBlock != null)
         {
             _heightHintTextBlock.Text = isGrid
-                ? "Минимум 5, максимум 100. Определяет число строк клеточной карты."
-                : "Минимум 5, максимум 100. Определяет высоту базовой территории, из которой будет построено графовое представление.";
+                ? "Количество клеток по вертикали."
+                : isClustered
+                    ? "Размер условной области размещения патчей и узлов."
+                    : "Размер условной области регионов.";
         }
 
         if (_fireCellsHintTextBlock != null)
         {
             _fireCellsHintTextBlock.Text = isGrid
-                ? "Минимум 1. Очаги задаются на клеточной карте."
-                : "Минимум 1. Очаги будут выбраны на итоговом графовом представлении после построения территории.";
+                ? "Сколько клеток загорится в начале симуляции."
+                : "Сколько узлов загорится в начале симуляции.";
         }
-    }
 
+        if (_semiManualDescriptionTextBlock != null)
+        {
+            if (SelectedMapCreationMode != MapCreationMode.SemiManual)
+            {
+                _semiManualDescriptionTextBlock.Text = string.Empty;
+            }
+            else if (isGrid)
+            {
+                _semiManualDescriptionTextBlock.Text = MapRegionObjects.Count == 0
+                    ? "Объекты карты ещё не добавлены. Откройте редактор карты и задайте области вручную."
+                    : $"Созданные области напрямую изменят клеточную карту.{Environment.NewLine}{BuildMapObjectsDetailedSummary()}";
+            }
+            else if (isClustered)
+            {
+                _semiManualDescriptionTextBlock.Text = ClusteredBlueprint == null || ClusteredBlueprint.Nodes.Count == 0
+                    ? "Для кластерного графа нужен отдельный редактор узлов и связей. Сеточный редактор сюда больше не применяется."
+                    : $"Подготовлен clustered blueprint: узлов — {ClusteredBlueprint.Nodes.Count}, рёбер — {ClusteredBlueprint.Edges.Count}.";
+            }
+            else
+            {
+                _semiManualDescriptionTextBlock.Text =
+                    "Региональный граф пока не переводим на отдельный редактор в рамках этого этапа.";
+            }
+        }
+
+        if (_openMapEditorButton != null)
+        {
+            _openMapEditorButton.Content = isGrid
+                ? "Открыть редактор карты"
+                : isClustered
+                    ? "Открыть редактор кластерного графа"
+                    : "Открыть редактор территории";
+        }
+
+        UpdateScenarioDescription();
+        UpdateMapEditorSummary();
+    }
     private void UpdateMapModeUi()
     {
+        bool isGrid = IsGridDialog();
+        bool isClustered = IsClusteredDialog();
+
         SelectedMapCreationMode = _mapCreationModeBox?.SelectedIndex switch
         {
             1 => MapCreationMode.Scenario,
@@ -838,60 +1125,64 @@ public partial class CreateSimulationDialog : Window
         if (_semiManualPanel != null)
             _semiManualPanel.IsVisible = SelectedMapCreationMode == MapCreationMode.SemiManual;
 
-        bool isGrid = _page == AppPage.Grid;
-        bool isClustered = _page == AppPage.Graph && _mode == GraphCreationMode.Clustered;
-        bool isRegion = _page == AppPage.Graph && _mode == GraphCreationMode.RegionCluster;
-
         if (_mapModeDescriptionTextBlock != null)
         {
             _mapModeDescriptionTextBlock.Text = SelectedMapCreationMode switch
             {
                 MapCreationMode.Random => isGrid
-                    ? "Карта будет сформирована автоматически по параметрам влажности, рельефа и распределениям растительности."
-                    : "Сначала будет автоматически сформирована базовая территория, после чего из неё будет построено выбранное графовое представление.",
+                    ? "Карта будет сформирована автоматически по текущим параметрам и распределениям."
+                    : isClustered
+                        ? "Кластерный граф будет сформирован автоматически: генератор сам создаст патчи, узлы и связи."
+                        : "Структура будет создана автоматически.",
 
                 MapCreationMode.Scenario => isGrid
-                    ? "Будет использован готовый сценарий клеточной карты: река, озеро, просека, холмы или другой тип местности."
-                    : "Будет использован готовый сценарий территории. Затем эта территория будет преобразована в кластерный или региональный граф.",
+                    ? "Будет применён готовый сценарий клеточной карты."
+                    : isClustered
+                        ? "Будет применён специализированный сценарий кластерного графа: он задаст плотность патчей, их свойства и межкластерные переходы."
+                        : "Будет применён готовый сценарий.",
 
                 MapCreationMode.SemiManual => isGrid
-                    ? "Вы задаёте области территории вручную: воду, просеки, влажные и сухие зоны, холмы и другие объекты. Они сразу формируют клеточную карту."
+                    ? "Вы вручную задаёте области карты, которые напрямую изменяют сетку."
                     : isClustered
-                        ? "Вы задаёте области исходной территории вручную. Затем эта территория агрегируется в патчи и строится кластерный граф."
-                        : "Вы задаёте области исходной территории вручную. Затем эта территория агрегируется в регионы и строится региональный граф.",
+                        ? "Для clustered graph нужен отдельный редактор узлов и связей. Старый редактор карты сюда больше не применяется."
+                        : "Этот режим будет вынесен отдельно.",
 
                 _ => "Карта будет сформирована автоматически."
             };
         }
 
-        if (_semiManualDescriptionTextBlock != null)
+        if (_scenarioTypeBox != null)
         {
-            if (SelectedMapCreationMode != MapCreationMode.SemiManual)
-            {
-                _semiManualDescriptionTextBlock.Text = string.Empty;
-            }
-            else if (MapRegionObjects.Count == 0)
-            {
-                _semiManualDescriptionTextBlock.Text = isGrid
-                    ? "Объекты карты ещё не добавлены. Откройте редактор и создайте области вручную."
-                    : isClustered
-                        ? "Объекты территории ещё не добавлены. Откройте редактор территории и задайте области, из которых потом будут построены патчи."
-                        : "Объекты территории ещё не добавлены. Откройте редактор территории и задайте области, из которых потом будут построены регионы.";
-            }
-            else
-            {
-                var prefix = isGrid
-                    ? "Созданные области напрямую изменят клеточную карту."
-                    : isClustered
-                        ? "Созданные области сначала изменят базовую территорию, а затем повлияют на состав патчей и связи кластерного графа."
-                        : "Созданные области сначала изменят базовую территорию, а затем повлияют на состав регионов и межрегиональные связи.";
+            _scenarioTypeBox.Items.Clear();
 
-                _semiManualDescriptionTextBlock.Text = $"{prefix} {BuildMapObjectsDetailedSummary()}";
+            if (SelectedMapCreationMode == MapCreationMode.Scenario)
+            {
+                if (isGrid)
+                {
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Смешанный лес" });
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Сухой хвойный массив" });
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Лес с рекой" });
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Лес с озером" });
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Лес с просекой" });
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Холмистая местность" });
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Влажный лес после дождя" });
+                }
+                else if (isClustered)
+                {
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Плотный сухой хвойный массив" });
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Кластеры, разделённые водным барьером" });
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Кластеры с просекой / разрывом" });
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Холмистые кластеры" });
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Влажные патчи после дождя" });
+                    _scenarioTypeBox.Items.Add(new ComboBoxItem { Content = "Смешанные патчи с очагами сухости" });
+                }
+
+                _scenarioTypeBox.SelectedIndex = 0;
             }
         }
 
         if (_openMapEditorButton != null)
-            _openMapEditorButton.Content = isGrid ? "Открыть редактор карты" : "Открыть редактор территории";
+            _openMapEditorButton.IsVisible = SelectedMapCreationMode == MapCreationMode.SemiManual;
 
         UpdateScenarioDescription();
         UpdateMapEditorSummary();
@@ -918,83 +1209,134 @@ public partial class CreateSimulationDialog : Window
             $"Состав: {string.Join(" • ", grouped)}";
     }
 
-
-
     private void UpdateMapEditorSummary()
     {
         if (_mapEditorSummaryTextBlock == null)
             return;
 
-        bool isGrid = _page == AppPage.Grid;
-        int count = MapRegionObjects?.Count ?? 0;
+        bool isGrid = IsGridDialog();
+        bool isClustered = IsClusteredDialog();
 
-        if (count == 0)
+        if (SelectedMapCreationMode != MapCreationMode.SemiManual)
         {
             _mapEditorSummaryTextBlock.Text = isGrid
-                ? "Объекты карты ещё не добавлены."
-                : "Объекты территории ещё не добавлены.";
+                ? "Редактор карты не используется."
+                : isClustered
+                    ? "Редактор кластерного графа не используется."
+                    : "Редактор не используется.";
             return;
         }
 
-        var grouped = MapRegionObjects
-            .GroupBy(x => x.ObjectType)
-            .OrderByDescending(g => g.Count())
-            .ThenBy(g => g.Key.ToString())
-            .Select(g => $"{GetMapObjectTypeName(g.Key)}: {g.Count()}")
-            .ToList();
+        if (isGrid)
+        {
+            int count = MapRegionObjects?.Count ?? 0;
 
-        string prefix = isGrid
-            ? $"Добавлено объектов карты: {count}."
-            : $"Добавлено объектов территории: {count}.";
+            _mapEditorSummaryTextBlock.Text = count == 0
+                ? "Объекты карты ещё не заданы."
+                : $"Задано объектов карты: {count}.";
+            return;
+        }
 
-        _mapEditorSummaryTextBlock.Text = $"{prefix} {string.Join(" • ", grouped)}";
+        if (isClustered)
+        {
+            if (ClusteredBlueprint == null)
+            {
+                _mapEditorSummaryTextBlock.Text =
+                    "Clustered blueprint ещё не подготовлен. Следующим шагом подключим отдельный редактор узлов и связей.";
+                return;
+            }
+
+            _mapEditorSummaryTextBlock.Text =
+                $"Подготовлен clustered blueprint: узлов — {ClusteredBlueprint.Nodes.Count}, рёбер — {ClusteredBlueprint.Edges.Count}.";
+            return;
+        }
+
+        _mapEditorSummaryTextBlock.Text =
+            "Для этой структуры отдельный редактор пока не подключён.";
     }
-
-
     private void UpdateScenarioDescription()
     {
-        SelectedScenarioType = _scenarioTypeBox?.SelectedIndex switch
-        {
-            1 => MapScenarioType.DryConiferousMassif,
-            2 => MapScenarioType.ForestWithRiver,
-            3 => MapScenarioType.ForestWithLake,
-            4 => MapScenarioType.ForestWithFirebreak,
-            5 => MapScenarioType.HillyTerrain,
-            6 => MapScenarioType.WetForestAfterRain,
-            _ => MapScenarioType.MixedForest
-        };
-
         if (_scenarioDescriptionTextBlock == null)
             return;
 
-        _scenarioDescriptionTextBlock.Text = SelectedScenarioType switch
+        if (SelectedMapCreationMode != MapCreationMode.Scenario)
         {
-            MapScenarioType.MixedForest =>
-                "Сбалансированный лесной ландшафт с несколькими типами растительности. Подходит как базовый сценарий для сравнения с более выраженными условиями.",
+            _scenarioDescriptionTextBlock.Text = string.Empty;
+            return;
+        }
 
-            MapScenarioType.DryConiferousMassif =>
-                "Преобладает сухой хвойный лес с пониженной влажностью. Ожидается быстрое и интенсивное распространение огня.",
+        bool isGrid = IsGridDialog();
+        bool isClustered = IsClusteredDialog();
 
-            MapScenarioType.ForestWithRiver =>
-                "Через лес проходит река, которая создаёт естественный барьер. Сценарий подходит для демонстрации сдерживания распространения пожара водой.",
+        if (isGrid)
+        {
+            var gridScenario = _scenarioTypeBox?.SelectedIndex switch
+            {
+                1 => MapScenarioType.DryConiferousMassif,
+                2 => MapScenarioType.ForestWithRiver,
+                3 => MapScenarioType.ForestWithLake,
+                4 => MapScenarioType.ForestWithFirebreak,
+                5 => MapScenarioType.HillyTerrain,
+                6 => MapScenarioType.WetForestAfterRain,
+                _ => MapScenarioType.MixedForest
+            };
 
-            MapScenarioType.ForestWithLake =>
-                "На карте расположен водоём с влажной прибрежной зоной. Позволяет показать локальное замедление пожара и изменение фронта огня.",
+            _scenarioDescriptionTextBlock.Text = gridScenario switch
+            {
+                MapScenarioType.MixedForest => "Сбалансированный лесной ландшафт с несколькими типами растительности.",
+                MapScenarioType.DryConiferousMassif => "Сухая хвойная территория с высокой горючестью и быстрым распространением.",
+                MapScenarioType.ForestWithRiver => "На карте формируется речной барьер, который сдерживает распространение огня.",
+                MapScenarioType.ForestWithLake => "На карте формируется озеро и влажная прибрежная зона.",
+                MapScenarioType.ForestWithFirebreak => "На карте формируется просека, разрывающая фронт огня.",
+                MapScenarioType.HillyTerrain => "Карта получает выраженный рельеф и локальные высотные зоны.",
+                MapScenarioType.WetForestAfterRain => "Лес после дождя: повышенная влажность и замедленное развитие пожара.",
+                _ => "Сценарий клеточной карты."
+            };
 
-            MapScenarioType.ForestWithFirebreak =>
-                "На территории сформирована просека или противопожарная полоса. Сценарий хорошо показывает влияние искусственных барьеров.",
+            return;
+        }
 
-            MapScenarioType.HillyTerrain =>
-                "Рельеф выражен сильнее обычного, присутствуют холмы и перепады высот. Подходит для демонстрации влияния уклона на распространение огня.",
+        if (isClustered)
+        {
+            var clusteredScenario = _scenarioTypeBox?.SelectedIndex switch
+            {
+                1 => ClusteredScenarioType.WaterBarrier,
+                2 => ClusteredScenarioType.FirebreakGap,
+                3 => ClusteredScenarioType.HillyClusters,
+                4 => ClusteredScenarioType.WetAfterRain,
+                5 => ClusteredScenarioType.MixedDryHotspots,
+                _ => ClusteredScenarioType.DenseDryConiferous
+            };
 
-            MapScenarioType.WetForestAfterRain =>
-                "Лес после осадков: повышенная влажность, локально более сырые участки. Ожидается более медленное распространение и меньшее число новых возгораний.",
+            _scenarioDescriptionTextBlock.Text = clusteredScenario switch
+            {
+                ClusteredScenarioType.DenseDryConiferous =>
+                    "Много плотных хвойных патчей, низкая влажность, сильные внутренние связи и хорошие межкластерные переходы.",
 
-            _ =>
-                "Выберите сценарий карты."
-        };
+                ClusteredScenarioType.WaterBarrier =>
+                    "Часть патчей отделена барьером. Между группами мало переходов, и распространение через них ослаблено.",
+
+                ClusteredScenarioType.FirebreakGap =>
+                    "Кластеры разделены разрывом или слабой перемычкой. Огонь хорошо идёт внутри патча, но хуже переходит между группами.",
+
+                ClusteredScenarioType.HillyClusters =>
+                    "Кластеры имеют более сильную неоднородность по высоте. Это влияет на связность и на направление распространения.",
+
+                ClusteredScenarioType.WetAfterRain =>
+                    "Патчи после дождя: повышенная влажность, более слабая горючесть и ослабленные переходы.",
+
+                ClusteredScenarioType.MixedDryHotspots =>
+                    "Смешанный фон с локальными сухими патчами — внутри них распространение заметно сильнее, чем в остальном графе.",
+
+                _ => "Сценарий кластерного графа."
+            };
+
+            return;
+        }
+
+        _scenarioDescriptionTextBlock.Text =
+            "Для регионального графа специализированные сценарии будут выделены отдельно на следующем этапе.";
     }
-
     private void UpdateStructurePreview()
     {
         int width = ParseInt(_widthBox?.Text, 20);
@@ -1005,31 +1347,101 @@ public partial class CreateSimulationDialog : Window
         height = Math.Max(1, height);
         initialFireCells = Math.Max(1, initialFireCells);
 
-        bool isGrid = _page == AppPage.Grid;
-        bool isClustered = _page == AppPage.Graph && _mode == GraphCreationMode.Clustered;
+        bool isGrid = IsGridDialog();
+        bool isClustered = IsClusteredDialog();
         bool isRegion = _page == AppPage.Graph && _mode == GraphCreationMode.RegionCluster;
 
         int area = width * height;
-        int estimatedClusterNodes = Math.Max(1, area / 2);
+
+        if (isGrid)
+        {
+            if (_structureSummaryTextBlock != null)
+                _structureSummaryTextBlock.Text =
+                    $"Сетка {width}×{height} = {area} клеток. Начальных очагов: {initialFireCells}.";
+
+            if (_structureDetailTextBlock != null)
+                _structureDetailTextBlock.Text =
+                    "Параметры напрямую определяют размер клеточной карты и число участков поверхности.";
+            return;
+        }
+
+        if (isClustered)
+        {
+            int estimatedNodes = Math.Max(10, area / 2);
+            int estimatedPatches =
+                estimatedNodes <= 20 ? 3 :
+                estimatedNodes <= 60 ? 4 :
+                estimatedNodes <= 140 ? 5 :
+                estimatedNodes <= 260 ? 6 : 7;
+
+            if (SelectedMapCreationMode == MapCreationMode.SemiManual &&
+                ClusteredBlueprint != null &&
+                ClusteredBlueprint.Nodes.Count > 0)
+            {
+                int manualNodes = ClusteredBlueprint.Nodes.Count;
+                int manualEdges = ClusteredBlueprint.Edges.Count;
+                int manualClusters = ClusteredBlueprint.Nodes
+                    .Select(n => n.ClusterId?.Trim())
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.Ordinal)
+                    .Count();
+
+                if (_structureSummaryTextBlock != null)
+                {
+                    _structureSummaryTextBlock.Text =
+                        $"Clustered blueprint: узлов {manualNodes}, рёбер {manualEdges}, групп {manualClusters}. Начальных очагов: {initialFireCells}.";
+                }
+
+                if (_structureDetailTextBlock != null)
+                {
+                    _structureDetailTextBlock.Text =
+                        "Граф будет построен напрямую из выбранных узлов и связей. Здесь важны топология, длина рёбер и свойства самих вершин.";
+                }
+
+                return;
+            }
+
+            if (_structureSummaryTextBlock != null)
+            {
+                _structureSummaryTextBlock.Text =
+                    $"Рабочая область {width}×{height}. Ожидается около {estimatedNodes} узлов, {estimatedPatches} патчей и локально-плотная связность. Начальных очагов: {initialFireCells}.";
+            }
+
+            if (_structureDetailTextBlock != null)
+            {
+                _structureDetailTextBlock.Text =
+                    SelectedMapCreationMode switch
+                    {
+                        MapCreationMode.Random =>
+                            "Random clustered graph: генератор сам создаёт патчи, размещает узлы и строит локальные рёбра с межкластерными мостами.",
+
+                        MapCreationMode.Scenario =>
+                            "Scenario clustered graph: сценарий задаёт структуру патчей, влажность, доминирующую растительность и силу межкластерных переходов.",
+
+                        MapCreationMode.SemiManual =>
+                            "Semi-manual clustered graph: структура задаётся через clustered editor — выбор узлов, построение рёбер и настройку свойств вершин и связей.",
+
+                        _ =>
+                            "Clustered graph формируется как самостоятельный граф, а не как побочный продукт клеточной карты."
+                    };
+            }
+
+            return;
+        }
 
         if (_structureSummaryTextBlock != null)
         {
-            _structureSummaryTextBlock.Text = isGrid
-                ? $"Сетка {width}×{height} = {area} клеток. Начальных очагов: {initialFireCells}."
-                : isClustered
-                    ? $"Территория {width}×{height} = {area} ячеек-основания. Ожидаемое число узлов кластерного графа: около {estimatedClusterNodes}. Начальных очагов: {initialFireCells}."
-                    : $"Территория {width}×{height} = {area} ячеек-основания. На её основе будут агрегированы регионы и межрегиональные связи. Начальных очагов: {initialFireCells}.";
+            _structureSummaryTextBlock.Text =
+                $"Рабочая область {width}×{height}. Региональный граф пока оставляем без изменений. Начальных очагов: {initialFireCells}.";
         }
 
         if (_structureDetailTextBlock != null)
         {
-            _structureDetailTextBlock.Text = isGrid
-                ? "Параметры напрямую определяют размер клеточной карты и количество участков леса."
-                : isClustered
-                    ? "Размер территории влияет на число патчей, плотность узлов и характер связей в кластерном графе."
-                    : "Размер территории влияет на число регионов, их состав, внутреннюю плотность и межрегиональные мосты.";
+            _structureDetailTextBlock.Text =
+                "RegionClusterGraph будет исправляться отдельным этапом. На текущем шаге его UI и логика не перерабатываются.";
         }
     }
+
 
     private List<(int VegetationType, double Probability)> ReadVegetationDistributions()
     {
