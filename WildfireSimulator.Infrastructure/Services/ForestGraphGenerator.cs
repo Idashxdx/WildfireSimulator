@@ -1468,21 +1468,25 @@ public class ForestGraphGenerator : IForestGraphGenerator
 
     public async Task<ForestGraph> GenerateClusteredGraphAsync(int nodeCount, SimulationParameters parameters)
     {
+        var effectiveNodeCount = Math.Max(1, nodeCount);
+
         _logger.LogInformation(
-            "Генерация кластерного графа с {NodeCount} узлами. Режим карты: {Mode}, clustered-сценарий: {ClusteredScenario}, grid-сценарий: {GridScenario}",
-            nodeCount,
+            "Генерация ClusteredGraph с {NodeCount} узлами. Mode={Mode}, ClusteredScenario={ClusteredScenario}, GridScenarioIgnored={GridScenarioIgnored}, BlueprintNodes={BlueprintNodes}, BlueprintEdges={BlueprintEdges}",
+            effectiveNodeCount,
             parameters.MapCreationMode,
             parameters.ClusteredScenarioType,
-            parameters.ScenarioType);
+            parameters.ScenarioType,
+            parameters.ClusteredBlueprint?.Nodes.Count ?? 0,
+            parameters.ClusteredBlueprint?.Edges.Count ?? 0);
 
         var random = CreateRandom(parameters);
-        var placementScale = GetClusteredPlacementScale(nodeCount);
-        var maxDegree = GetClusteredMaxDegree(nodeCount);
+        var placementScale = GetClusteredPlacementScale(effectiveNodeCount);
+        var maxDegree = GetClusteredMaxDegree(effectiveNodeCount);
 
         var graph = new ForestGraph
         {
-            Width = Math.Max(8, (int)Math.Ceiling(Math.Sqrt(nodeCount) * placementScale)),
-            Height = Math.Max(8, (int)Math.Ceiling(Math.Sqrt(nodeCount) * placementScale)),
+            Width = Math.Max(8, (int)Math.Ceiling(Math.Sqrt(effectiveNodeCount) * placementScale)),
+            Height = Math.Max(8, (int)Math.Ceiling(Math.Sqrt(effectiveNodeCount) * placementScale)),
             StepDurationSeconds = parameters.StepDurationSeconds
         };
 
@@ -1491,7 +1495,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
             case MapCreationMode.SemiManual:
                 BuildClusteredGraphFromBlueprint(
                     graph,
-                    nodeCount,
+                    effectiveNodeCount,
                     parameters,
                     random,
                     maxDegree);
@@ -1500,7 +1504,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
             case MapCreationMode.Scenario:
                 BuildClusteredScenarioGraph(
                     graph,
-                    nodeCount,
+                    effectiveNodeCount,
                     parameters,
                     random,
                     maxDegree);
@@ -1509,7 +1513,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
             default:
                 BuildClusteredRandomGraph(
                     graph,
-                    nodeCount,
+                    effectiveNodeCount,
                     parameters,
                     random,
                     maxDegree);
@@ -1517,7 +1521,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
         }
 
         _logger.LogInformation(
-            "Кластерный граф создан: {Cells} узлов, {Edges} рёбер, режим={Mode}, clustered-сценарий={Scenario}",
+            "ClusteredGraph создан: nodes={Nodes}, edges={Edges}, mode={Mode}, clusteredScenario={Scenario}",
             graph.Cells.Count,
             graph.Edges.Count,
             parameters.MapCreationMode,
@@ -1526,11 +1530,11 @@ public class ForestGraphGenerator : IForestGraphGenerator
         return await Task.FromResult(graph);
     }
     private void BuildClusteredRandomGraph(
-    ForestGraph graph,
-    int nodeCount,
-    SimulationParameters parameters,
-    Random random,
-    int maxDegree)
+        ForestGraph graph,
+        int nodeCount,
+        SimulationParameters parameters,
+        Random random,
+        int maxDegree)
     {
         var patches = CreateClusteredPatchesRandomOnly(
             GetClusteredPatchCount(nodeCount),
@@ -1576,77 +1580,127 @@ public class ForestGraphGenerator : IForestGraphGenerator
         CreateDenseLocalEdges(graph, maxDegree);
         CreateClusterBridges(graph, patches, random);
 
-        ApplyConnectedGraphSurfaceZones(
-            graph,
-            parameters,
-            random,
-            groupSelector: cell => cell.ClusterId);
-
         ApplySurfaceBarrierEdgeModifiers(graph);
     }
+
+
     private void CreateClusterBridges(
     ForestGraph graph,
     List<ClusteredPatch> patches,
     Random random)
-{
-    if (graph.Cells.Count <= 1 || patches.Count <= 1)
-        return;
-
-    var cellsByCluster = graph.Cells
-        .Where(c => !string.IsNullOrWhiteSpace(c.ClusterId))
-        .GroupBy(c => c.ClusterId!)
-        .ToDictionary(g => g.Key, g => g.ToList());
-
-    var patchByClusterId = patches.ToDictionary(
-        p => $"patch-{p.Index}",
-        p => p);
-
-    var orderedPatchPairs = new List<(ClusteredPatch A, ClusteredPatch B, double Distance)>();
-
-    for (int i = 0; i < patches.Count; i++)
     {
-        for (int j = i + 1; j < patches.Count; j++)
+        if (graph.Cells.Count <= 1 || patches.Count <= 1)
+            return;
+
+        var cellsByCluster = graph.Cells
+            .Where(c => !string.IsNullOrWhiteSpace(c.ClusterId))
+            .GroupBy(c => c.ClusterId!)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var patchByClusterId = patches.ToDictionary(
+            p => $"patch-{p.Index}",
+            p => p);
+
+        var orderedPatchPairs = new List<(ClusteredPatch A, ClusteredPatch B, double Distance)>();
+
+        for (int i = 0; i < patches.Count; i++)
         {
-            var a = patches[i];
-            var b = patches[j];
-
-            var distance = CalculateDistance(a.CenterX, a.CenterY, b.CenterX, b.CenterY);
-            orderedPatchPairs.Add((a, b, distance));
-        }
-    }
-
-    orderedPatchPairs = orderedPatchPairs
-        .OrderBy(x => x.Distance)
-        .ToList();
-
-    var connectedClusters = new HashSet<string>();
-
-    foreach (var pair in orderedPatchPairs)
-    {
-        string clusterA = $"patch-{pair.A.Index}";
-        string clusterB = $"patch-{pair.B.Index}";
-
-        if (!cellsByCluster.TryGetValue(clusterA, out var firstCells) ||
-            !cellsByCluster.TryGetValue(clusterB, out var secondCells))
-        {
-            continue;
-        }
-
-        var bestPair = firstCells
-            .SelectMany(a => secondCells.Select(b => new
+            for (int j = i + 1; j < patches.Count; j++)
             {
-                A = a,
-                B = b,
-                Distance = CalculateDistance(a.X, a.Y, b.X, b.Y)
-            }))
+                var a = patches[i];
+                var b = patches[j];
+
+                var distance = CalculateDistance(a.CenterX, a.CenterY, b.CenterX, b.CenterY);
+                orderedPatchPairs.Add((a, b, distance));
+            }
+        }
+
+        orderedPatchPairs = orderedPatchPairs
             .OrderBy(x => x.Distance)
-            .FirstOrDefault();
+            .ToList();
 
-        if (bestPair == null)
-            continue;
+        var connectedClusters = new HashSet<string>();
 
-        if (!EdgeExists(graph, bestPair.A, bestPair.B))
+        foreach (var pair in orderedPatchPairs)
         {
+            string clusterA = $"patch-{pair.A.Index}";
+            string clusterB = $"patch-{pair.B.Index}";
+
+            if (!cellsByCluster.TryGetValue(clusterA, out var firstCells) ||
+                !cellsByCluster.TryGetValue(clusterB, out var secondCells))
+            {
+                continue;
+            }
+
+            var bestPair = firstCells
+                .SelectMany(a => secondCells.Select(b => new
+                {
+                    A = a,
+                    B = b,
+                    Distance = CalculateDistance(a.X, a.Y, b.X, b.Y)
+                }))
+                .OrderBy(x => x.Distance)
+                .FirstOrDefault();
+
+            if (bestPair == null)
+                continue;
+
+            if (!EdgeExists(graph, bestPair.A, bestPair.B))
+            {
+                TryAddEdge(graph, bestPair.A, bestPair.B);
+
+                var createdEdge = graph.Edges.LastOrDefault(e =>
+                    (e.FromCellId == bestPair.A.Id && e.ToCellId == bestPair.B.Id) ||
+                    (e.FromCellId == bestPair.B.Id && e.ToCellId == bestPair.A.Id));
+
+                if (createdEdge != null)
+                {
+                    double bridgeBoost = 0.82 + random.NextDouble() * 0.24;
+                    SetEdgeFireSpreadModifier(createdEdge, Math.Clamp(createdEdge.FireSpreadModifier * bridgeBoost, 0.02, 1.35));
+                }
+            }
+
+            connectedClusters.Add(clusterA);
+            connectedClusters.Add(clusterB);
+        }
+
+        var isolatedClusters = cellsByCluster.Keys
+            .Where(clusterId => !connectedClusters.Contains(clusterId))
+            .ToList();
+
+        foreach (var isolatedCluster in isolatedClusters)
+        {
+            if (!cellsByCluster.TryGetValue(isolatedCluster, out var isolatedCells) || isolatedCells.Count == 0)
+                continue;
+
+            if (!patchByClusterId.TryGetValue(isolatedCluster, out var isolatedPatch))
+                continue;
+
+            var nearestOtherPatch = patches
+                .Where(p => $"patch-{p.Index}" != isolatedCluster)
+                .OrderBy(p => CalculateDistance(isolatedPatch.CenterX, isolatedPatch.CenterY, p.CenterX, p.CenterY))
+                .FirstOrDefault();
+
+            if (nearestOtherPatch == null)
+                continue;
+
+            string targetCluster = $"patch-{nearestOtherPatch.Index}";
+            if (!cellsByCluster.TryGetValue(targetCluster, out var targetCells) || targetCells.Count == 0)
+                continue;
+
+            var bestPair = isolatedCells
+                .SelectMany(a => targetCells.Select(b => new
+                {
+                    A = a,
+                    B = b,
+                    Distance = CalculateDistance(a.X, a.Y, b.X, b.Y)
+                }))
+                .OrderBy(x => x.Distance)
+                .FirstOrDefault();
+
+            if (bestPair == null || EdgeExists(graph, bestPair.A, bestPair.B))
+                continue;
+
             TryAddEdge(graph, bestPair.A, bestPair.B);
 
             var createdEdge = graph.Edges.LastOrDefault(e =>
@@ -1655,64 +1709,10 @@ public class ForestGraphGenerator : IForestGraphGenerator
 
             if (createdEdge != null)
             {
-                double bridgeBoost = 0.82 + random.NextDouble() * 0.24;
-                SetEdgeFireSpreadModifier(createdEdge, Math.Clamp(createdEdge.FireSpreadModifier * bridgeBoost, 0.02, 1.35));
+                SetEdgeFireSpreadModifier(createdEdge, Math.Clamp(createdEdge.FireSpreadModifier * 0.78, 0.02, 1.10));
             }
         }
-
-        connectedClusters.Add(clusterA);
-        connectedClusters.Add(clusterB);
     }
-
-    var isolatedClusters = cellsByCluster.Keys
-        .Where(clusterId => !connectedClusters.Contains(clusterId))
-        .ToList();
-
-    foreach (var isolatedCluster in isolatedClusters)
-    {
-        if (!cellsByCluster.TryGetValue(isolatedCluster, out var isolatedCells) || isolatedCells.Count == 0)
-            continue;
-
-        if (!patchByClusterId.TryGetValue(isolatedCluster, out var isolatedPatch))
-            continue;
-
-        var nearestOtherPatch = patches
-            .Where(p => $"patch-{p.Index}" != isolatedCluster)
-            .OrderBy(p => CalculateDistance(isolatedPatch.CenterX, isolatedPatch.CenterY, p.CenterX, p.CenterY))
-            .FirstOrDefault();
-
-        if (nearestOtherPatch == null)
-            continue;
-
-        string targetCluster = $"patch-{nearestOtherPatch.Index}";
-        if (!cellsByCluster.TryGetValue(targetCluster, out var targetCells) || targetCells.Count == 0)
-            continue;
-
-        var bestPair = isolatedCells
-            .SelectMany(a => targetCells.Select(b => new
-            {
-                A = a,
-                B = b,
-                Distance = CalculateDistance(a.X, a.Y, b.X, b.Y)
-            }))
-            .OrderBy(x => x.Distance)
-            .FirstOrDefault();
-
-        if (bestPair == null || EdgeExists(graph, bestPair.A, bestPair.B))
-            continue;
-
-        TryAddEdge(graph, bestPair.A, bestPair.B);
-
-        var createdEdge = graph.Edges.LastOrDefault(e =>
-            (e.FromCellId == bestPair.A.Id && e.ToCellId == bestPair.B.Id) ||
-            (e.FromCellId == bestPair.B.Id && e.ToCellId == bestPair.A.Id));
-
-        if (createdEdge != null)
-        {
-            SetEdgeFireSpreadModifier(createdEdge, Math.Clamp(createdEdge.FireSpreadModifier * 0.78, 0.02, 1.10));
-        }
-    }
-}
     private void BuildClusteredScenarioGraph(
         ForestGraph graph,
         int nodeCount,
@@ -1786,11 +1786,11 @@ public class ForestGraphGenerator : IForestGraphGenerator
         ApplySurfaceBarrierEdgeModifiers(graph);
     }
     private void BuildClusteredGraphFromBlueprint(
-        ForestGraph graph,
-        int nodeCount,
-        SimulationParameters parameters,
-        Random random,
-        int maxDegree)
+     ForestGraph graph,
+     int nodeCount,
+     SimulationParameters parameters,
+     Random random,
+     int maxDegree)
     {
         var blueprint = parameters.ClusteredBlueprint;
 
@@ -1855,12 +1855,6 @@ public class ForestGraphGenerator : IForestGraphGenerator
             graph.Edges.Add(edge);
         }
 
-        if (graph.Edges.Count == 0 && graph.Cells.Count > 1)
-        {
-            _logger.LogInformation(
-                "В blueprint нет рёбер. Добавляем fallback локальные связи для связности clustered graph.");
-            CreateDenseLocalEdges(graph, maxDegree);
-        }
 
         ApplySurfaceBarrierEdgeModifiers(graph);
     }
@@ -2198,7 +2192,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
             SetEdgeFireSpreadModifier(edge, Math.Clamp(modifier, 0.02, 1.85));
         }
     }
-    
+
     private void ApplyClusteredScenarioNodeAdjustments(
         ForestGraph graph,
         ClusteredScenarioType scenario,
