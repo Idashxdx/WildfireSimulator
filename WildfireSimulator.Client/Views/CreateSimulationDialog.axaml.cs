@@ -40,15 +40,6 @@ public partial class CreateSimulationDialog : Window
     public List<(int VegetationType, double Probability)> VegetationDistributions { get; private set; } = new();
     public ClusteredScenarioType? SelectedClusteredScenarioType { get; private set; }
     public ClusteredGraphBlueprintDto? ClusteredBlueprint { get; private set; }
-    private bool IsGridDialog()
-    {
-        return _page == AppPage.Grid;
-    }
-
-    private bool IsClusteredDialog()
-    {
-        return _page == AppPage.Graph && _mode == GraphCreationMode.Clustered;
-    }
 
     private readonly AppPage _page;
     private readonly GraphCreationMode _mode;
@@ -128,6 +119,16 @@ public partial class CreateSimulationDialog : Window
         ClearErrors();
     }
 
+    private bool IsGridDialog()
+    {
+        return _page == AppPage.Grid;
+    }
+
+    private bool IsClusteredDialog()
+    {
+        return _page == AppPage.Graph && _mode == GraphCreationMode.Clustered;
+    }
+
     private void InitializeComponent()
     {
         AvaloniaXamlLoader.Load(this);
@@ -195,46 +196,6 @@ public partial class CreateSimulationDialog : Window
         _presetButton4 = this.FindControl<Button>("PresetButton4");
         _presetButton5 = this.FindControl<Button>("PresetButton5");
     }
-    private void UpdatePresetButtonsUi()
-    {
-        if (_presetHintTextBlock == null)
-            return;
-
-        if (IsGridDialog())
-        {
-            _presetHintTextBlock.Text =
-                "Готовые территориальные сценарии для сетки. Кнопка сразу подставляет режим, сценарий, погодные условия и параметры карты.";
-
-            if (_presetButton1 != null) _presetButton1.Content = "Сухой хвойный + ветер";
-            if (_presetButton2 != null) _presetButton2.Content = "Река как барьер";
-            if (_presetButton3 != null) _presetButton3.Content = "Влажный лес";
-            if (_presetButton4 != null) _presetButton4.Content = "Просека";
-            if (_presetButton5 != null) _presetButton5.Content = "Холмы";
-            return;
-        }
-
-        if (IsClusteredDialog())
-        {
-            _presetHintTextBlock.Text =
-                "Готовые сценарии именно для clustered graph. Кнопка сразу подставляет clustered-сценарий, параметры связности, влажности, рельефа и погодные настройки.";
-
-            if (_presetButton1 != null) _presetButton1.Content = "Плотный сухой массив";
-            if (_presetButton2 != null) _presetButton2.Content = "Водный барьер";
-            if (_presetButton3 != null) _presetButton3.Content = "Влажные патчи";
-            if (_presetButton4 != null) _presetButton4.Content = "Разрыв / просека";
-            if (_presetButton5 != null) _presetButton5.Content = "Холмистые кластеры";
-            return;
-        }
-
-        _presetHintTextBlock.Text =
-            "Для текущего режима быстрые сценарии пока не перерабатываются.";
-
-        if (_presetButton1 != null) _presetButton1.Content = "Сценарий 1";
-        if (_presetButton2 != null) _presetButton2.Content = "Сценарий 2";
-        if (_presetButton3 != null) _presetButton3.Content = "Сценарий 3";
-        if (_presetButton4 != null) _presetButton4.Content = "Сценарий 4";
-        if (_presetButton5 != null) _presetButton5.Content = "Сценарий 5";
-    }
 
     private void AttachEvents()
     {
@@ -261,6 +222,12 @@ public partial class CreateSimulationDialog : Window
         if (_openMapEditorButton != null)
             _openMapEditorButton.Click += async (_, _) => await OpenMapEditorAsync();
 
+        if (_presetButton1 != null) _presetButton1.Click += OnPresetClicked;
+        if (_presetButton2 != null) _presetButton2.Click += OnPresetClicked;
+        if (_presetButton3 != null) _presetButton3.Click += OnPresetClicked;
+        if (_presetButton4 != null) _presetButton4.Click += OnPresetClicked;
+        if (_presetButton5 != null) _presetButton5.Click += OnPresetClicked;
+
         var createButton = this.FindControl<Button>("CreateButton");
         if (createButton != null)
             createButton.Click += OnCreateClicked;
@@ -286,6 +253,121 @@ public partial class CreateSimulationDialog : Window
 
         if (_fuelDensityBox != null)
             _fuelDensityBox.LostFocus += (_, _) => UpdateStructurePreview();
+    }
+
+    private void UpdatePresetButtonsUi()
+    {
+        if (_presetHintTextBlock == null)
+            return;
+
+        if (IsGridDialog())
+        {
+            _presetHintTextBlock.Text =
+                "Готовые территориальные сценарии для сетки. Кнопка сразу подставляет режим, сценарий, погодные условия и параметры карты.";
+
+            if (_presetButton1 != null)
+            {
+                _presetButton1.Content = "Сухой хвойный + ветер";
+                _presetButton1.Tag = "dry-coniferous";
+            }
+
+            if (_presetButton2 != null)
+            {
+                _presetButton2.Content = "Река как барьер";
+                _presetButton2.Tag = "river";
+            }
+
+            if (_presetButton3 != null)
+            {
+                _presetButton3.Content = "Влажный лес";
+                _presetButton3.Tag = "wet";
+            }
+
+            if (_presetButton4 != null)
+            {
+                _presetButton4.Content = "Просека";
+                _presetButton4.Tag = "firebreak";
+            }
+
+            if (_presetButton5 != null)
+            {
+                _presetButton5.Content = "Холмы";
+                _presetButton5.Tag = "hills";
+            }
+
+            return;
+        }
+
+        if (IsClusteredDialog())
+        {
+            _presetHintTextBlock.Text =
+                "Готовые сценарии именно для clustered graph. Кнопка сразу подставляет clustered-сценарий, параметры связности, влажности, рельефа и погодные настройки.";
+
+            if (_presetButton1 != null)
+            {
+                _presetButton1.Content = "Плотный сухой массив";
+                _presetButton1.Tag = "dry-coniferous";
+            }
+
+            if (_presetButton2 != null)
+            {
+                _presetButton2.Content = "Водный барьер";
+                _presetButton2.Tag = "river";
+            }
+
+            if (_presetButton3 != null)
+            {
+                _presetButton3.Content = "Влажные патчи";
+                _presetButton3.Tag = "wet";
+            }
+
+            if (_presetButton4 != null)
+            {
+                _presetButton4.Content = "Разрыв / просека";
+                _presetButton4.Tag = "firebreak";
+            }
+
+            if (_presetButton5 != null)
+            {
+                _presetButton5.Content = "Холмистые кластеры";
+                _presetButton5.Tag = "hills";
+            }
+
+            return;
+        }
+
+        _presetHintTextBlock.Text =
+            "Для текущего режима быстрые сценарии пока не перерабатываются.";
+
+        if (_presetButton1 != null)
+        {
+            _presetButton1.Content = "Сценарий 1";
+            _presetButton1.Tag = "scenario-1";
+        }
+
+        if (_presetButton2 != null)
+        {
+            _presetButton2.Content = "Сценарий 2";
+            _presetButton2.Tag = "scenario-2";
+        }
+
+        if (_presetButton3 != null)
+        {
+            _presetButton3.Content = "Сценарий 3";
+            _presetButton3.Tag = "scenario-3";
+        }
+
+        if (_presetButton4 != null)
+        {
+            _presetButton4.Content = "Сценарий 4";
+            _presetButton4.Tag = "scenario-4";
+        }
+
+        if (_presetButton5 != null)
+        {
+            _presetButton5.Content = "Сценарий 5";
+            _presetButton5.Tag = "scenario-5";
+        }
     }
 
     private void OnPresetClicked(object? sender, RoutedEventArgs e)
@@ -318,6 +400,7 @@ public partial class CreateSimulationDialog : Window
         UpdateMapEditorSummary();
         UpdateStructurePreview();
     }
+
     private void ResetEditorArtifactsForPreset()
     {
         MapRegionObjects = new List<MapRegionObjectDto>();
@@ -492,7 +575,6 @@ public partial class CreateSimulationDialog : Window
 
         switch (preset)
         {
-
             case "dry-coniferous":
                 if (_nameBox != null) _nameBox.Text = "Малый clustered: сухой кластер";
                 if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 0;
@@ -532,7 +614,6 @@ public partial class CreateSimulationDialog : Window
 
                 SetVegetationDistributionTexts(0.25, 0.20, 0.25, 0.10, 0.10, 0.07, 0.03);
                 break;
-
 
             case "wet":
                 if (_nameBox != null) _nameBox.Text = "Большой clustered: влажные патчи";
@@ -962,6 +1043,7 @@ public partial class CreateSimulationDialog : Window
             _ => type.ToString()
         };
     }
+
     private void ApplyDefaults()
     {
         if (_nameBox == null ||
@@ -989,15 +1071,6 @@ public partial class CreateSimulationDialog : Window
             _fireCellsBox.Text = "3";
             _stepsBox.Text = "100";
             _stepDurationBox.Text = "900";
-        }
-        else if (_mode == GraphCreationMode.RegionCluster)
-        {
-            _nameBox.Text = "Региональный граф";
-            _widthBox.Text = "20";
-            _heightBox.Text = "20";
-            _fireCellsBox.Text = "1";
-            _stepsBox.Text = "30";
-            _stepDurationBox.Text = "1800";
         }
         else
         {
@@ -1085,37 +1158,18 @@ public partial class CreateSimulationDialog : Window
             return;
         }
 
-        if (IsClusteredDialog())
-        {
-            _typeInfoTextBlock.Text = "Кластерный граф";
-            _typeHintTextBlock.Text =
-                "ClusteredGraph — это самостоятельная графовая модель. Узлы образуют патчи и группы, а сценарии управляют плотностью связей, барьерами, мостами, влажностью, рельефом и доминирующей растительностью.";
-
-            _widthLabelTextBlock.Text = "Ширина поля графа";
-            _heightLabelTextBlock.Text = "Высота поля графа";
-
-            _widthHintTextBlock.Text = "Размер рабочей области, внутри которой размещаются кандидаты и узлы clustered graph.";
-            _heightHintTextBlock.Text = "Размер рабочей области для построения патчей, мостов и связей clustered graph.";
-
-            _fireCellsHintTextBlock.Text =
-                "Стартовые очаги можно выбрать случайно или вручную по узлам графа.";
-
-            UpdatePresetButtonsUi();
-            return;
-        }
-
-        _typeInfoTextBlock.Text = "Региональный граф";
+        _typeInfoTextBlock.Text = "Кластерный граф";
         _typeHintTextBlock.Text =
-            "RegionClusterGraph пока оставлен без переработки. Этот режим не входит в текущий этап улучшения clustered graph.";
+            "ClusteredGraph — это самостоятельная графовая модель. Узлы образуют патчи и группы, а сценарии управляют плотностью связей, барьерами, мостами, влажностью, рельефом и доминирующей растительностью.";
 
-        _widthLabelTextBlock.Text = "Ширина области";
-        _heightLabelTextBlock.Text = "Высота области";
+        _widthLabelTextBlock.Text = "Ширина поля графа";
+        _heightLabelTextBlock.Text = "Высота поля графа";
 
-        _widthHintTextBlock.Text = "Используется как размер базовой области.";
-        _heightHintTextBlock.Text = "Используется как размер базовой области.";
+        _widthHintTextBlock.Text = "Размер рабочей области, внутри которой размещаются кандидаты и узлы clustered graph.";
+        _heightHintTextBlock.Text = "Размер рабочей области для построения патчей, мостов и связей clustered graph.";
 
         _fireCellsHintTextBlock.Text =
-            "Очаги пожара будут выбраны случайно или вручную по вершинам графа.";
+            "Стартовые очаги можно выбрать случайно или вручную по узлам графа.";
 
         UpdatePresetButtonsUi();
     }
@@ -1156,7 +1210,7 @@ public partial class CreateSimulationDialog : Window
                     _ => "Сетка будет создана автоматически."
                 };
             }
-            else if (IsClusteredDialog())
+            else
             {
                 _mapModeDescriptionTextBlock.Text = SelectedMapCreationMode switch
                 {
@@ -1172,16 +1226,6 @@ public partial class CreateSimulationDialog : Window
                     _ => "Кластерный граф будет создан автоматически."
                 };
             }
-            else
-            {
-                _mapModeDescriptionTextBlock.Text = SelectedMapCreationMode switch
-                {
-                    MapCreationMode.Random => "Режим случайной генерации.",
-                    MapCreationMode.Scenario => "Сценарный режим пока не перерабатывается для этого типа графа.",
-                    MapCreationMode.SemiManual => "Полуручной режим пока не перерабатывается для этого типа графа.",
-                    _ => "Режим генерации не выбран."
-                };
-            }
         }
 
         if (_semiManualDescriptionTextBlock != null)
@@ -1195,15 +1239,10 @@ public partial class CreateSimulationDialog : Window
                 _semiManualDescriptionTextBlock.Text =
                     "Откроется редактор карты. В нём можно рисовать области леса, воды, просеки, влажные и сухие зоны, холмы и низины. Эти объекты изменяют параметры клеточной территории.";
             }
-            else if (IsClusteredDialog())
-            {
-                _semiManualDescriptionTextBlock.Text =
-                    "Откроется clustered graph editor. В нём можно выбрать узлы из подложки-кандидатов, вручную соединить их рёбрами, удалить связи и задать свойства узлов и рёбер.";
-            }
             else
             {
                 _semiManualDescriptionTextBlock.Text =
-                    "Для этого режима отдельный полуручной сценарий пока не входит в текущий этап.";
+                    "Откроется clustered graph editor. В нём можно выбрать узлы из подложки-кандидатов, вручную соединить их рёбрами, удалить связи и задать свойства узлов и рёбер.";
             }
         }
 
@@ -1219,19 +1258,13 @@ public partial class CreateSimulationDialog : Window
                 _openMapEditorButton.Content = "Открыть редактор карты";
                 _openMapEditorButton.IsEnabled = true;
             }
-            else if (IsClusteredDialog())
+            else
             {
                 _openMapEditorButton.Content = "Открыть редактор clustered graph";
                 _openMapEditorButton.IsEnabled = true;
             }
-            else
-            {
-                _openMapEditorButton.Content = "Редактор пока не поддержан";
-                _openMapEditorButton.IsEnabled = false;
-            }
         }
     }
-
 
     private void UpdateMapEditorSummary()
     {
@@ -1329,9 +1362,9 @@ public partial class CreateSimulationDialog : Window
             x.ObjectType == MapObjectType.ShrubArea);
 
         var parts = new List<string>
-    {
-        $"Объектов карты: {MapRegionObjects.Count}"
-    };
+        {
+            $"Объектов карты: {MapRegionObjects.Count}"
+        };
 
         if (vegetationAreas > 0)
             parts.Add($"растительных областей — {vegetationAreas}");
@@ -1357,7 +1390,6 @@ public partial class CreateSimulationDialog : Window
         return string.Join(", ", parts) + ".";
     }
 
-
     private void UpdateScenarioDescription()
     {
         SelectedScenarioType = null;
@@ -1371,9 +1403,7 @@ public partial class CreateSimulationDialog : Window
             _scenarioDescriptionTextBlock.Text =
                 IsGridDialog()
                     ? "Выберите один из территориальных сценариев сетки."
-                    : IsClusteredDialog()
-                        ? "Выберите один из сценариев clustered graph."
-                        : "Сценарии для этого режима пока не перерабатываются.";
+                    : "Выберите один из сценариев clustered graph.";
             return;
         }
 
@@ -1419,46 +1449,38 @@ public partial class CreateSimulationDialog : Window
             return;
         }
 
-        if (IsClusteredDialog())
+        SelectedClusteredScenarioType = _scenarioTypeBox.SelectedIndex switch
         {
-            SelectedClusteredScenarioType = _scenarioTypeBox.SelectedIndex switch
-            {
-                1 => ClusteredScenarioType.WaterBarrier,
-                2 => ClusteredScenarioType.FirebreakGap,
-                3 => ClusteredScenarioType.HillyClusters,
-                4 => ClusteredScenarioType.WetAfterRain,
-                5 => ClusteredScenarioType.MixedDryHotspots,
-                _ => ClusteredScenarioType.DenseDryConiferous
-            };
+            1 => ClusteredScenarioType.WaterBarrier,
+            2 => ClusteredScenarioType.FirebreakGap,
+            3 => ClusteredScenarioType.HillyClusters,
+            4 => ClusteredScenarioType.WetAfterRain,
+            5 => ClusteredScenarioType.MixedDryHotspots,
+            _ => ClusteredScenarioType.DenseDryConiferous
+        };
 
-            _scenarioDescriptionTextBlock.Text = SelectedClusteredScenarioType switch
-            {
-                ClusteredScenarioType.DenseDryConiferous =>
-                    "Плотные сухие хвойные патчи с хорошей внутренней связностью и сильными межпатчевыми переходами. Это сценарий быстрого и агрессивного распространения по графу.",
+        _scenarioDescriptionTextBlock.Text = SelectedClusteredScenarioType switch
+        {
+            ClusteredScenarioType.DenseDryConiferous =>
+                "Плотные сухие хвойные патчи с хорошей внутренней связностью и сильными межпатчевыми переходами. Это сценарий быстрого и агрессивного распространения по графу.",
 
-                ClusteredScenarioType.WaterBarrier =>
-                    "Часть патчей разделена водным барьером. Межкластерные переходы становятся редкими или ослабленными, а граф визуально делится на группы.",
+            ClusteredScenarioType.WaterBarrier =>
+                "Часть патчей разделена водным барьером. Межкластерные переходы становятся редкими или ослабленными, а граф визуально делится на группы.",
 
-                ClusteredScenarioType.FirebreakGap =>
-                    "Между группами патчей формируется разрыв или очень слабые переходы. Сценарий нужен для проверки, как барьерность влияет на переход огня между частями графа.",
+            ClusteredScenarioType.FirebreakGap =>
+                "Между группами патчей формируется разрыв или очень слабые переходы. Сценарий нужен для проверки, как барьерность влияет на переход огня между частями графа.",
 
-                ClusteredScenarioType.HillyClusters =>
-                    "Патчи отличаются по высоте сильнее обычного. Сценарий подчёркивает неоднородность рельефа и влияние топологии на распространение.",
+            ClusteredScenarioType.HillyClusters =>
+                "Патчи отличаются по высоте сильнее обычного. Сценарий подчёркивает неоднородность рельефа и влияние топологии на распространение.",
 
-                ClusteredScenarioType.WetAfterRain =>
-                    "Патчи становятся более влажными, а связи между ними — менее опасными для распространения. Это clustered-сценарий подавленного пожара.",
+            ClusteredScenarioType.WetAfterRain =>
+                "Патчи становятся более влажными, а связи между ними — менее опасными для распространения. Это clustered-сценарий подавленного пожара.",
 
-                ClusteredScenarioType.MixedDryHotspots =>
-                    "Большая часть графа остаётся умеренной, но в отдельных патчах появляются сухие очаги с повышенной горючестью и более опасными переходами.",
+            ClusteredScenarioType.MixedDryHotspots =>
+                "Большая часть графа остаётся умеренной, но в отдельных патчах появляются сухие очаги с повышенной горючестью и более опасными переходами.",
 
-                _ => "Сценарий clustered graph выбран."
-            };
-
-            return;
-        }
-
-        _scenarioDescriptionTextBlock.Text =
-            "Для текущего режима отдельное описание сценариев пока не входит в этот этап.";
+            _ => "Сценарий clustered graph выбран."
+        };
     }
 
     private void UpdateStructurePreview()
@@ -1503,44 +1525,33 @@ public partial class CreateSimulationDialog : Window
             return;
         }
 
-        if (IsClusteredDialog())
+        int candidateCount = ClusteredBlueprint?.Candidates?.Count ?? 0;
+        int nodeCount = ClusteredBlueprint?.Nodes?.Count ?? 0;
+        int edgeCount = ClusteredBlueprint?.Edges?.Count ?? 0;
+
+        string scenarioText = SelectedMapCreationMode switch
         {
-            int candidateCount = ClusteredBlueprint?.Candidates?.Count ?? 0;
-            int nodeCount = ClusteredBlueprint?.Nodes?.Count ?? 0;
-            int edgeCount = ClusteredBlueprint?.Edges?.Count ?? 0;
-
-            string scenarioText = SelectedMapCreationMode switch
-            {
-                MapCreationMode.Random => "Случайный clustered graph",
-                MapCreationMode.Scenario => "Сценарный clustered graph",
-                MapCreationMode.SemiManual => "Полуручный clustered graph",
-                _ => "Clustered graph"
-            };
-
-            _structureSummaryTextBlock.Text =
-                $"Поле {width} × {height} • стартовых очагов: {fireCells}";
-
-            if (SelectedMapCreationMode == MapCreationMode.SemiManual)
-            {
-                _structureDetailTextBlock.Text =
-                    $"{scenarioText}\n" +
-                    $"Blueprint: кандидатов {candidateCount}, узлов {nodeCount}, рёбер {edgeCount}.";
-            }
-            else
-            {
-                _structureDetailTextBlock.Text =
-                    $"{scenarioText}\n" +
-                    $"Факторы: сухость {dryness:F2}, рельеф {relief:F2}, плотность топлива {fuel:F2}.";
-            }
-
-            return;
-        }
+            MapCreationMode.Random => "Случайный clustered graph",
+            MapCreationMode.Scenario => "Сценарный clustered graph",
+            MapCreationMode.SemiManual => "Полуручный clustered graph",
+            _ => "Clustered graph"
+        };
 
         _structureSummaryTextBlock.Text =
-            $"Область {width} × {height} • стартовых очагов: {fireCells}";
+            $"Поле {width} × {height} • стартовых очагов: {fireCells}";
 
-        _structureDetailTextBlock.Text =
-            "RegionClusterGraph пока не перерабатывается в этом этапе. Текущая ветка оставлена без отдельной UX-настройки.";
+        if (SelectedMapCreationMode == MapCreationMode.SemiManual)
+        {
+            _structureDetailTextBlock.Text =
+                $"{scenarioText}\n" +
+                $"Blueprint: кандидатов {candidateCount}, узлов {nodeCount}, рёбер {edgeCount}.";
+        }
+        else
+        {
+            _structureDetailTextBlock.Text =
+                $"{scenarioText}\n" +
+                $"Факторы: сухость {dryness:F2}, рельеф {relief:F2}, плотность топлива {fuel:F2}.";
+        }
     }
 
     private List<(int VegetationType, double Probability)> ReadVegetationDistributions()

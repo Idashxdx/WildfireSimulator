@@ -20,8 +20,7 @@ public enum AppPage
 
 public enum GraphCreationMode
 {
-    Clustered = 0,
-    RegionCluster = 1
+    Clustered = 0
 }
 
 public enum IgnitionMode
@@ -366,7 +365,6 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool IsGridSelected => SelectedSimulationGraphType == GraphType.Grid;
     public bool IsClusteredGraphSelected => SelectedSimulationGraphType == GraphType.ClusteredGraph;
-    public bool IsRegionClusterGraphSelected => SelectedSimulationGraphType == GraphType.RegionClusterGraph;
 
     public string SelectedGraphNodeTitle =>
         SelectedGraphNode == null
@@ -395,10 +393,7 @@ public partial class MainWindowViewModel : ObservableObject
             null => "Нет данных",
             _ => SelectedGraphNode?.Vegetation ?? "Нет данных"
         };
-    public string SelectedGraphNodeGroupCaption =>
-SelectedSimulationGraphType == GraphType.RegionClusterGraph
-    ? "Region ID"
-    : "Cluster ID";
+    public string SelectedGraphNodeGroupCaption => "Cluster ID";
 
     public string SelectedGraphNodeDegreeSummaryText =>
         SelectedGraphNode == null
@@ -492,9 +487,7 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
         GraphType.Grid =>
             "Регулярная карта: каждая клетка — участок поверхности, огонь распространяется по соседям и формирует фронт.",
         GraphType.ClusteredGraph =>
-            "Кластерный граф: один связный граф с локальной кластеризацией вершин без явного разделения на регионы.",
-        GraphType.RegionClusterGraph =>
-            "Региональный граф: территория разделена на регионы, внутри которых связи плотные, а между регионами — редкие мосты.",
+            "Графовая модель: вершины образуют единый граф с локальной кластеризацией, мостами и неоднородной связностью.",
         _ =>
             "Модель не выбрана."
     };
@@ -504,9 +497,7 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
         GraphType.Grid =>
             "Масштаб: 1 клетка = 1 гектар.",
         GraphType.ClusteredGraph =>
-            "Масштаб: узел — отдельный объект графа; важнее локальная связность и кластеры, чем сплошное покрытие пространства.",
-        GraphType.RegionClusterGraph =>
-            "Масштаб: 1 узел ≈ 1 гектар, группа узлов = регион с высокой внутренней связностью.",
+            "Масштаб: узел — отдельный объект графа; важнее локальная связность, мосты и кластеры.",
         _ =>
             "Масштаб не определён."
     };
@@ -517,8 +508,6 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
             "Ожидаемое поведение: компактный фронт, локальное распространение, сдвиг по ветру.",
         GraphType.ClusteredGraph =>
             "Ожидаемое поведение: распространение по локальным кластерам и близким связям, возможны тупики и ветвления.",
-        GraphType.RegionClusterGraph =>
-            "Ожидаемое поведение: локальный рост внутри региона и более поздний переход между регионами по мостам.",
         _ =>
             "Поведение не определено."
     };
@@ -535,23 +524,20 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
     public string GraphTypeText => SelectedSimulationGraphType switch
     {
         GraphType.Grid => "Сетка",
-        GraphType.ClusteredGraph => "Кластерный граф",
-        GraphType.RegionClusterGraph => "Региональный граф",
+        GraphType.ClusteredGraph => "Граф",
         _ => "Неизвестно"
     };
 
     public string SelectedGraphCreationModeText => SelectedGraphCreationMode switch
     {
-        GraphCreationMode.Clustered => "Кластерный граф",
-        GraphCreationMode.RegionCluster => "Региональный граф",
-        _ => "Кластерный граф"
+        GraphCreationMode.Clustered => "Граф",
+        _ => "Граф"
     };
 
     public bool IsGridPage => CurrentPage == AppPage.Grid;
     public bool IsGraphPage => CurrentPage == AppPage.Graph;
 
     public bool IsClusteredGraphCreationMode => SelectedGraphCreationMode == GraphCreationMode.Clustered;
-    public bool IsRegionClusterGraphCreationMode => SelectedGraphCreationMode == GraphCreationMode.RegionCluster;
 
     public bool CanStartAutoSimulation =>
         IsConnected &&
@@ -663,14 +649,12 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
     {
         OnPropertyChanged(nameof(SelectedGraphCreationModeText));
         OnPropertyChanged(nameof(IsClusteredGraphCreationMode));
-        OnPropertyChanged(nameof(IsRegionClusterGraphCreationMode));
     }
     partial void OnSelectedSimulationGraphTypeChanged(GraphType value)
     {
         OnPropertyChanged(nameof(GraphTypeText));
         OnPropertyChanged(nameof(IsGridSelected));
         OnPropertyChanged(nameof(IsClusteredGraphSelected));
-        OnPropertyChanged(nameof(IsRegionClusterGraphSelected));
         OnPropertyChanged(nameof(VisualizationMeaningText));
         OnPropertyChanged(nameof(StructureScaleText));
         OnPropertyChanged(nameof(SpreadBehaviorText));
@@ -707,8 +691,7 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
             OnPropertyChanged(nameof(IsGridSelected));
             OnPropertyChanged(nameof(IsClusteredGraphSelected));
-            OnPropertyChanged(nameof(IsRegionClusterGraphSelected));
-            OnPropertyChanged(nameof(VisualizationMeaningText));
+                OnPropertyChanged(nameof(VisualizationMeaningText));
             OnPropertyChanged(nameof(StructureScaleText));
             OnPropertyChanged(nameof(SpreadBehaviorText));
             OnPropertyChanged(nameof(IsRandomIgnitionMode));
@@ -781,8 +764,7 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
             OnPropertyChanged(nameof(CanExecuteStepSimulation));
             OnPropertyChanged(nameof(IsGridSelected));
             OnPropertyChanged(nameof(IsClusteredGraphSelected));
-            OnPropertyChanged(nameof(IsRegionClusterGraphSelected));
-            OnPropertyChanged(nameof(VisualizationMeaningText));
+                OnPropertyChanged(nameof(VisualizationMeaningText));
             OnPropertyChanged(nameof(StructureScaleText));
             OnPropertyChanged(nameof(SpreadBehaviorText));
             OnPropertyChanged(nameof(IsRandomIgnitionMode));
@@ -1231,12 +1213,6 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
     }
 
     [RelayCommand]
-    private void SelectRegionClusterGraphMode()
-    {
-        SelectedGraphCreationMode = GraphCreationMode.RegionCluster;
-    }
-
-    [RelayCommand]
     private async Task TestConnectionAsync()
     {
         SetTransientStatus("Проверка подключения...", false);
@@ -1497,9 +1473,6 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
                 _ =>
                     $"Кластерный граф {dialog.GridWidth}x{dialog.GridHeight}"
             },
-
-            GraphType.RegionClusterGraph =>
-                $"Региональный граф {dialog.GridWidth}x{dialog.GridHeight}",
 
             _ =>
                 $"Сетка {dialog.GridWidth}x{dialog.GridHeight}"
@@ -1976,9 +1949,7 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
         if (CurrentPage == AppPage.Grid)
             return GraphType.Grid;
 
-        return SelectedGraphCreationMode == GraphCreationMode.RegionCluster
-            ? GraphType.RegionClusterGraph
-            : GraphType.ClusteredGraph;
+        return GraphType.ClusteredGraph;
     }
 
     private async Task SubscribeToSelectedSimulationAsync(Guid simulationId)
@@ -2044,8 +2015,7 @@ SelectedSimulationGraphType == GraphType.RegionClusterGraph
 
                 OnPropertyChanged(nameof(IsGridSelected));
                 OnPropertyChanged(nameof(IsClusteredGraphSelected));
-                OnPropertyChanged(nameof(IsRegionClusterGraphSelected));
-                OnPropertyChanged(nameof(VisualizationMeaningText));
+                        OnPropertyChanged(nameof(VisualizationMeaningText));
                 OnPropertyChanged(nameof(StructureScaleText));
                 OnPropertyChanged(nameof(SpreadBehaviorText));
 

@@ -1022,15 +1022,13 @@ public class SimulationManagerController : ControllerBase
                 simulation.Parameters.GridWidth * simulation.Parameters.GridHeight / 2,
                 simulation.Parameters),
 
-            GraphType.RegionClusterGraph => await _graphGenerator.GenerateRegionClusterGraphAsync(
-                simulation.Parameters),
-
             _ => await _graphGenerator.GenerateGridAsync(
                 simulation.Parameters.GridWidth,
                 simulation.Parameters.GridHeight,
                 simulation.Parameters)
         };
     }
+
 
     private SimulationGraphDto BuildGraphDto(Simulation simulation, ForestGraph graph)
     {
@@ -1079,7 +1077,6 @@ public class SimulationManagerController : ControllerBase
         return simulation.Parameters.GraphType switch
         {
             GraphType.ClusteredGraph => BuildClusteredGraphNodeDtos(graph),
-            GraphType.RegionClusterGraph => BuildRegionClusterGraphNodeDtos(graph),
             _ => BuildGridNodeDtos(graph)
         };
     }
@@ -1144,36 +1141,6 @@ public class SimulationManagerController : ControllerBase
             .ToList();
     }
 
-    private List<SimulationGraphNodeDto> BuildRegionClusterGraphNodeDtos(ForestGraph graph)
-    {
-        return graph.Cells
-            .Select(c => new SimulationGraphNodeDto
-            {
-                Id = c.Id,
-                X = c.X,
-                Y = c.Y,
-                RenderX = Math.Round((double)c.X, 3),
-                RenderY = Math.Round((double)c.Y, 3),
-                GroupKey = !string.IsNullOrWhiteSpace(c.ClusterId)
-                    ? c.ClusterId
-                    : $"region-free-{c.X}-{c.Y}",
-                Vegetation = c.Vegetation.ToString(),
-                Moisture = Math.Round(c.Moisture, 3),
-                Elevation = Math.Round(c.Elevation, 3),
-                State = c.State.ToString(),
-                BurnProbability = Math.Round(c.BurnProbability, 6),
-                IgnitionTime = c.IgnitionTime,
-                BurnoutTime = c.BurnoutTime,
-                FireStage = c.FireStage.ToString(),
-                FireIntensity = Math.Round(c.FireIntensity, 3),
-                CurrentFuelLoad = Math.Round(c.CurrentFuelLoad, 6),
-                FuelLoad = Math.Round(c.FuelLoad, 6),
-                BurningElapsedSeconds = Math.Round(c.BurningElapsedSeconds, 3),
-                AccumulatedHeatJ = Math.Round(c.AccumulatedHeatJ, 3),
-                IsIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != VegetationType.Bare,
-            })
-            .ToList();
-    }
 
     private string GetLayoutHint(GraphType graphType)
     {
@@ -1181,7 +1148,6 @@ public class SimulationManagerController : ControllerBase
         {
             GraphType.Grid => "grid",
             GraphType.ClusteredGraph => "node-link",
-            GraphType.RegionClusterGraph => "region-cluster-node-link",
             _ => "grid"
         };
     }

@@ -7,8 +7,7 @@ namespace WildfireSimulator.Client.Models;
 public enum GraphType
 {
     Grid = 0,
-    ClusteredGraph = 1,
-    RegionClusterGraph = 2
+    ClusteredGraph = 1
 }
 
 public enum VegetationType
@@ -103,13 +102,12 @@ public class SimulationDto
     public string GraphTypeText => GraphType switch
     {
         GraphType.Grid => "Сетка",
-        GraphType.ClusteredGraph => "Кластерный граф",
-        GraphType.RegionClusterGraph => "Региональный кластерный граф",
+        GraphType.ClusteredGraph => "Граф",
         _ => "Неизвестно"
     };
 
     public bool IsGrid => GraphType == GraphType.Grid;
-    public bool IsGraph => GraphType == GraphType.ClusteredGraph || GraphType == GraphType.RegionClusterGraph;
+    public bool IsGraph => GraphType == GraphType.ClusteredGraph;
 }
 
 public class CreateSimulationDto

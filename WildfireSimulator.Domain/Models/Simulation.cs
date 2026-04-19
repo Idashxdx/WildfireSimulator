@@ -465,10 +465,8 @@ public class SimulationParameters
 
     public MapCreationMode MapCreationMode { get; set; }
 
-    // Только для Grid
     public MapScenarioType? ScenarioType { get; set; }
 
-    // Только для ClusteredGraph
     public ClusteredScenarioType? ClusteredScenarioType { get; set; }
 
     public double MapNoiseStrength { get; set; }
@@ -477,7 +475,6 @@ public class SimulationParameters
     public double ReliefStrengthFactor { get; set; }
     public double FuelDensityFactor { get; set; }
 
-    // Только для Grid SemiManual
     [NotMapped]
     public List<MapRegionObject> MapRegionObjects { get; set; } = new();
 
@@ -489,7 +486,6 @@ public class SimulationParameters
             : JsonSerializer.Deserialize<List<MapRegionObject>>(value) ?? new List<MapRegionObject>();
     }
 
-    // Только для ClusteredGraph SemiManual
     [NotMapped]
     public ClusteredGraphBlueprint? ClusteredBlueprint { get; set; }
 
@@ -530,8 +526,7 @@ public class SimulationParameters
 public enum GraphType
 {
     Grid = 0,
-    ClusteredGraph = 1,
-    RegionClusterGraph = 2
+    ClusteredGraph = 1
 }
 
 public class VegetationDistribution

@@ -123,12 +123,10 @@ public class SimulationsController : ControllerBase
                 RandomSeed = request.RandomSeed,
                 MapCreationMode = request.MapCreationMode,
 
-                // Grid-only
                 ScenarioType = request.GraphType == GraphType.Grid
                     ? request.ScenarioType
                     : null,
 
-                // Clustered-only
                 ClusteredScenarioType = request.GraphType == GraphType.ClusteredGraph
                     ? request.ClusteredScenarioType
                     : null,
@@ -237,7 +235,7 @@ public class SimulationsController : ControllerBase
             await _simulationRepository.AddAsync(simulation, cancellationToken);
 
             _logger.LogInformation(
-                "Создана симуляция {Id}. GraphType={GraphType}, Mode={Mode}, GridScenario={GridScenario}, ClusteredScenario={ClusteredScenario}, GridObjects={ObjectsCount}, ClusteredNodes={ClusteredNodesCount}",
+                "Создана симуляция {Id}. GraphType={GraphType}, Mode={Mode}, GridScenario={GridScenario}, GraphScenario={GraphScenario}, GridObjects={ObjectsCount}, GraphNodes={GraphNodesCount}",
                 simulation.Id,
                 simulation.Parameters.GraphType,
                 simulation.Parameters.MapCreationMode,
@@ -348,11 +346,11 @@ public class CreateSimulationWithWeatherRequest
 
     public MapCreationMode MapCreationMode { get; set; } = MapCreationMode.Random;
 
-    // Только для Grid
     public MapScenarioType? ScenarioType { get; set; }
 
-    // Только для ClusteredGraph
     public ClusteredScenarioType? ClusteredScenarioType { get; set; }
+
+    public ClusteredBlueprintRequest? ClusteredBlueprint { get; set; }
 
     public double MapNoiseStrength { get; set; } = 0.08;
 
@@ -360,11 +358,7 @@ public class CreateSimulationWithWeatherRequest
     public double ReliefStrengthFactor { get; set; } = 1.0;
     public double FuelDensityFactor { get; set; } = 1.0;
 
-    // Только для Grid SemiManual
     public List<MapRegionObjectRequest> MapRegionObjects { get; set; } = new();
-
-    // Только для ClusteredGraph SemiManual
-    public ClusteredBlueprintRequest? ClusteredBlueprint { get; set; }
 
     public List<InitialFirePositionDto> InitialFirePositions { get; set; } = new();
 

@@ -129,15 +129,9 @@
 
                                 <StackPanel Spacing="8">
                                     <Button Classes="uniformButton"
-                                        Content="Кластерный граф"
+                                        Content="Граф"
                                         Command="{Binding SelectClusteredGraphModeCommand}"
                                         Background="{Binding IsClusteredGraphCreationMode, Converter={StaticResource BoolToBrushConverter}, ConverterParameter='#DDEFD5;#ECE6FA'}"
-                                        Foreground="#2F2A3A" />
-
-                                    <Button Classes="uniformButton"
-                                        Content="Региональный граф"
-                                        Command="{Binding SelectRegionClusterGraphModeCommand}"
-                                        Background="{Binding IsRegionClusterGraphCreationMode, Converter={StaticResource BoolToBrushConverter}, ConverterParameter='#DDEFD5;#ECE6FA'}"
                                         Foreground="#2F2A3A" />
                                 </StackPanel>
 
@@ -549,14 +543,6 @@
                                     LayoutHint="{Binding GraphLayoutHint}"
                                     IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
                                     IsVisible="{Binding IsClusteredGraphSelected}" />
-
-                                <controls:NodeGraphVisualization x:Name="RegionGraphVisualization"
-                                    Nodes="{Binding GraphNodes}"
-                                    Edges="{Binding GraphEdges}"
-                                    SelectedNode="{Binding SelectedGraphNode, Mode=TwoWay}"
-                                    LayoutHint="{Binding GraphLayoutHint}"
-                                    IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
-                                    IsVisible="{Binding IsRegionClusterGraphSelected}" />
                             </Grid>
                         </Border>
 

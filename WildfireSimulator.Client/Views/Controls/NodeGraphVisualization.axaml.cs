@@ -40,10 +40,6 @@ public partial class NodeGraphVisualization : UserControl
     private const double MinCanvasSize = 500.0;
     private const double CanvasPadding = 56.0;
 
-    private const double RegionClusterInternalScale = 16.0;
-    private const double RegionClusterPadding = 24.0;
-    private const double RegionClusterMinGap = 28.0;
-
     public static readonly StyledProperty<IEnumerable<SimulationGraphNodeDto>?> NodesProperty =
         AvaloniaProperty.Register<NodeGraphVisualization, IEnumerable<SimulationGraphNodeDto>?>(nameof(Nodes));
 
@@ -232,11 +228,7 @@ public partial class NodeGraphVisualization : UserControl
             return;
         }
 
-        if (LayoutHint.Contains("region-cluster", StringComparison.OrdinalIgnoreCase))
-            DrawRegionClusterMap(nodes, edges);
-        else
-            DrawStandardGraph(nodes, edges);
-
+        DrawStandardGraph(nodes, edges);
         ApplyZoom();
     }
 
@@ -304,8 +296,8 @@ public partial class NodeGraphVisualization : UserControl
     }
 
     private void DrawClusterPatchBackgrounds(
-        List<SimulationGraphNodeDto> nodes,
-        Dictionary<Guid, Point> points)
+      List<SimulationGraphNodeDto> nodes,
+      Dictionary<Guid, Point> points)
     {
         if (_graphCanvas == null)
             return;
@@ -323,23 +315,24 @@ public partial class NodeGraphVisualization : UserControl
         foreach (var group in groups)
         {
             var groupNodes = group.ToList();
-            var regionPoints = groupNodes
+
+            var groupPoints = groupNodes
                 .Where(n => points.ContainsKey(n.Id))
                 .Select(n => points[n.Id])
                 .ToList();
 
-            if (regionPoints.Count < 3)
+            if (groupPoints.Count < 3)
                 continue;
 
-            var hull = BuildSoftHull(regionPoints);
+            var hull = BuildSoftHull(groupPoints);
             if (hull.Count < 3)
                 continue;
 
             var polygon = new Polygon
             {
                 Points = new Points(hull),
-                Fill = new SolidColorBrush(GetRegionFillColor(groupNodes)),
-                Stroke = new SolidColorBrush(GetRegionStrokeColor(groupNodes)),
+                Fill = new SolidColorBrush(GetGroupFillColor(groupNodes)),
+                Stroke = new SolidColorBrush(GetGroupStrokeColor(groupNodes)),
                 StrokeThickness = 1.1,
                 Opacity = 0.40,
                 IsHitTestVisible = false
@@ -347,8 +340,8 @@ public partial class NodeGraphVisualization : UserControl
 
             _graphCanvas.Children.Add(polygon);
 
-            var centerX = regionPoints.Average(p => p.X);
-            var centerY = regionPoints.Average(p => p.Y);
+            var centerX = groupPoints.Average(p => p.X);
+            var centerY = groupPoints.Average(p => p.Y);
 
             var label = new TextBlock
             {
@@ -365,481 +358,27 @@ public partial class NodeGraphVisualization : UserControl
             _graphCanvas.Children.Add(label);
         }
     }
-
-    private void DrawRegionClusterMap(List<SimulationGraphNodeDto> nodes, List<SimulationGraphEdgeDto> edges)
+    private Color GetGroupFillColor(List<SimulationGraphNodeDto> nodes)
     {
-        if (_graphCanvas == null)
-            return;
+        if (nodes.Any(n => n.IsBurning))
+            return Color.FromArgb(60, 255, 122, 89);
 
-        var groups = nodes
-            .GroupBy(n => string.IsNullOrWhiteSpace(n.GroupKey) ? "region-0" : n.GroupKey)
-            .OrderBy(g => g.Key)
-            .ToList();
+        if (nodes.All(n => n.IsBurned))
+            return Color.FromArgb(45, 120, 120, 120);
 
-        if (groups.Count == 0)
-        {
-            DrawStandardGraph(nodes, edges);
-            return;
-        }
-
-        var nodeMap = nodes.ToDictionary(n => n.Id);
-        var placedRegions = BuildPlacedRegions(groups, edges, nodeMap);
-        var points = BuildRegionClusterScreenPoints(placedRegions);
-
-        var selectedNodeId = SelectedNode?.Id;
-        var selectedEdgeIds = GetSelectedEdgeIds(edges, selectedNodeId);
-        var neighborIds = GetNeighborIds(edges, selectedNodeId);
-
-        var size = MeasurePlacedRegions(placedRegions);
-
-        _graphCanvas.Width = Math.Max(MinCanvasSize, size.Width);
-        _graphCanvas.Height = Math.Max(MinCanvasSize, size.Height);
-
-        foreach (var region in placedRegions)
-            DrawRegionBackground(region, points);
-
-        var edgesToDraw = SelectRegionClusterEdgesForDrawing(edges, nodeMap, selectedNodeId);
-
-        foreach (var edge in edgesToDraw.Where(e => IsInterRegionEdge(e, nodeMap)))
-            DrawEdge(edge, points, selectedNodeId, selectedEdgeIds, isBridge: true);
-
-        foreach (var edge in edgesToDraw.Where(e => !IsInterRegionEdge(e, nodeMap)))
-            DrawEdge(edge, points, selectedNodeId, selectedEdgeIds, isBridge: false);
-
-        foreach (var region in placedRegions)
-        {
-            foreach (var node in region.Nodes.OrderBy(n => n.IsBurning ? 0 : 1).ThenBy(n => n.Y).ThenBy(n => n.X))
-                DrawNode(node, edges, points, selectedNodeId, neighborIds, useMapStyle: true);
-
-            DrawRegionLabel(region);
-        }
+        return Color.FromArgb(45, 142, 124, 195);
     }
 
-    private List<PlacedRegion> BuildPlacedRegions(
-        List<IGrouping<string, SimulationGraphNodeDto>> groups,
-        List<SimulationGraphEdgeDto> edges,
-        Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
+    private Color GetGroupStrokeColor(List<SimulationGraphNodeDto> nodes)
     {
-        var regions = groups
-            .Select(group =>
-            {
-                var nodes = group.ToList();
-                var bounds = GetModelBounds(nodes);
+        if (nodes.Any(n => n.IsBurning))
+            return Color.FromArgb(150, 214, 64, 43);
 
-                double width = Math.Max(3.0, bounds.MaxX - bounds.MinX + 1.0);
-                double height = Math.Max(3.0, bounds.MaxY - bounds.MinY + 1.0);
+        if (nodes.All(n => n.IsBurned))
+            return Color.FromArgb(120, 110, 110, 110);
 
-                double centerX = nodes.Average(n => n.RenderX);
-                double centerY = nodes.Average(n => n.RenderY);
-
-                return new PlacedRegion(
-                    group.Key,
-                    nodes,
-                    bounds.MinX,
-                    bounds.MinY,
-                    bounds.MaxX,
-                    bounds.MaxY,
-                    width,
-                    height,
-                    centerX,
-                    centerY);
-            })
-            .ToList();
-
-        var regionGraph = BuildRegionGraph(regions, edges, nodeMap);
-
-        PlaceRegionsFromModelGeography(regions);
-        RefineRegionClusterPositions(regions, regionGraph);
-
-        return regions;
+        return Color.FromArgb(120, 110, 103, 90);
     }
-
-    private Dictionary<string, Dictionary<string, double>> BuildRegionGraph(
-        List<PlacedRegion> regions,
-        List<SimulationGraphEdgeDto> edges,
-        Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
-    {
-        var result = regions.ToDictionary(r => r.RegionId, _ => new Dictionary<string, double>());
-
-        foreach (var edge in edges)
-        {
-            if (!nodeMap.TryGetValue(edge.FromCellId, out var fromNode) ||
-                !nodeMap.TryGetValue(edge.ToCellId, out var toNode))
-                continue;
-
-            var fromRegion = string.IsNullOrWhiteSpace(fromNode.GroupKey) ? "region-0" : fromNode.GroupKey;
-            var toRegion = string.IsNullOrWhiteSpace(toNode.GroupKey) ? "region-0" : toNode.GroupKey;
-
-            if (fromRegion == toRegion)
-                continue;
-
-            if (!result[fromRegion].ContainsKey(toRegion))
-                result[fromRegion][toRegion] = 0.0;
-
-            if (!result[toRegion].ContainsKey(fromRegion))
-                result[toRegion][fromRegion] = 0.0;
-
-            double weight = Math.Max(0.20, edge.FireSpreadModifier);
-            result[fromRegion][toRegion] += weight;
-            result[toRegion][fromRegion] += weight;
-        }
-
-        return result;
-    }
-
-    private void PlaceRegionsFromModelGeography(List<PlacedRegion> regions)
-    {
-        if (regions.Count == 0)
-            return;
-
-        double minCenterX = regions.Min(r => r.ModelCenterX);
-        double maxCenterX = regions.Max(r => r.ModelCenterX);
-        double minCenterY = regions.Min(r => r.ModelCenterY);
-        double maxCenterY = regions.Max(r => r.ModelCenterY);
-
-        if (Math.Abs(maxCenterX - minCenterX) < 0.001)
-            maxCenterX = minCenterX + 1.0;
-
-        if (Math.Abs(maxCenterY - minCenterY) < 0.001)
-            maxCenterY = minCenterY + 1.0;
-
-        double averageRegionWidthPx = regions.Average(r => r.Width * RegionClusterInternalScale + RegionClusterPadding * 2);
-        double averageRegionHeightPx = regions.Average(r => r.Height * RegionClusterInternalScale + RegionClusterPadding * 2);
-
-        double xRange = maxCenterX - minCenterX;
-        double yRange = maxCenterY - minCenterY;
-
-        double scaleX = xRange > 0.0
-            ? averageRegionWidthPx / Math.Max(2.8, xRange / Math.Sqrt(regions.Count))
-            : averageRegionWidthPx;
-
-        double scaleY = yRange > 0.0
-            ? averageRegionHeightPx / Math.Max(2.6, yRange / Math.Sqrt(regions.Count))
-            : averageRegionHeightPx;
-
-        double mapScale = Math.Max(14.0, Math.Min(34.0, Math.Min(scaleX, scaleY)));
-
-        foreach (var region in regions)
-        {
-            double targetCenterX = CanvasPadding + (region.ModelCenterX - minCenterX) * mapScale;
-            double targetCenterY = CanvasPadding + (region.ModelCenterY - minCenterY) * mapScale;
-
-            region.TargetCenterX = targetCenterX;
-            region.TargetCenterY = targetCenterY;
-
-            double localCenterOffsetX = RegionClusterPadding + (region.ModelCenterX - region.MinModelX) * RegionClusterInternalScale;
-            double localCenterOffsetY = RegionClusterPadding + (region.ModelCenterY - region.MinModelY) * RegionClusterInternalScale;
-
-            region.ScreenOriginX = targetCenterX - localCenterOffsetX;
-            region.ScreenOriginY = targetCenterY - localCenterOffsetY;
-        }
-
-        ShiftRegionsToPositiveSpace(regions);
-    }
-
-    private void RefineRegionClusterPositions(
-        List<PlacedRegion> regions,
-        Dictionary<string, Dictionary<string, double>> regionGraph)
-    {
-        if (regions.Count <= 1)
-            return;
-
-        var regionById = regions.ToDictionary(r => r.RegionId);
-
-        for (int iteration = 0; iteration < 32; iteration++)
-        {
-            foreach (var region in regions)
-            {
-                double currentCenterX = GetRegionCenterX(region);
-                double currentCenterY = GetRegionCenterY(region);
-
-                double targetPullX = (region.TargetCenterX - currentCenterX) * 0.12;
-                double targetPullY = (region.TargetCenterY - currentCenterY) * 0.12;
-
-                double bridgePullX = 0.0;
-                double bridgePullY = 0.0;
-                double bridgeWeightSum = 0.0;
-
-                if (regionGraph.TryGetValue(region.RegionId, out var neighbors))
-                {
-                    foreach (var neighborPair in neighbors)
-                    {
-                        if (!regionById.TryGetValue(neighborPair.Key, out var neighbor))
-                            continue;
-
-                        double weight = neighborPair.Value;
-                        if (weight <= 0.0)
-                            continue;
-
-                        double nx = GetRegionCenterX(neighbor);
-                        double ny = GetRegionCenterY(neighbor);
-
-                        bridgePullX += (nx - currentCenterX) * weight;
-                        bridgePullY += (ny - currentCenterY) * weight;
-                        bridgeWeightSum += weight;
-                    }
-                }
-
-                if (bridgeWeightSum > 0.0)
-                {
-                    bridgePullX = (bridgePullX / bridgeWeightSum) * 0.065;
-                    bridgePullY = (bridgePullY / bridgeWeightSum) * 0.065;
-                }
-
-                region.ScreenOriginX += targetPullX + bridgePullX;
-                region.ScreenOriginY += targetPullY + bridgePullY;
-            }
-
-            ResolveRegionOverlaps(regions);
-            ShiftRegionsToPositiveSpace(regions);
-        }
-    }
-
-    private void ResolveRegionOverlaps(List<PlacedRegion> regions)
-    {
-        if (regions.Count <= 1)
-            return;
-
-        for (int i = 0; i < regions.Count; i++)
-        {
-            for (int j = i + 1; j < regions.Count; j++)
-            {
-                var a = regions[i];
-                var b = regions[j];
-
-                var aRect = GetRegionRect(a, extraPadding: RegionClusterMinGap * 0.5);
-                var bRect = GetRegionRect(b, extraPadding: RegionClusterMinGap * 0.5);
-
-                bool overlap =
-                    aRect.Left < bRect.Right &&
-                    aRect.Right > bRect.Left &&
-                    aRect.Top < bRect.Bottom &&
-                    aRect.Bottom > bRect.Top;
-
-                if (!overlap)
-                    continue;
-
-                double centerAx = GetRegionCenterX(a);
-                double centerAy = GetRegionCenterY(a);
-                double centerBx = GetRegionCenterX(b);
-                double centerBy = GetRegionCenterY(b);
-
-                double dx = centerBx - centerAx;
-                double dy = centerBy - centerAy;
-
-                if (Math.Abs(dx) < 0.001 && Math.Abs(dy) < 0.001)
-                {
-                    dx = 1.0;
-                    dy = 0.2;
-                }
-
-                double overlapX = Math.Min(aRect.Right, bRect.Right) - Math.Max(aRect.Left, bRect.Left);
-                double overlapY = Math.Min(aRect.Bottom, bRect.Bottom) - Math.Max(aRect.Top, bRect.Top);
-
-                double pushDistance = Math.Max(10.0, Math.Min(overlapX, overlapY) * 0.48);
-
-                double length = Math.Sqrt(dx * dx + dy * dy);
-                double ux = dx / length;
-                double uy = dy / length;
-
-                a.ScreenOriginX -= ux * pushDistance * 0.5;
-                a.ScreenOriginY -= uy * pushDistance * 0.5;
-
-                b.ScreenOriginX += ux * pushDistance * 0.5;
-                b.ScreenOriginY += uy * pushDistance * 0.5;
-            }
-        }
-    }
-
-    private void ShiftRegionsToPositiveSpace(List<PlacedRegion> regions)
-    {
-        if (regions.Count == 0)
-            return;
-
-        double minLeft = regions.Min(r => GetRegionRect(r, 0.0).Left);
-        double minTop = regions.Min(r => GetRegionRect(r, 0.0).Top);
-
-        double shiftX = 0.0;
-        double shiftY = 0.0;
-
-        if (minLeft < CanvasPadding)
-            shiftX = CanvasPadding - minLeft;
-
-        if (minTop < CanvasPadding)
-            shiftY = CanvasPadding - minTop;
-
-        if (Math.Abs(shiftX) < 0.001 && Math.Abs(shiftY) < 0.001)
-            return;
-
-        foreach (var region in regions)
-        {
-            region.ScreenOriginX += shiftX;
-            region.ScreenOriginY += shiftY;
-
-            region.TargetCenterX += shiftX;
-            region.TargetCenterY += shiftY;
-        }
-    }
-
-    private Rect GetRegionRect(PlacedRegion region, double extraPadding)
-    {
-        double width = region.Width * RegionClusterInternalScale + RegionClusterPadding * 2 + extraPadding * 2;
-        double height = region.Height * RegionClusterInternalScale + RegionClusterPadding * 2 + extraPadding * 2;
-
-        return new Rect(
-            region.ScreenOriginX - extraPadding,
-            region.ScreenOriginY - extraPadding,
-            width,
-            height);
-    }
-
-    private double GetRegionCenterX(PlacedRegion region)
-    {
-        return region.ScreenOriginX
-               + RegionClusterPadding
-               + (region.ModelCenterX - region.MinModelX) * RegionClusterInternalScale;
-    }
-
-    private double GetRegionCenterY(PlacedRegion region)
-    {
-        return region.ScreenOriginY
-               + RegionClusterPadding
-               + (region.ModelCenterY - region.MinModelY) * RegionClusterInternalScale;
-    }
-
-    private Dictionary<Guid, Point> BuildRegionClusterScreenPoints(List<PlacedRegion> regions)
-    {
-        var result = new Dictionary<Guid, Point>();
-
-        foreach (var region in regions)
-        {
-            foreach (var node in region.Nodes)
-            {
-                double localX = node.RenderX - region.MinModelX;
-                double localY = node.RenderY - region.MinModelY;
-
-                double x = region.ScreenOriginX + RegionClusterPadding + localX * RegionClusterInternalScale;
-                double y = region.ScreenOriginY + RegionClusterPadding + localY * RegionClusterInternalScale;
-
-                result[node.Id] = new Point(x, y);
-            }
-        }
-
-        return result;
-    }
-
-    private Size MeasurePlacedRegions(List<PlacedRegion> regions)
-    {
-        double maxX = MinCanvasSize;
-        double maxY = MinCanvasSize;
-
-        foreach (var region in regions)
-        {
-            var rect = GetRegionRect(region, extraPadding: 20.0);
-
-            if (rect.Right + CanvasPadding > maxX)
-                maxX = rect.Right + CanvasPadding;
-
-            if (rect.Bottom + CanvasPadding > maxY)
-                maxY = rect.Bottom + CanvasPadding;
-        }
-
-        return new Size(maxX, maxY);
-    }
-
-    private void DrawRegionBackground(PlacedRegion region, Dictionary<Guid, Point> points)
-    {
-        if (_graphCanvas == null)
-            return;
-
-        var regionPoints = region.Nodes
-            .Where(n => points.ContainsKey(n.Id))
-            .Select(n => points[n.Id])
-            .ToList();
-
-        if (regionPoints.Count == 0)
-            return;
-
-        var hull = BuildSoftHull(regionPoints);
-        if (hull.Count < 3)
-            return;
-
-        var polygon = new Polygon
-        {
-            Points = new Points(hull),
-            Fill = new SolidColorBrush(GetRegionFillColor(region.Nodes)),
-            Stroke = new SolidColorBrush(GetRegionStrokeColor(region.Nodes)),
-            StrokeThickness = 1.2,
-            Opacity = 0.78,
-            IsHitTestVisible = false
-        };
-
-        _graphCanvas.Children.Add(polygon);
-    }
-
-    private void DrawRegionLabel(PlacedRegion region)
-    {
-        if (_graphCanvas == null)
-            return;
-
-        var label = new TextBlock
-        {
-            Text = region.RegionId,
-            Foreground = new SolidColorBrush(Color.Parse("#6E675A")),
-            FontSize = 11,
-            FontWeight = FontWeight.Bold,
-            IsHitTestVisible = false
-        };
-
-        Canvas.SetLeft(label, region.ScreenOriginX + 10);
-        Canvas.SetTop(label, region.ScreenOriginY + 6);
-        _graphCanvas.Children.Add(label);
-    }
-
-    private List<SimulationGraphEdgeDto> SelectRegionClusterEdgesForDrawing(
-        List<SimulationGraphEdgeDto> edges,
-        Dictionary<Guid, SimulationGraphNodeDto> nodeMap,
-        Guid? selectedNodeId)
-    {
-        if (selectedNodeId.HasValue)
-        {
-            return edges
-                .Where(e => e.FromCellId == selectedNodeId.Value || e.ToCellId == selectedNodeId.Value)
-                .ToList();
-        }
-
-        var intra = edges
-            .Where(e => !IsInterRegionEdge(e, nodeMap))
-            .ToList();
-
-        var bridges = edges
-            .Where(e => IsInterRegionEdge(e, nodeMap))
-            .GroupBy(e => NormalizeRegionPair(nodeMap[e.FromCellId].GroupKey, nodeMap[e.ToCellId].GroupKey))
-            .Select(g => g
-                .OrderByDescending(e => e.FireSpreadModifier)
-                .ThenBy(e => e.Distance)
-                .First())
-            .ToList();
-
-        return intra.Concat(bridges).ToList();
-    }
-
-    private bool IsInterRegionEdge(SimulationGraphEdgeDto edge, Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
-    {
-        if (!nodeMap.TryGetValue(edge.FromCellId, out var fromNode) ||
-            !nodeMap.TryGetValue(edge.ToCellId, out var toNode))
-            return false;
-
-        return !string.Equals(fromNode.GroupKey, toNode.GroupKey, StringComparison.Ordinal);
-    }
-
-    private string NormalizeRegionPair(string? a, string? b)
-    {
-        a ??= string.Empty;
-        b ??= string.Empty;
-        return string.CompareOrdinal(a, b) <= 0 ? $"{a}|{b}" : $"{b}|{a}";
-    }
-
     private void DrawEdge(
         SimulationGraphEdgeDto edge,
         Dictionary<Guid, Point> points,
@@ -884,14 +423,13 @@ public partial class NodeGraphVisualization : UserControl
         };
 
         ToolTip.SetTip(line, BuildEdgeTooltip(edge, isBridge));
-
         _graphCanvas.Children.Add(line);
     }
 
     private string BuildEdgeTooltip(SimulationGraphEdgeDto edge, bool isBridge)
     {
         var edgeType = isBridge
-            ? "Межрегиональное / межкластерное ребро"
+            ? "Межкластерное ребро"
             : "Локальное ребро";
 
         return $"{edgeType}\n" +
@@ -1106,41 +644,6 @@ public partial class NodeGraphVisualization : UserControl
         _graphCanvas.Children.Add(glow);
     }
 
-    private void DrawIgnitionMarker(Point point, double radius, bool useMapStyle)
-    {
-        if (_graphCanvas == null)
-            return;
-
-        var outerSize = Math.Max(7, radius * 0.95);
-        var innerSize = Math.Max(4, radius * 0.42);
-
-        var outer = new Ellipse
-        {
-            Width = outerSize,
-            Height = outerSize,
-            Fill = new SolidColorBrush(Color.Parse("#FFF4A3")),
-            Stroke = new SolidColorBrush(Color.Parse("#C94F3D")),
-            StrokeThickness = useMapStyle ? 1.6 : 1.8,
-            IsHitTestVisible = false
-        };
-
-        Canvas.SetLeft(outer, point.X - outerSize / 2.0);
-        Canvas.SetTop(outer, point.Y - outerSize / 2.0);
-        _graphCanvas.Children.Add(outer);
-
-        var inner = new Ellipse
-        {
-            Width = innerSize,
-            Height = innerSize,
-            Fill = new SolidColorBrush(Color.Parse("#D6402B")),
-            IsHitTestVisible = false
-        };
-
-        Canvas.SetLeft(inner, point.X - innerSize / 2.0);
-        Canvas.SetTop(inner, point.Y - innerSize / 2.0);
-        _graphCanvas.Children.Add(inner);
-    }
-
     private List<Point> BuildSoftHull(List<Point> points)
     {
         if (points.Count < 3)
@@ -1220,22 +723,6 @@ public partial class NodeGraphVisualization : UserControl
         return (minX, maxX, minY, maxY);
     }
 
-    private (double MinX, double MaxX, double MinY, double MaxY) GetModelBounds(List<SimulationGraphNodeDto> nodes)
-    {
-        var minX = nodes.Min(n => n.RenderX);
-        var maxX = nodes.Max(n => n.RenderX);
-        var minY = nodes.Min(n => n.RenderY);
-        var maxY = nodes.Max(n => n.RenderY);
-
-        if (Math.Abs(maxX - minX) < 0.001)
-            maxX = minX + 1.0;
-
-        if (Math.Abs(maxY - minY) < 0.001)
-            maxY = minY + 1.0;
-
-        return (minX, maxX, minY, maxY);
-    }
-
     private HashSet<Guid> GetSelectedEdgeIds(List<SimulationGraphEdgeDto> edges, Guid? selectedNodeId)
     {
         var result = new HashSet<Guid>();
@@ -1270,13 +757,46 @@ public partial class NodeGraphVisualization : UserControl
         return result;
     }
 
+    private double GetEdgeThickness(SimulationGraphEdgeDto edge)
+    {
+        if (edge.FireSpreadModifier >= 0.70)
+            return BaseEdgeThickness + 1.0;
+
+        if (edge.FireSpreadModifier >= 0.35)
+            return BaseEdgeThickness + 0.3;
+
+        return BaseEdgeThickness;
+    }
+
+    private Color GetEdgeColor(SimulationGraphEdgeDto edge)
+    {
+        if (edge.FireSpreadModifier >= 0.70)
+            return Color.Parse("#9D4EDD");
+
+        if (edge.FireSpreadModifier >= 0.35)
+            return Color.Parse("#B8A1D9");
+
+        return Color.Parse("#D8D2E6");
+    }
+
+    private Color GetBridgeColor(SimulationGraphEdgeDto edge)
+    {
+        if (edge.FireSpreadModifier >= 0.70)
+            return Color.Parse("#C05621");
+
+        if (edge.FireSpreadModifier >= 0.35)
+            return Color.Parse("#D97706");
+
+        return Color.Parse("#E5A45E");
+    }
+
     private Color GetNodeColor(SimulationGraphNodeDto node)
     {
+        if (node.IsBurning)
+            return Color.Parse("#FF7A59");
+
         if (node.IsBurned)
             return Color.Parse("#777777");
-
-        if (node.IsBurning)
-            return Color.Parse("#E34A33");
 
         return node.Vegetation?.ToLowerInvariant() switch
         {
@@ -1286,131 +806,32 @@ public partial class NodeGraphVisualization : UserControl
             "grass" => Color.Parse("#E7D36F"),
             "shrub" => Color.Parse("#CFA46A"),
             "water" => Color.Parse("#7CC6F2"),
-            "bare" => Color.Parse("#D3C4B4"),
-            _ => Color.Parse("#A8C97F")
+            "bare" => Color.Parse("#C9B7A7"),
+            _ => Color.Parse("#D9D5CF")
         };
     }
 
     private Color GetMapCellColor(SimulationGraphNodeDto node)
     {
-        if (node.IsBurned)
-            return Color.Parse("#CE2D2D");
-
-        if (node.IsBurning)
-            return Color.Parse("#E34A33");
-
-        var vegetation = node.Vegetation?.ToLowerInvariant();
-
-        if (vegetation == "water")
-            return Color.Parse("#7CC6F2");
-
-        if (vegetation == "bare")
-            return Color.Parse("#D3C4B4");
-
-        if (node.BurnProbability >= 0.75)
-            return Color.Parse("#F46D43");
-
-        if (node.BurnProbability >= 0.50)
-            return Color.Parse("#FDAE61");
-
-        if (node.BurnProbability >= 0.25)
-            return Color.Parse("#FEE08B");
-
-        return vegetation switch
-        {
-            "coniferous" => Color.Parse("#5E9B5E"),
-            "deciduous" => Color.Parse("#8ACB88"),
-            "mixed" => Color.Parse("#A8C97F"),
-            "grass" => Color.Parse("#E7D36F"),
-            "shrub" => Color.Parse("#CFA46A"),
-            _ => Color.Parse("#A8C97F")
-        };
+        return GetNodeColor(node);
     }
 
-    private Color GetRegionFillColor(List<SimulationGraphNodeDto> nodes)
+    private string BuildTooltip(SimulationGraphNodeDto node, List<SimulationGraphEdgeDto> edges)
     {
-        var burning = nodes.Count(n => n.IsBurning);
-        var burned = nodes.Count(n => n.IsBurned);
-        var avgProbability = nodes.Count > 0 ? nodes.Average(n => n.BurnProbability) : 0.0;
-        var dominantVegetation = nodes
-            .GroupBy(n => n.Vegetation)
-            .OrderByDescending(g => g.Count())
-            .Select(g => g.Key?.ToLowerInvariant())
-            .FirstOrDefault();
+        int degree = edges.Count(e => e.FromCellId == node.Id || e.ToCellId == node.Id);
 
-        if (burning > 0)
-            return Color.Parse("#F2DED4");
-
-        if (burned > nodes.Count * 0.45)
-            return Color.Parse("#E8DDD7");
-
-        if (avgProbability >= 0.60)
-            return Color.Parse("#F1ECD2");
-
-        return dominantVegetation switch
-        {
-            "coniferous" => Color.Parse("#DCEAD6"),
-            "deciduous" => Color.Parse("#E5F0DD"),
-            "mixed" => Color.Parse("#E8EDD8"),
-            "grass" => Color.Parse("#F3EBCF"),
-            "shrub" => Color.Parse("#EEE0D1"),
-            "water" => Color.Parse("#DCEFFE"),
-            "bare" => Color.Parse("#EEE3D8"),
-            _ => Color.Parse("#ECE9DD")
-        };
-    }
-
-    private Color GetRegionStrokeColor(List<SimulationGraphNodeDto> nodes)
-    {
-        var burning = nodes.Count(n => n.IsBurning);
-        if (burning > 0)
-            return Color.Parse("#D7B9AA");
-
-        var dominantVegetation = nodes
-            .GroupBy(n => n.Vegetation)
-            .OrderByDescending(g => g.Count())
-            .Select(g => g.Key?.ToLowerInvariant())
-            .FirstOrDefault();
-
-        return dominantVegetation switch
-        {
-            "water" => Color.Parse("#A6CBE8"),
-            "bare" => Color.Parse("#D4BDAA"),
-            _ => Color.Parse("#D5D0C2")
-        };
-    }
-
-    private Color GetEdgeColor(SimulationGraphEdgeDto edge)
-    {
-        if (edge.FireSpreadModifier >= 0.70)
-            return Color.Parse("#D88A5B");
-
-        if (edge.FireSpreadModifier >= 0.35)
-            return Color.Parse("#A59BAE");
-
-        return Color.Parse("#CFC8D5");
-    }
-
-    private Color GetBridgeColor(SimulationGraphEdgeDto edge)
-    {
-        if (edge.FireSpreadModifier >= 0.70)
-            return Color.Parse("#DE9A62");
-
-        if (edge.FireSpreadModifier >= 0.35)
-            return Color.Parse("#AAA2B3");
-
-        return Color.Parse("#CFC9D5");
-    }
-
-    private double GetEdgeThickness(SimulationGraphEdgeDto edge)
-    {
-        if (edge.FireSpreadModifier >= 0.70)
-            return BaseEdgeThickness + 1.1;
-
-        if (edge.FireSpreadModifier >= 0.35)
-            return BaseEdgeThickness + 0.35;
-
-        return BaseEdgeThickness;
+        return $"Вершина ({node.X}, {node.Y})\n" +
+               $"Группа: {node.GroupKey}\n" +
+               $"Растительность: {node.Vegetation}\n" +
+               $"Состояние: {node.State}\n" +
+               $"Влажность: {node.Moisture:F2}\n" +
+               $"Высота: {node.Elevation:F2}\n" +
+               $"Вероятность возгорания: {node.BurnProbability:F3}\n" +
+               $"Степень: {degree}\n" +
+               $"Fire stage: {node.FireStage}\n" +
+               $"Intensity: {node.FireIntensity:F2}\n" +
+               $"Fuel: {node.CurrentFuelLoad:F2}/{node.FuelLoad:F2}\n" +
+               $"Accumulated heat: {node.AccumulatedHeatJ:F2}";
     }
 
     private void DrawEmptyState()
@@ -1423,137 +844,17 @@ public partial class NodeGraphVisualization : UserControl
 
         var text = new TextBlock
         {
-            Text = "Граф не загружен",
-            Foreground = new SolidColorBrush(Color.Parse("#6E6A78")),
-            FontSize = 18,
+            Text = "Нет данных для отображения графа",
+            Foreground = new SolidColorBrush(Color.Parse("#8A8495")),
+            FontSize = 16,
             FontWeight = FontWeight.SemiBold
         };
 
         text.Measure(Size.Infinity);
 
-        Canvas.SetLeft(text, (MinCanvasSize - text.DesiredSize.Width) / 2);
-        Canvas.SetTop(text, (MinCanvasSize - text.DesiredSize.Height) / 2);
+        Canvas.SetLeft(text, (_graphCanvas.Width - text.DesiredSize.Width) / 2.0);
+        Canvas.SetTop(text, (_graphCanvas.Height - text.DesiredSize.Height) / 2.0);
+
         _graphCanvas.Children.Add(text);
-    }
-
-    private string BuildTooltip(SimulationGraphNodeDto node, List<SimulationGraphEdgeDto> edges)
-    {
-        var nodeEdges = edges
-            .Where(e => e.FromCellId == node.Id || e.ToCellId == node.Id)
-            .ToList();
-
-        var degree = nodeEdges.Count;
-        var strong = nodeEdges.Count(e => e.FireSpreadModifier >= 0.70);
-        var medium = nodeEdges.Count(e => e.FireSpreadModifier >= 0.35 && e.FireSpreadModifier < 0.70);
-        var weak = nodeEdges.Count(e => e.FireSpreadModifier < 0.35);
-
-        var ignitionText = node.IsSelectedIgnition ? "\nСтартовый очаг: Да" : string.Empty;
-
-        var vegetationText = node.Vegetation?.Trim() switch
-        {
-            "Coniferous" => "Хвойный лес",
-            "Deciduous" => "Лиственный лес",
-            "Mixed" => "Смешанный лес",
-            "Grass" => "Трава",
-            "Shrub" => "Кустарник",
-            "Water" => "Вода",
-            "Bare" => "Пустая поверхность",
-            _ => node.Vegetation ?? "Неизвестно"
-        };
-
-        var stateText = node.State?.Trim() switch
-        {
-            "Burning" => "Горит",
-            "Burned" => "Сгорела",
-            "Normal" => "Нормальная",
-            _ => node.State ?? "Неизвестно"
-        };
-
-        var fireStageText = node.FireStage?.Trim() switch
-        {
-            "Unburned" => "Не горела",
-            "Ignition" => "Воспламенение",
-            "Active" => "Активное горение",
-            "Intense" => "Интенсивное горение",
-            "Smoldering" => "Тление",
-            "BurnedOut" => "Полностью выгорела",
-            _ => node.FireStage ?? "—"
-        };
-
-        var territoryUnitLabel = LayoutHint.Contains("region-cluster", StringComparison.OrdinalIgnoreCase)
-            ? "Region ID"
-            : "Cluster ID";
-
-        var graphNodeType = LayoutHint.Contains("region-cluster", StringComparison.OrdinalIgnoreCase)
-            ? "Региональная вершина"
-            : "Кластерная вершина";
-
-        return $"{graphNodeType}\n" +
-               $"Координаты модели: ({node.X}, {node.Y})\n" +
-               $"Координаты на схеме: ({node.RenderX:F2}, {node.RenderY:F2})\n" +
-               $"{territoryUnitLabel}: {node.GroupKey}\n" +
-               $"Тип поверхности: {vegetationText}\n" +
-               $"Состояние: {stateText}\n" +
-               $"Стадия огня: {fireStageText}\n" +
-               $"Влажность: {node.Moisture:F2}\n" +
-               $"Высота: {node.Elevation:F1} м\n" +
-               $"Вероятность возгорания: {node.BurnProbability:F3}\n" +
-               $"Интенсивность огня: {node.FireIntensity:F2}\n" +
-               $"Текущее топливо: {node.CurrentFuelLoad:F3}\n" +
-               $"Базовый запас топлива: {node.FuelLoad:F3}\n" +
-               $"Накопленное тепло: {node.AccumulatedHeatJ:F2} Дж\n" +
-               $"Время горения: {node.BurningElapsedSeconds:F0} с" +
-               ignitionText + "\n" +
-               $"Степень узла: {degree}\n" +
-               $"Сильных связей: {strong}\n" +
-               $"Средних связей: {medium}\n" +
-               $"Слабых связей: {weak}";
-    }
-
-    private sealed class PlacedRegion
-    {
-        public string RegionId { get; }
-        public List<SimulationGraphNodeDto> Nodes { get; }
-
-        public double MinModelX { get; }
-        public double MinModelY { get; }
-        public double MaxModelX { get; }
-        public double MaxModelY { get; }
-
-        public double Width { get; }
-        public double Height { get; }
-
-        public double ModelCenterX { get; }
-        public double ModelCenterY { get; }
-
-        public double TargetCenterX { get; set; }
-        public double TargetCenterY { get; set; }
-
-        public double ScreenOriginX { get; set; }
-        public double ScreenOriginY { get; set; }
-
-        public PlacedRegion(
-            string regionId,
-            List<SimulationGraphNodeDto> nodes,
-            double minModelX,
-            double minModelY,
-            double maxModelX,
-            double maxModelY,
-            double width,
-            double height,
-            double modelCenterX,
-            double modelCenterY)
-        {
-            RegionId = regionId;
-            Nodes = nodes;
-            MinModelX = minModelX;
-            MinModelY = minModelY;
-            MaxModelX = maxModelX;
-            MaxModelY = maxModelY;
-            Width = width;
-            Height = height;
-            ModelCenterX = modelCenterX;
-            ModelCenterY = modelCenterY;
-        }
     }
 }

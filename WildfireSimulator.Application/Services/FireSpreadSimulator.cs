@@ -453,29 +453,14 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
     private SpreadTopology DetectTopology(ForestGraph graph)
     {
-        bool hasRegionClusters = graph.Cells.Any(IsRegionClusterCell);
-        if (hasRegionClusters)
-            return SpreadTopology.RegionClusterAreas;
-
-        bool hasClusteredPatches = graph.Cells.Any(IsClusteredPatchCell);
-        if (hasClusteredPatches)
+        bool hasGroupedGraphNodes = graph.Cells.Any(c => !string.IsNullOrWhiteSpace(c.ClusterId));
+        if (hasGroupedGraphNodes)
             return SpreadTopology.ClusteredArea;
 
         if (graph.Cells.Count == graph.Width * graph.Height)
             return SpreadTopology.Grid;
 
         return SpreadTopology.ClusteredArea;
-    }
-    private bool IsRegionClusterCell(ForestCell cell)
-    {
-        return !string.IsNullOrWhiteSpace(cell.ClusterId) &&
-               cell.ClusterId.StartsWith("region-", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private bool IsClusteredPatchCell(ForestCell cell)
-    {
-        return !string.IsNullOrWhiteSpace(cell.ClusterId) &&
-               cell.ClusterId.StartsWith("patch-", StringComparison.OrdinalIgnoreCase);
     }
 
     private void ApplyWindDrivenHeatTransfers(
@@ -1072,7 +1057,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                         interClusterNeighborCount * 14.0 +
                         Math.Max(0, 2 - sameClusterNeighborCount) * 6.0;
 
-                    if (topology == SpreadTopology.RegionClusterAreas)
+                    /* if (topology == SpreadTopology.RegionClusterAreas)
                     {
                         int bridgeHopDistance = FindNearestBridgeHopDistance(graph, cell);
                         int clusterSize = clusterCells.Count;
@@ -1120,7 +1105,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
                         if (sameClusterNeighborCount < 3)
                             regionClusterBridgeCorridorBonus -= 8.0;
-                    }
+                    } */
                 }
 
                 double score =
@@ -1359,7 +1344,6 @@ public class FireSpreadSimulator : IFireSpreadSimulator
     private enum SpreadTopology
     {
         Grid,
-        ClusteredArea,
-        RegionClusterAreas
+        ClusteredArea
     }
 }

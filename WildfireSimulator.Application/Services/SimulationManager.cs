@@ -506,8 +506,8 @@ public partial class SimulationManager
         return graph;
     }
     private async Task<ForestGraph> CreateBaseGraphAsync(
-        Simulation simulation,
-        IForestGraphGenerator graphGenerator)
+     Simulation simulation,
+     IForestGraphGenerator graphGenerator)
     {
         ForestGraph graph = simulation.Parameters.GraphType switch
         {
@@ -518,9 +518,6 @@ public partial class SimulationManager
 
             GraphType.ClusteredGraph => await graphGenerator.GenerateClusteredGraphAsync(
                 simulation.Parameters.GridWidth * simulation.Parameters.GridHeight / 2,
-                simulation.Parameters),
-
-            GraphType.RegionClusterGraph => await graphGenerator.GenerateRegionClusterGraphAsync(
                 simulation.Parameters),
 
             _ => await graphGenerator.GenerateGridAsync(
