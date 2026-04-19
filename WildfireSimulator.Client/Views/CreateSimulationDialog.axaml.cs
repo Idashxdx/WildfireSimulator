@@ -492,68 +492,50 @@ public partial class CreateSimulationDialog : Window
 
         switch (preset)
         {
+
             case "dry-coniferous":
-                if (_nameBox != null) _nameBox.Text = "Демо: Плотный сухой хвойный кластерный граф";
+                if (_nameBox != null) _nameBox.Text = "Малый clustered: сухой кластер";
                 if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 0;
 
-                if (_widthBox != null) _widthBox.Text = "26";
-                if (_heightBox != null) _heightBox.Text = "22";
-                if (_fireCellsBox != null) _fireCellsBox.Text = "2";
+                if (_widthBox != null) _widthBox.Text = "6";
+                if (_heightBox != null) _heightBox.Text = "6";
+                if (_fireCellsBox != null) _fireCellsBox.Text = "1";
 
                 if (_moistureMinBox != null) _moistureMinBox.Text = "0.10";
                 if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.22";
-                if (_elevationBox != null) _elevationBox.Text = "60";
+                if (_elevationBox != null) _elevationBox.Text = "30";
 
-                if (_stepsBox != null) _stepsBox.Text = "90";
+                if (_stepsBox != null) _stepsBox.Text = "40";
                 if (_stepDurationBox != null) _stepDurationBox.Text = "900";
 
-                if (_tempBox != null) _tempBox.Text = "31";
+                if (_tempBox != null) _tempBox.Text = "30";
                 if (_humidityBox != null) _humidityBox.Text = "25";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "9";
+                if (_windSpeedBox != null) _windSpeedBox.Text = "6";
                 if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
-                if (_precipitationBox != null) _precipitationBox.Text = "0";
 
-                if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.06";
-                if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.28";
-                if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.00";
-                if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.25";
-                if (_randomSeedBox != null) _randomSeedBox.Text = "601";
-
-                SetVegetationDistributionTexts(0.56, 0.08, 0.20, 0.06, 0.07, 0.02, 0.01);
+                SetVegetationDistributionTexts(0.60, 0.05, 0.15, 0.08, 0.07, 0.03, 0.02);
                 break;
 
             case "river":
-                if (_nameBox != null) _nameBox.Text = "Демо: Кластеры, разделённые водным барьером";
+                if (_nameBox != null) _nameBox.Text = "Малый clustered: водный барьер";
                 if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 1;
 
-                if (_widthBox != null) _widthBox.Text = "28";
-                if (_heightBox != null) _heightBox.Text = "20";
-                if (_fireCellsBox != null) _fireCellsBox.Text = "2";
+                if (_widthBox != null) _widthBox.Text = "7";
+                if (_heightBox != null) _heightBox.Text = "6";
+                if (_fireCellsBox != null) _fireCellsBox.Text = "1";
 
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.28";
-                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.58";
-                if (_elevationBox != null) _elevationBox.Text = "45";
+                if (_moistureMinBox != null) _moistureMinBox.Text = "0.30";
+                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.60";
+                if (_elevationBox != null) _elevationBox.Text = "25";
 
-                if (_stepsBox != null) _stepsBox.Text = "100";
-                if (_stepDurationBox != null) _stepDurationBox.Text = "900";
+                if (_stepsBox != null) _stepsBox.Text = "50";
 
-                if (_tempBox != null) _tempBox.Text = "26";
-                if (_humidityBox != null) _humidityBox.Text = "42";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "6";
-                if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
-                if (_precipitationBox != null) _precipitationBox.Text = "0";
-
-                if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.04";
-                if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.00";
-                if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "0.95";
-                if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.00";
-                if (_randomSeedBox != null) _randomSeedBox.Text = "602";
-
-                SetVegetationDistributionTexts(0.20, 0.24, 0.30, 0.08, 0.10, 0.05, 0.03);
+                SetVegetationDistributionTexts(0.25, 0.20, 0.25, 0.10, 0.10, 0.07, 0.03);
                 break;
 
+
             case "wet":
-                if (_nameBox != null) _nameBox.Text = "Демо: Влажные патчи после дождя";
+                if (_nameBox != null) _nameBox.Text = "Большой clustered: влажные патчи";
                 if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 4;
 
                 if (_widthBox != null) _widthBox.Text = "24";
@@ -565,25 +547,12 @@ public partial class CreateSimulationDialog : Window
                 if (_elevationBox != null) _elevationBox.Text = "40";
 
                 if (_stepsBox != null) _stepsBox.Text = "80";
-                if (_stepDurationBox != null) _stepDurationBox.Text = "900";
-
-                if (_tempBox != null) _tempBox.Text = "19";
-                if (_humidityBox != null) _humidityBox.Text = "76";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "3";
-                if (_windDirBox != null) _windDirBox.SelectedIndex = 1;
-                if (_precipitationBox != null) _precipitationBox.Text = "2.0";
-
-                if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.03";
-                if (_mapDrynessBox != null) _mapDrynessBox.Text = "0.78";
-                if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "0.92";
-                if (_fuelDensityBox != null) _fuelDensityBox.Text = "0.95";
-                if (_randomSeedBox != null) _randomSeedBox.Text = "603";
 
                 SetVegetationDistributionTexts(0.14, 0.28, 0.30, 0.08, 0.10, 0.06, 0.04);
                 break;
 
             case "firebreak":
-                if (_nameBox != null) _nameBox.Text = "Демо: Кластеры с просекой / разрывом";
+                if (_nameBox != null) _nameBox.Text = "Большой clustered: разрыв";
                 if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 2;
 
                 if (_widthBox != null) _widthBox.Text = "26";
@@ -594,50 +563,18 @@ public partial class CreateSimulationDialog : Window
                 if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.52";
                 if (_elevationBox != null) _elevationBox.Text = "45";
 
-                if (_stepsBox != null) _stepsBox.Text = "90";
-                if (_stepDurationBox != null) _stepDurationBox.Text = "900";
-
-                if (_tempBox != null) _tempBox.Text = "28";
-                if (_humidityBox != null) _humidityBox.Text = "35";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "7";
-                if (_windDirBox != null) _windDirBox.SelectedIndex = 2;
-                if (_precipitationBox != null) _precipitationBox.Text = "0";
-
-                if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.05";
-                if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.05";
-                if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.00";
-                if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.08";
-                if (_randomSeedBox != null) _randomSeedBox.Text = "604";
-
                 SetVegetationDistributionTexts(0.26, 0.18, 0.26, 0.10, 0.10, 0.05, 0.05);
                 break;
 
             case "hills":
-                if (_nameBox != null) _nameBox.Text = "Демо: Холмистые кластеры";
+                if (_nameBox != null) _nameBox.Text = "Большой clustered: холмистые кластеры";
                 if (_scenarioTypeBox != null) _scenarioTypeBox.SelectedIndex = 3;
 
-                if (_widthBox != null) _widthBox.Text = "24";
+                if (_widthBox != null) _widthBox.Text = "28";
                 if (_heightBox != null) _heightBox.Text = "24";
                 if (_fireCellsBox != null) _fireCellsBox.Text = "2";
 
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.20";
-                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.56";
-                if (_elevationBox != null) _elevationBox.Text = "125";
-
-                if (_stepsBox != null) _stepsBox.Text = "100";
-                if (_stepDurationBox != null) _stepDurationBox.Text = "900";
-
-                if (_tempBox != null) _tempBox.Text = "27";
-                if (_humidityBox != null) _humidityBox.Text = "37";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "6";
-                if (_windDirBox != null) _windDirBox.SelectedIndex = 3;
-                if (_precipitationBox != null) _precipitationBox.Text = "0";
-
-                if (_mapNoiseBox != null) _mapNoiseBox.Text = "0.06";
-                if (_mapDrynessBox != null) _mapDrynessBox.Text = "1.00";
-                if (_reliefStrengthBox != null) _reliefStrengthBox.Text = "1.35";
-                if (_fuelDensityBox != null) _fuelDensityBox.Text = "1.00";
-                if (_randomSeedBox != null) _randomSeedBox.Text = "605";
+                if (_elevationBox != null) _elevationBox.Text = "120";
 
                 SetVegetationDistributionTexts(0.24, 0.18, 0.24, 0.12, 0.14, 0.04, 0.04);
                 break;

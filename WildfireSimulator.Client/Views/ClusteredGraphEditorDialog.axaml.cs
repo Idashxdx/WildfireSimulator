@@ -72,9 +72,9 @@ public partial class ClusteredGraphEditorDialog : Window
     public ClusteredGraphBlueprintDto EditedBlueprint { get; private set; } = new();
 
     public ClusteredGraphEditorDialog(
-        int canvasWidth,
-        int canvasHeight,
-        ClusteredGraphBlueprintDto? existingBlueprint = null)
+    int canvasWidth,
+    int canvasHeight,
+    ClusteredGraphBlueprintDto? existingBlueprint = null)
     {
         _canvasWidth = Math.Max(8, canvasWidth);
         _canvasHeight = Math.Max(8, canvasHeight);
@@ -95,12 +95,32 @@ public partial class ClusteredGraphEditorDialog : Window
         RefreshNodeEditor();
         RefreshEdgeEditor();
         RefreshSummary();
-        DrawGraph();
+        ScheduleDraw();
     }
+
 
     private void InitializeComponent()
     {
         AvaloniaXamlLoader.Load(this);
+    }
+
+private bool _drawScheduled;
+
+    private void ScheduleDraw()
+    {
+        if (_graphCanvas == null)
+            return;
+
+        if (_drawScheduled)
+            return;
+
+        _drawScheduled = true;
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _drawScheduled = false;
+            DrawGraph();
+        }, Avalonia.Threading.DispatcherPriority.Background);
     }
 
     private void FindControls()
@@ -144,7 +164,7 @@ public partial class ClusteredGraphEditorDialog : Window
             {
                 int count = ParseInt(_candidateCountBox?.Text, 90);
                 RegenerateCandidates(Math.Clamp(count, 20, 300));
-                DrawGraph();
+                ScheduleDraw();
             };
         }
 
@@ -153,7 +173,7 @@ public partial class ClusteredGraphEditorDialog : Window
             _autoConnectButton.Click += (_, _) =>
             {
                 AutoConnectSelectedNodes();
-                DrawGraph();
+                ScheduleDraw();
             };
         }
 
@@ -162,7 +182,7 @@ public partial class ClusteredGraphEditorDialog : Window
             _autoGroupButton.Click += (_, _) =>
             {
                 AutoAssignClusters();
-                DrawGraph();
+                ScheduleDraw();
             };
         }
 
@@ -171,7 +191,7 @@ public partial class ClusteredGraphEditorDialog : Window
             _normalizeEdgesButton.Click += (_, _) =>
             {
                 NormalizeEdges();
-                DrawGraph();
+                ScheduleDraw();
             };
         }
 
@@ -180,7 +200,7 @@ public partial class ClusteredGraphEditorDialog : Window
             _weakenBridgesButton.Click += (_, _) =>
             {
                 WeakenBridges();
-                DrawGraph();
+                ScheduleDraw();
             };
         }
 
@@ -189,7 +209,7 @@ public partial class ClusteredGraphEditorDialog : Window
             _boostLocalEdgesButton.Click += (_, _) =>
             {
                 BoostLocalEdges();
-                DrawGraph();
+                ScheduleDraw();
             };
         }
 
@@ -198,7 +218,7 @@ public partial class ClusteredGraphEditorDialog : Window
             _applyNodeButton.Click += (_, _) =>
             {
                 ApplyNodeChanges();
-                DrawGraph();
+                ScheduleDraw();
             };
         }
 
@@ -207,7 +227,7 @@ public partial class ClusteredGraphEditorDialog : Window
             _applyEdgeButton.Click += (_, _) =>
             {
                 ApplyEdgeChanges();
-                DrawGraph();
+                ScheduleDraw();
             };
         }
 
@@ -223,6 +243,7 @@ public partial class ClusteredGraphEditorDialog : Window
             };
         }
     }
+
 
     private void LoadBlueprint(ClusteredGraphBlueprintDto blueprint)
     {
@@ -258,6 +279,13 @@ public partial class ClusteredGraphEditorDialog : Window
     private void RegenerateCandidates(int count)
     {
         var preservedNodes = _nodes.Select(CloneNode).ToList();
+        var preservedEdges = _edges
+            .Where(e =>
+                preservedNodes.Any(n => n.Id == e.FromNodeId) &&
+                preservedNodes.Any(n => n.Id == e.ToNodeId))
+            .Select(CloneEdge)
+            .ToList();
+
         var preservedNodePoints = preservedNodes
             .Select(x => (x.X, x.Y))
             .ToHashSet();
@@ -269,9 +297,15 @@ public partial class ClusteredGraphEditorDialog : Window
         foreach (var node in preservedNodes)
             _nodes.Add(node);
 
+        foreach (var edge in preservedEdges)
+            _edges.Add(edge);
+
+        int totalCapacity = Math.Max(1, _canvasWidth * _canvasHeight);
+        int requestedCount = Math.Clamp(count, 1, totalCapacity);
+
         var used = new HashSet<(int X, int Y)>(preservedNodePoints);
 
-        while (_candidates.Count < count)
+        while (_candidates.Count < requestedCount && used.Count < totalCapacity)
         {
             int x = _random.Next(0, _canvasWidth);
             int y = _random.Next(0, _canvasHeight);
@@ -300,6 +334,9 @@ public partial class ClusteredGraphEditorDialog : Window
             }
         }
 
+        if (_candidateCountBox != null)
+            _candidateCountBox.Text = requestedCount.ToString(CultureInfo.InvariantCulture);
+
         _selectedNodeId = null;
         _selectedEdgeId = null;
         _pendingEdgeStartNodeId = null;
@@ -322,6 +359,7 @@ public partial class ClusteredGraphEditorDialog : Window
         DrawNodes();
         DrawPendingEdgeHint();
     }
+
 
     private void DrawBackground()
     {
@@ -350,9 +388,13 @@ public partial class ClusteredGraphEditorDialog : Window
         if (_graphCanvas == null)
             return;
 
+        var selectedNodePoints = _nodes
+            .Select(n => (n.X, n.Y))
+            .ToHashSet();
+
         foreach (var candidate in _candidates)
         {
-            bool isSelectedNode = _nodes.Any(n => n.X == candidate.X && n.Y == candidate.Y);
+            bool isSelectedNode = selectedNodePoints.Contains((candidate.X, candidate.Y));
             var point = ToCanvasPoint(candidate.X, candidate.Y);
 
             var ellipse = new Ellipse
@@ -373,17 +415,14 @@ public partial class ClusteredGraphEditorDialog : Window
 
             ToolTip.SetTip(ellipse, $"Кандидат ({candidate.X}, {candidate.Y})");
 
-            ellipse.PointerPressed += (_, e) =>
-            {
-                if (!e.GetCurrentPoint(ellipse).Properties.IsLeftButtonPressed)
-                    return;
-
-                HandleCandidateClick(candidate);
-                e.Handled = true;
-            };
-
             Canvas.SetLeft(ellipse, point.X - CandidateRadius);
             Canvas.SetTop(ellipse, point.Y - CandidateRadius);
+
+            ellipse.PointerPressed += (_, _) =>
+            {
+                HandleCandidateClick(candidate);
+            };
+
             _graphCanvas.Children.Add(ellipse);
         }
     }
@@ -520,10 +559,8 @@ public partial class ClusteredGraphEditorDialog : Window
 
     private void HandleCandidateClick(ClusteredCandidateNodeDto candidate)
     {
-        if (GetMode() != EditorMode.SelectNodes)
-            return;
-
         var existingNode = _nodes.FirstOrDefault(n => n.X == candidate.X && n.Y == candidate.Y);
+
         if (existingNode != null)
         {
             var removedNodeId = existingNode.Id;
@@ -556,8 +593,9 @@ public partial class ClusteredGraphEditorDialog : Window
         RefreshNodeEditor();
         RefreshEdgeEditor();
         RefreshSummary();
-        DrawGraph();
+        ScheduleDraw();
     }
+
 
     private void HandleNodeClick(ClusteredNodeDraftDto node)
     {
@@ -598,35 +636,35 @@ public partial class ClusteredGraphEditorDialog : Window
         RefreshNodeEditor();
         RefreshEdgeEditor();
         RefreshSummary();
-        DrawGraph();
+        ScheduleDraw();
     }
+private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
+{
+    var mode = GetMode();
 
-    private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
+    if (mode == EditorMode.DeleteEdges)
     {
-        var mode = GetMode();
-
-        if (mode == EditorMode.DeleteEdges)
-        {
-            _edges.RemoveAll(e => e.Id == edge.Id);
-            if (_selectedEdgeId == edge.Id)
-                _selectedEdgeId = null;
-        }
-        else
-        {
-            _selectedEdgeId = edge.Id;
-            _selectedNodeId = null;
-        }
-
-        RefreshNodeEditor();
-        RefreshEdgeEditor();
-        RefreshSummary();
-        DrawGraph();
+        _edges.RemoveAll(e => e.Id == edge.Id);
+        if (_selectedEdgeId == edge.Id)
+            _selectedEdgeId = null;
+    }
+    else
+    {
+        _selectedEdgeId = edge.Id;
+        _selectedNodeId = null;
     }
 
+    RefreshNodeEditor();
+    RefreshEdgeEditor();
+    RefreshSummary();
+    ScheduleDraw();
+}
     private void AutoConnectSelectedNodes()
     {
         if (_nodes.Count < 2)
             return;
+
+        var orderedPairs = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var node in _nodes)
         {
@@ -642,12 +680,22 @@ public partial class ClusteredGraphEditorDialog : Window
                 .ToList();
 
             foreach (var item in nearest)
+            {
+                var a = node.Id.ToString();
+                var b = item.Node.Id.ToString();
+                var key = string.CompareOrdinal(a, b) <= 0 ? $"{a}|{b}" : $"{b}|{a}";
+
+                if (!orderedPairs.Add(key))
+                    continue;
+
                 TryAddEdge(node.Id, item.Node.Id);
+            }
         }
 
         RefreshSummary();
         RefreshEdgeEditor();
     }
+
 
     private void AutoAssignClusters()
     {

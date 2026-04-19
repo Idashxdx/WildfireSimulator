@@ -246,8 +246,7 @@ public partial class NodeGraphVisualization : UserControl
             return;
 
         var bounds = GetNodeBounds(nodes);
-
-        const double scale = 28.0;
+        var scale = GetStandardGraphScale(nodes, bounds);
 
         var width = Math.Max(MinCanvasSize, (bounds.MaxX - bounds.MinX) * scale + CanvasPadding * 2);
         var height = Math.Max(MinCanvasSize, (bounds.MaxY - bounds.MinY) * scale + CanvasPadding * 2);
@@ -265,11 +264,106 @@ public partial class NodeGraphVisualization : UserControl
         var selectedEdgeIds = GetSelectedEdgeIds(edges, selectedNodeId);
         var neighborIds = GetNeighborIds(edges, selectedNodeId);
 
+        DrawClusterPatchBackgrounds(nodes, points);
+
         foreach (var edge in edges)
             DrawEdge(edge, points, selectedNodeId, selectedEdgeIds, isBridge: false);
 
         foreach (var node in nodes.OrderBy(n => n.IsBurning ? 0 : 1))
             DrawNode(node, edges, points, selectedNodeId, neighborIds, useMapStyle: false);
+    }
+
+    private double GetStandardGraphScale(
+        List<SimulationGraphNodeDto> nodes,
+        (double MinX, double MaxX, double MinY, double MaxY) bounds)
+    {
+        int count = nodes.Count;
+        double spanX = Math.Max(1.0, bounds.MaxX - bounds.MinX);
+        double spanY = Math.Max(1.0, bounds.MaxY - bounds.MinY);
+        double maxSpan = Math.Max(spanX, spanY);
+
+        if (count <= 10)
+            return 46.0;
+
+        if (count <= 16)
+            return 40.0;
+
+        if (count <= 30)
+            return 34.0;
+
+        if (count <= 60)
+            return 28.0;
+
+        if (count <= 120)
+            return maxSpan <= 12.0 ? 24.0 : 22.0;
+
+        if (count <= 200)
+            return maxSpan <= 14.0 ? 21.0 : 19.0;
+
+        return 17.0;
+    }
+
+    private void DrawClusterPatchBackgrounds(
+        List<SimulationGraphNodeDto> nodes,
+        Dictionary<Guid, Point> points)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var groups = nodes
+            .Where(n => !string.IsNullOrWhiteSpace(n.GroupKey))
+            .GroupBy(n => n.GroupKey)
+            .Where(g => g.Count() >= 3)
+            .OrderBy(g => g.Key)
+            .ToList();
+
+        if (groups.Count < 2)
+            return;
+
+        foreach (var group in groups)
+        {
+            var groupNodes = group.ToList();
+            var regionPoints = groupNodes
+                .Where(n => points.ContainsKey(n.Id))
+                .Select(n => points[n.Id])
+                .ToList();
+
+            if (regionPoints.Count < 3)
+                continue;
+
+            var hull = BuildSoftHull(regionPoints);
+            if (hull.Count < 3)
+                continue;
+
+            var polygon = new Polygon
+            {
+                Points = new Points(hull),
+                Fill = new SolidColorBrush(GetRegionFillColor(groupNodes)),
+                Stroke = new SolidColorBrush(GetRegionStrokeColor(groupNodes)),
+                StrokeThickness = 1.1,
+                Opacity = 0.40,
+                IsHitTestVisible = false
+            };
+
+            _graphCanvas.Children.Add(polygon);
+
+            var centerX = regionPoints.Average(p => p.X);
+            var centerY = regionPoints.Average(p => p.Y);
+
+            var label = new TextBlock
+            {
+                Text = group.Key ?? string.Empty,
+                Foreground = new SolidColorBrush(Color.Parse("#6E675A")),
+                FontSize = 11,
+                FontWeight = FontWeight.Bold,
+                IsHitTestVisible = false
+            };
+
+            label.Measure(Size.Infinity);
+            Canvas.SetLeft(label, centerX - label.DesiredSize.Width / 2.0);
+            Canvas.SetTop(label, centerY - label.DesiredSize.Height / 2.0);
+            _graphCanvas.Children.Add(label);
+        }
     }
 
     private void DrawRegionClusterMap(List<SimulationGraphNodeDto> nodes, List<SimulationGraphEdgeDto> edges)
@@ -747,11 +841,11 @@ public partial class NodeGraphVisualization : UserControl
     }
 
     private void DrawEdge(
-     SimulationGraphEdgeDto edge,
-     Dictionary<Guid, Point> points,
-     Guid? selectedNodeId,
-     HashSet<Guid> selectedEdgeIds,
-     bool isBridge)
+        SimulationGraphEdgeDto edge,
+        Dictionary<Guid, Point> points,
+        Guid? selectedNodeId,
+        HashSet<Guid> selectedEdgeIds,
+        bool isBridge)
     {
         if (_graphCanvas == null)
             return;
@@ -793,6 +887,7 @@ public partial class NodeGraphVisualization : UserControl
 
         _graphCanvas.Children.Add(line);
     }
+
     private string BuildEdgeTooltip(SimulationGraphEdgeDto edge, bool isBridge)
     {
         var edgeType = isBridge
@@ -807,14 +902,13 @@ public partial class NodeGraphVisualization : UserControl
                $"Fire spread modifier: {edge.FireSpreadModifier:F6}";
     }
 
-
     private void DrawNode(
-     SimulationGraphNodeDto node,
-     List<SimulationGraphEdgeDto> edges,
-     Dictionary<Guid, Point> points,
-     Guid? selectedNodeId,
-     HashSet<Guid> neighborIds,
-     bool useMapStyle)
+        SimulationGraphNodeDto node,
+        List<SimulationGraphEdgeDto> edges,
+        Dictionary<Guid, Point> points,
+        Guid? selectedNodeId,
+        HashSet<Guid> neighborIds,
+        bool useMapStyle)
     {
         if (_graphCanvas == null)
             return;
@@ -830,14 +924,7 @@ public partial class NodeGraphVisualization : UserControl
         if (selectedNodeId.HasValue && !isSelected && !isNeighbor)
             opacity = 0.44;
 
-        double radius = isSelected
-            ? SelectedNodeRadius
-            : isNeighbor
-                ? NeighborNodeRadius
-                : BaseNodeRadius;
-
-        if (isIgnitionSelected)
-            radius = Math.Max(radius, useMapStyle ? 10.5 : 11.5);
+        double radius = GetNodeRadius(node, useMapStyle, isSelected, isNeighbor, isIgnitionSelected);
 
         if (isIgnitionSelected)
             DrawIgnitionGlow(point, radius, useMapStyle);
@@ -859,8 +946,8 @@ public partial class NodeGraphVisualization : UserControl
                         ? Color.Parse("#355CBE")
                         : isNeighbor
                             ? Color.Parse("#B45A4A")
-                            : Color.Parse("#F8F5EE")),
-            StrokeThickness = isIgnitionSelected ? 2.6 : isSelected ? 2.2 : isNeighbor ? 1.8 : 1.2,
+                            : GetNodeBorderColor(node)),
+            StrokeThickness = isIgnitionSelected ? 2.6 : isSelected ? 2.2 : isNeighbor ? 1.8 : GetNodeBorderThickness(node),
             Opacity = opacity,
             Cursor = new Cursor(StandardCursorType.Hand)
         };
@@ -879,6 +966,122 @@ public partial class NodeGraphVisualization : UserControl
         Canvas.SetLeft(shape, point.X - radius);
         Canvas.SetTop(shape, point.Y - radius);
         _graphCanvas.Children.Add(shape);
+
+        DrawVegetationMarker(node, point, radius, opacity);
+    }
+
+    private double GetNodeRadius(
+        SimulationGraphNodeDto node,
+        bool useMapStyle,
+        bool isSelected,
+        bool isNeighbor,
+        bool isIgnitionSelected)
+    {
+        int nodeCount = Nodes?.Count() ?? 0;
+
+        double baseRadius = nodeCount switch
+        {
+            <= 10 => 11.0,
+            <= 20 => 10.0,
+            <= 60 => 8.8,
+            <= 120 => 7.8,
+            <= 200 => 7.0,
+            _ => 6.5
+        };
+
+        if (useMapStyle)
+            baseRadius -= 0.6;
+
+        double radius = isSelected
+            ? Math.Max(baseRadius + 2.2, SelectedNodeRadius)
+            : isNeighbor
+                ? Math.Max(baseRadius + 0.8, NeighborNodeRadius - 0.6)
+                : baseRadius;
+
+        if (isIgnitionSelected)
+            radius = Math.Max(radius, useMapStyle ? 10.5 : 11.5);
+
+        return radius;
+    }
+
+    private Color GetNodeBorderColor(SimulationGraphNodeDto node)
+    {
+        return node.Vegetation?.ToLowerInvariant() switch
+        {
+            "water" => Color.Parse("#2E79B8"),
+            "bare" => Color.Parse("#8C7462"),
+            _ => Color.Parse("#F8F5EE")
+        };
+    }
+
+    private double GetNodeBorderThickness(SimulationGraphNodeDto node)
+    {
+        return node.Vegetation?.ToLowerInvariant() switch
+        {
+            "water" => 1.8,
+            "bare" => 1.8,
+            _ => 1.2
+        };
+    }
+
+    private void DrawVegetationMarker(
+        SimulationGraphNodeDto node,
+        Point point,
+        double radius,
+        double opacity)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var vegetation = node.Vegetation?.ToLowerInvariant();
+
+        if (vegetation == "water")
+        {
+            double markerRadius = Math.Max(2.6, radius * 0.30);
+
+            var inner = new Ellipse
+            {
+                Width = markerRadius * 2,
+                Height = markerRadius * 2,
+                Fill = new SolidColorBrush(Color.Parse("#1E5F99")),
+                Opacity = opacity,
+                IsHitTestVisible = false
+            };
+
+            Canvas.SetLeft(inner, point.X - markerRadius);
+            Canvas.SetTop(inner, point.Y - markerRadius);
+            _graphCanvas.Children.Add(inner);
+            return;
+        }
+
+        if (vegetation == "bare")
+        {
+            double size = Math.Max(4.0, radius * 0.9);
+            double half = size / 2.0;
+
+            var line1 = new Line
+            {
+                StartPoint = new Point(point.X - half, point.Y - half),
+                EndPoint = new Point(point.X + half, point.Y + half),
+                Stroke = new SolidColorBrush(Color.Parse("#6D594B")),
+                StrokeThickness = 1.4,
+                Opacity = opacity,
+                IsHitTestVisible = false
+            };
+
+            var line2 = new Line
+            {
+                StartPoint = new Point(point.X - half, point.Y + half),
+                EndPoint = new Point(point.X + half, point.Y - half),
+                Stroke = new SolidColorBrush(Color.Parse("#6D594B")),
+                StrokeThickness = 1.4,
+                Opacity = opacity,
+                IsHitTestVisible = false
+            };
+
+            _graphCanvas.Children.Add(line1);
+            _graphCanvas.Children.Add(line2);
+        }
     }
 
     private void DrawIgnitionGlow(Point point, double radius, bool useMapStyle)
@@ -1083,7 +1286,7 @@ public partial class NodeGraphVisualization : UserControl
             "grass" => Color.Parse("#E7D36F"),
             "shrub" => Color.Parse("#CFA46A"),
             "water" => Color.Parse("#7CC6F2"),
-            "bare" => Color.Parse("#C9B7A7"),
+            "bare" => Color.Parse("#D3C4B4"),
             _ => Color.Parse("#A8C97F")
         };
     }
@@ -1096,6 +1299,14 @@ public partial class NodeGraphVisualization : UserControl
         if (node.IsBurning)
             return Color.Parse("#E34A33");
 
+        var vegetation = node.Vegetation?.ToLowerInvariant();
+
+        if (vegetation == "water")
+            return Color.Parse("#7CC6F2");
+
+        if (vegetation == "bare")
+            return Color.Parse("#D3C4B4");
+
         if (node.BurnProbability >= 0.75)
             return Color.Parse("#F46D43");
 
@@ -1105,15 +1316,13 @@ public partial class NodeGraphVisualization : UserControl
         if (node.BurnProbability >= 0.25)
             return Color.Parse("#FEE08B");
 
-        return node.Vegetation?.ToLowerInvariant() switch
+        return vegetation switch
         {
             "coniferous" => Color.Parse("#5E9B5E"),
             "deciduous" => Color.Parse("#8ACB88"),
             "mixed" => Color.Parse("#A8C97F"),
             "grass" => Color.Parse("#E7D36F"),
             "shrub" => Color.Parse("#CFA46A"),
-            "water" => Color.Parse("#7CC6F2"),
-            "bare" => Color.Parse("#C9B7A7"),
             _ => Color.Parse("#A8C97F")
         };
     }
@@ -1145,6 +1354,8 @@ public partial class NodeGraphVisualization : UserControl
             "mixed" => Color.Parse("#E8EDD8"),
             "grass" => Color.Parse("#F3EBCF"),
             "shrub" => Color.Parse("#EEE0D1"),
+            "water" => Color.Parse("#DCEFFE"),
+            "bare" => Color.Parse("#EEE3D8"),
             _ => Color.Parse("#ECE9DD")
         };
     }
@@ -1155,7 +1366,18 @@ public partial class NodeGraphVisualization : UserControl
         if (burning > 0)
             return Color.Parse("#D7B9AA");
 
-        return Color.Parse("#D5D0C2");
+        var dominantVegetation = nodes
+            .GroupBy(n => n.Vegetation)
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key?.ToLowerInvariant())
+            .FirstOrDefault();
+
+        return dominantVegetation switch
+        {
+            "water" => Color.Parse("#A6CBE8"),
+            "bare" => Color.Parse("#D4BDAA"),
+            _ => Color.Parse("#D5D0C2")
+        };
     }
 
     private Color GetEdgeColor(SimulationGraphEdgeDto edge)
