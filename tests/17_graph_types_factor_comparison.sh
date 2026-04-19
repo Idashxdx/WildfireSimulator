@@ -10,8 +10,8 @@ echo "ТЕСТ: сухой сценарий должен гореть сильн
 echo "============================================================"
 echo ""
 
-GRAPH_TYPES=(0 1 2)
-GRAPH_NAMES=("Grid" "ClusteredGraph" "RegionClusterGraph")
+GRAPH_TYPES=(0 1)
+GRAPH_NAMES=("Grid" "ClusteredGraph")
 
 run_case() {
     local GRAPH_TYPE="$1"

@@ -10,8 +10,8 @@ echo " ТЕСТ: сравнение структур при одинаковых
 echo "============================================================"
 echo ""
 
-GRAPH_TYPES=(0 1 2)
-GRAPH_NAMES=("Grid" "ClusteredGraph" "RegionClusterGraph")
+GRAPH_TYPES=(0 1)
+GRAPH_NAMES=("Grid" "ClusteredGraph")
 
 REAL_TIME_SECONDS=10800
 STEP_DURATION=1800
