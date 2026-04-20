@@ -7,6 +7,7 @@ public class SimulationGraphDto
     public Guid SimulationId { get; set; }
     public string SimulationName { get; set; } = string.Empty;
     public GraphType GraphType { get; set; }
+    public GraphScaleType? GraphScaleType { get; set; }
     public string LayoutHint { get; set; } = "grid";
     public int Width { get; set; }
     public int Height { get; set; }

@@ -114,6 +114,10 @@ public class SimulationsController : ControllerBase
                 GridWidth = request.GridWidth,
                 GridHeight = request.GridHeight,
                 GraphType = request.GraphType,
+                GraphScaleType = request.GraphType == GraphType.Grid
+                    ? null
+                    : request.GraphScaleType ?? GraphScaleType.Medium,
+
                 InitialMoistureMin = request.InitialMoistureMin,
                 InitialMoistureMax = request.InitialMoistureMax,
                 ElevationVariation = request.ElevationVariation,
@@ -235,9 +239,10 @@ public class SimulationsController : ControllerBase
             await _simulationRepository.AddAsync(simulation, cancellationToken);
 
             _logger.LogInformation(
-                "Создана симуляция {Id}. GraphType={GraphType}, Mode={Mode}, GridScenario={GridScenario}, GraphScenario={GraphScenario}, GridObjects={ObjectsCount}, GraphNodes={GraphNodesCount}",
+                "Создана симуляция {Id}. GraphType={GraphType}, GraphScaleType={GraphScaleType}, Mode={Mode}, GridScenario={GridScenario}, GraphScenario={GraphScenario}, GridObjects={ObjectsCount}, GraphNodes={GraphNodesCount}",
                 simulation.Id,
                 simulation.Parameters.GraphType,
+                simulation.Parameters.GraphScaleType,
                 simulation.Parameters.MapCreationMode,
                 simulation.Parameters.ScenarioType,
                 simulation.Parameters.ClusteredScenarioType,
@@ -336,6 +341,9 @@ public class CreateSimulationWithWeatherRequest
     public int GridWidth { get; set; } = 20;
     public int GridHeight { get; set; } = 20;
     public GraphType GraphType { get; set; } = GraphType.Grid;
+
+    public GraphScaleType? GraphScaleType { get; set; }
+
     public double InitialMoistureMin { get; set; } = 0.3;
     public double InitialMoistureMax { get; set; } = 0.7;
     public double ElevationVariation { get; set; } = 50.0;
@@ -370,7 +378,6 @@ public class CreateSimulationWithWeatherRequest
 
     public List<VegetationDistributionRequest> VegetationDistributions { get; set; } = new();
 }
-
 public class InitialFirePositionDto
 {
     public int X { get; set; }

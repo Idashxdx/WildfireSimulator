@@ -65,11 +65,11 @@ public class ApiService
     }
 
     public async Task<Guid?> CreateSimulationAsync(
-      CreateSimulationDto dto,
-      double temperature,
-      double humidity,
-      double windSpeed,
-      double windDirection)
+     CreateSimulationDto dto,
+     double temperature,
+     double humidity,
+     double windSpeed,
+     double windDirection)
     {
         try
         {
@@ -80,6 +80,8 @@ public class ApiService
                 gridWidth = dto.GridWidth,
                 gridHeight = dto.GridHeight,
                 graphType = dto.GraphType,
+                graphScaleType = dto.GraphScaleType,
+
                 initialMoistureMin = dto.InitialMoistureMin,
                 initialMoistureMax = dto.InitialMoistureMax,
                 elevationVariation = dto.ElevationVariation,
@@ -91,10 +93,7 @@ public class ApiService
 
                 mapCreationMode = dto.MapCreationMode,
 
-                // grid-only
                 scenarioType = dto.ScenarioType,
-
-                // clustered-only
                 clusteredScenarioType = dto.ClusteredScenarioType,
 
                 mapNoiseStrength = dto.MapNoiseStrength,
@@ -102,10 +101,7 @@ public class ApiService
                 reliefStrengthFactor = dto.ReliefStrengthFactor,
                 fuelDensityFactor = dto.FuelDensityFactor,
 
-                // grid-only
                 mapRegionObjects = dto.MapRegionObjects,
-
-                // clustered-only
                 clusteredBlueprint = dto.ClusteredBlueprint,
 
                 initialFirePositions = dto.InitialFirePositions,
@@ -139,7 +135,6 @@ public class ApiService
 
         return null;
     }
-
     public async Task<(bool Success, string Message, List<GraphCellDto>? Cells, bool IsRunning, double FireArea, int CurrentStep, int Status)> StartSimulationAsync(
      Guid simulationId,
      string ignitionMode = "saved-or-random",

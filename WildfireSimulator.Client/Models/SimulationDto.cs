@@ -10,6 +10,13 @@ public enum GraphType
     ClusteredGraph = 1
 }
 
+public enum GraphScaleType
+{
+    Small = 0,
+    Medium = 1,
+    Large = 2
+}
+
 public enum VegetationType
 {
     Grass = 0,
@@ -90,6 +97,9 @@ public class SimulationDto
     [JsonPropertyName("graphType")]
     public GraphType GraphType { get; set; } = GraphType.Grid;
 
+    [JsonPropertyName("graphScaleType")]
+    public GraphScaleType? GraphScaleType { get; set; }
+
     public string StatusText => Status switch
     {
         0 => "Создана",
@@ -102,7 +112,13 @@ public class SimulationDto
     public string GraphTypeText => GraphType switch
     {
         GraphType.Grid => "Сетка",
-        GraphType.ClusteredGraph => "Граф",
+        GraphType.ClusteredGraph => GraphScaleType switch
+        {
+            global::WildfireSimulator.Client.Models.GraphScaleType.Small => "Малый граф",
+            global::WildfireSimulator.Client.Models.GraphScaleType.Medium => "Средний граф",
+            global::WildfireSimulator.Client.Models.GraphScaleType.Large => "Большой граф",
+            _ => "Граф"
+        },
         _ => "Неизвестно"
     };
 
@@ -126,6 +142,9 @@ public class CreateSimulationDto
 
     [JsonPropertyName("graphType")]
     public int GraphType { get; set; } = 0;
+
+    [JsonPropertyName("graphScaleType")]
+    public GraphScaleType? GraphScaleType { get; set; }
 
     [JsonPropertyName("initialMoistureMin")]
     public double InitialMoistureMin { get; set; } = 0.3;
@@ -151,11 +170,9 @@ public class CreateSimulationDto
     [JsonPropertyName("mapCreationMode")]
     public MapCreationMode MapCreationMode { get; set; } = MapCreationMode.Random;
 
-    // Только для Grid
     [JsonPropertyName("scenarioType")]
     public MapScenarioType? ScenarioType { get; set; }
 
-    // Только для ClusteredGraph
     [JsonPropertyName("clusteredScenarioType")]
     public ClusteredScenarioType? ClusteredScenarioType { get; set; }
 
@@ -171,22 +188,20 @@ public class CreateSimulationDto
     [JsonPropertyName("fuelDensityFactor")]
     public double FuelDensityFactor { get; set; } = 1.0;
 
-    // Только для Grid SemiManual
-    [JsonPropertyName("mapRegionObjects")]
-    public List<MapRegionObjectDto> MapRegionObjects { get; set; } = new();
-
-    // Только для ClusteredGraph SemiManual
-    [JsonPropertyName("clusteredBlueprint")]
-    public ClusteredGraphBlueprintDto? ClusteredBlueprint { get; set; }
+    [JsonPropertyName("precipitation")]
+    public double Precipitation { get; set; } = 0.0;
 
     [JsonPropertyName("vegetationDistributions")]
     public List<VegetationDistributionDto> VegetationDistributions { get; set; } = new();
 
+    [JsonPropertyName("mapRegionObjects")]
+    public List<MapRegionObjectDto> MapRegionObjects { get; set; } = new();
+
+    [JsonPropertyName("clusteredBlueprint")]
+    public ClusteredGraphBlueprintDto? ClusteredBlueprint { get; set; }
+
     [JsonPropertyName("initialFirePositions")]
     public List<InitialFirePositionDto> InitialFirePositions { get; set; } = new();
-
-    [JsonPropertyName("precipitation")]
-    public double Precipitation { get; set; } = 0.0;
 }
 
 public class VegetationDistributionDto
@@ -210,7 +225,7 @@ public class InitialFirePositionDto
 public class MapRegionObjectDto
 {
     [JsonPropertyName("id")]
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     [JsonPropertyName("objectType")]
     public MapObjectType ObjectType { get; set; }
@@ -234,7 +249,7 @@ public class MapRegionObjectDto
     public double Strength { get; set; } = 1.0;
 
     [JsonPropertyName("priority")]
-    public int Priority { get; set; } = 0;
+    public int Priority { get; set; }
 }
 
 public class ClusteredGraphBlueprintDto
@@ -258,7 +273,7 @@ public class ClusteredGraphBlueprintDto
 public class ClusteredCandidateNodeDto
 {
     [JsonPropertyName("id")]
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     [JsonPropertyName("x")]
     public int X { get; set; }
@@ -270,7 +285,7 @@ public class ClusteredCandidateNodeDto
 public class ClusteredNodeDraftDto
 {
     [JsonPropertyName("id")]
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     [JsonPropertyName("x")]
     public int X { get; set; }
@@ -294,7 +309,7 @@ public class ClusteredNodeDraftDto
 public class ClusteredEdgeDraftDto
 {
     [JsonPropertyName("id")]
-    public Guid Id { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
 
     [JsonPropertyName("fromNodeId")]
     public Guid FromNodeId { get; set; }

@@ -24,6 +24,9 @@ public class SimulationGraphDto
     [JsonPropertyName("graphType")]
     public GraphType GraphType { get; set; } = GraphType.Grid;
 
+    [JsonPropertyName("graphScaleType")]
+    public GraphScaleType? GraphScaleType { get; set; }
+
     [JsonPropertyName("layoutHint")]
     public string LayoutHint { get; set; } = "grid";
 

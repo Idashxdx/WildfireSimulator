@@ -20,7 +20,9 @@ public enum AppPage
 
 public enum GraphCreationMode
 {
-    Clustered = 0
+    Small = 0,
+    Medium = 1,
+    Large = 2
 }
 
 public enum IgnitionMode
@@ -101,7 +103,7 @@ public partial class MainWindowViewModel : ObservableObject
     private AppPage _currentPage = AppPage.Grid;
 
     [ObservableProperty]
-    private GraphCreationMode _selectedGraphCreationMode = GraphCreationMode.Clustered;
+    private GraphCreationMode _selectedGraphCreationMode = GraphCreationMode.Medium;
 
     [ObservableProperty]
     private int _gridWidth = 20;
@@ -482,35 +484,97 @@ public partial class MainWindowViewModel : ObservableObject
     public string SelectedGraphNodeBurningElapsedText =>
         SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.BurningElapsedSeconds:F0} с";
 
-    public string VisualizationMeaningText => SelectedSimulationGraphType switch
+    public string VisualizationMeaningText
     {
-        GraphType.Grid =>
-            "Регулярная карта: каждая клетка — участок поверхности, огонь распространяется по соседям и формирует фронт.",
-        GraphType.ClusteredGraph =>
-            "Графовая модель: вершины образуют единый граф с локальной кластеризацией, мостами и неоднородной связностью.",
-        _ =>
-            "Модель не выбрана."
-    };
+        get
+        {
+            if (SelectedSimulationGraphType == GraphType.Grid)
+            {
+                return "Регулярная карта: каждая клетка — участок поверхности, огонь распространяется по соседям и формирует фронт.";
+            }
 
-    public string StructureScaleText => SelectedSimulationGraphType switch
-    {
-        GraphType.Grid =>
-            "Масштаб: 1 клетка = 1 гектар.",
-        GraphType.ClusteredGraph =>
-            "Масштаб: узел — отдельный объект графа; важнее локальная связность, мосты и кластеры.",
-        _ =>
-            "Масштаб не определён."
-    };
+            var scale = SelectedSimulation?.GraphScaleType;
 
-    public string SpreadBehaviorText => SelectedSimulationGraphType switch
+            return scale switch
+            {
+                GraphScaleType.Small =>
+                    "Малый граф: topology-first визуализация. Хорошо видны отдельные вершины, рёбра, мосты и развилки распространения.",
+                GraphScaleType.Medium =>
+                    "Средний граф: patch/cluster-модель. Хорошо заметны локальные группы узлов, барьеры, мосты между кластерами и неоднородная связность.",
+                GraphScaleType.Large =>
+                    "Большой граф: area-like графовая карта. Поведение ближе к крупным зонам и секторам, чем к отдельным изолированным вершинам.",
+                _ =>
+                    "Графовая модель: вершины образуют единый граф с локальной кластеризацией, мостами и неоднородной связностью."
+            };
+        }
+    }
+
+    public string StructureScaleText
     {
-        GraphType.Grid =>
-            "Ожидаемое поведение: компактный фронт, локальное распространение, сдвиг по ветру.",
-        GraphType.ClusteredGraph =>
-            "Ожидаемое поведение: распространение по локальным кластерам и близким связям, возможны тупики и ветвления.",
-        _ =>
-            "Поведение не определено."
-    };
+        get
+        {
+            if (SelectedSimulationGraphType == GraphType.Grid)
+            {
+                return "Масштаб: 1 клетка = 1 гектар.";
+            }
+
+            var scale = SelectedSimulation?.GraphScaleType;
+
+            return scale switch
+            {
+                GraphScaleType.Small =>
+                    "Масштаб: малый граф, обычно 8–20 узлов. Акцент на вершинах, рёбрах и локальной топологии.",
+                GraphScaleType.Medium =>
+                    "Масштаб: средний граф, обычно 20–80 узлов. Акцент на патчах, кластерах, мостах и локальных барьерах.",
+                GraphScaleType.Large =>
+                    "Масштаб: большой граф, обычно 80–250+ узлов. Акцент на макрозонах, секторах и коридорах распространения.",
+                _ =>
+                    "Масштаб: узел — отдельный объект графа; важнее локальная связность, мосты и кластеры."
+            };
+        }
+    }
+
+    public string SpreadBehaviorText
+    {
+        get
+        {
+            if (SelectedSimulationGraphType == GraphType.Grid)
+            {
+                return "Ожидаемое поведение: компактный фронт, локальное распространение, сдвиг по ветру.";
+            }
+
+            var scale = SelectedSimulation?.GraphScaleType;
+
+            return scale switch
+            {
+                GraphScaleType.Small =>
+                    "Ожидаемое поведение: заметные ветвления, локальные мосты, быстро читаемые пути перехода огня между узлами.",
+                GraphScaleType.Medium =>
+                    "Ожидаемое поведение: распространение по локальным кластерам и близким связям, возможны барьеры, тупики и patch-to-patch переходы.",
+                GraphScaleType.Large =>
+                    "Ожидаемое поведение: распространение между крупными зонами, секторами и corridor-переходами, важны макроразрывы и длинные связи.",
+                _ =>
+                    "Ожидаемое поведение: распространение по локальным кластерам и близким связям, возможны тупики и ветвления."
+            };
+        }
+    }
+
+    public string GraphTypeText
+    {
+        get
+        {
+            if (SelectedSimulationGraphType == GraphType.Grid)
+                return "Сетка";
+
+            return SelectedSimulation?.GraphScaleType switch
+            {
+                GraphScaleType.Small => "Малый граф",
+                GraphScaleType.Medium => "Средний граф",
+                GraphScaleType.Large => "Большой граф",
+                _ => "Граф"
+            };
+        }
+    }
 
     public string SimulationStatusText => SelectedSimulationStatus switch
     {
@@ -521,24 +585,45 @@ public partial class MainWindowViewModel : ObservableObject
         _ => "Неизвестно"
     };
 
-    public string GraphTypeText => SelectedSimulationGraphType switch
-    {
-        GraphType.Grid => "Сетка",
-        GraphType.ClusteredGraph => "Граф",
-        _ => "Неизвестно"
-    };
-
     public string SelectedGraphCreationModeText => SelectedGraphCreationMode switch
     {
-        GraphCreationMode.Clustered => "Граф",
+        GraphCreationMode.Small => "Малый граф — topology-first режим для наглядных узлов, рёбер и мостов",
+        GraphCreationMode.Medium => "Средний граф — patch/cluster режим для локальных групп и барьеров",
+        GraphCreationMode.Large => "Большой граф — area-like режим для макрозон, секторов и коридоров",
         _ => "Граф"
+    };
+
+    public string CurrentPageTitleText => CurrentPage switch
+    {
+        AppPage.Grid => "Сеточная модель",
+        AppPage.Graph => "Графовая модель",
+        _ => "Модель"
+    };
+
+    public string CurrentPageHintText => CurrentPage switch
+    {
+        AppPage.Grid =>
+            "Grid — клеточная карта леса с территориальными сценариями и полуручным редактором областей.",
+        AppPage.Graph => SelectedGraphCreationMode switch
+        {
+            GraphCreationMode.Small =>
+                "SmallGraph — компактный граф для topology demos: хорошо видны отдельные вершины, рёбра и мосты.",
+            GraphCreationMode.Medium =>
+                "MediumGraph — clustered / patch-like граф для локальных групп, барьеров и межкластерных переходов.",
+            GraphCreationMode.Large =>
+                "LargeGraph — area-like граф для крупных зон, corridor-связей и макромасштабного распространения.",
+            _ =>
+                "Графовая модель с несколькими масштабами."
+        },
+        _ => "Выберите режим моделирования."
     };
 
     public bool IsGridPage => CurrentPage == AppPage.Grid;
     public bool IsGraphPage => CurrentPage == AppPage.Graph;
 
-    public bool IsClusteredGraphCreationMode => SelectedGraphCreationMode == GraphCreationMode.Clustered;
-
+    public bool IsSmallGraphCreationMode => SelectedGraphCreationMode == GraphCreationMode.Small;
+    public bool IsMediumGraphCreationMode => SelectedGraphCreationMode == GraphCreationMode.Medium;
+    public bool IsLargeGraphCreationMode => SelectedGraphCreationMode == GraphCreationMode.Large;
     public bool CanStartAutoSimulation =>
         IsConnected &&
         SelectedSimulation != null &&
@@ -625,6 +710,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsGridPage));
         OnPropertyChanged(nameof(IsGraphPage));
+        OnPropertyChanged(nameof(CurrentPageTitleText));
+        OnPropertyChanged(nameof(CurrentPageHintText));
 
         if (SelectedSimulation != null)
         {
@@ -639,8 +726,18 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         SimulationInfoText = value == AppPage.Grid
-            ? "Выберите симуляцию типа «Сетка»"
-            : "Выберите графовую симуляцию";
+            ? "Выберите сеточную симуляцию: карта клеток, сценарии территории и полуручное редактирование областей."
+            : SelectedGraphCreationMode switch
+            {
+                GraphCreationMode.Small =>
+                    "Выберите или создайте малый граф: topology-first структура с отдельными узлами, рёбрами и мостами.",
+                GraphCreationMode.Medium =>
+                    "Выберите или создайте средний граф: patch/cluster-модель с локальными группами и межкластерными переходами.",
+                GraphCreationMode.Large =>
+                    "Выберите или создайте большой граф: area-like графовую карту с макрозонами и corridor-связями.",
+                _ =>
+                    "Выберите графовую симуляцию."
+            };
 
         RefreshWorkflowStatus();
     }
@@ -648,8 +745,29 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedGraphCreationModeChanged(GraphCreationMode value)
     {
         OnPropertyChanged(nameof(SelectedGraphCreationModeText));
-        OnPropertyChanged(nameof(IsClusteredGraphCreationMode));
+        OnPropertyChanged(nameof(CurrentPageHintText));
+        OnPropertyChanged(nameof(IsSmallGraphCreationMode));
+        OnPropertyChanged(nameof(IsMediumGraphCreationMode));
+        OnPropertyChanged(nameof(IsLargeGraphCreationMode));
+
+        if (CurrentPage == AppPage.Graph)
+        {
+            SimulationInfoText = value switch
+            {
+                GraphCreationMode.Small =>
+                    "Сейчас выбран режим создания: малый граф. Он подходит для наглядной topology demo и анализа отдельных мостов.",
+                GraphCreationMode.Medium =>
+                    "Сейчас выбран режим создания: средний граф. Он подходит для patch/cluster-структур, барьеров и локального распространения.",
+                GraphCreationMode.Large =>
+                    "Сейчас выбран режим создания: большой граф. Он подходит для макрозон, corridor-связей и area-like поведения.",
+                _ =>
+                    "Выберите графовую симуляцию."
+            };
+        }
+
+        RefreshWorkflowStatus();
     }
+
     partial void OnSelectedSimulationGraphTypeChanged(GraphType value)
     {
         OnPropertyChanged(nameof(GraphTypeText));
@@ -666,123 +784,69 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedGraphNodeFireSummaryText));
         OnPropertyChanged(nameof(SelectedGraphNodeFuelSummaryText));
         OnPropertyChanged(nameof(SelectedGraphNodeThermalSummaryText));
+
+        OnPropertyChanged(nameof(CurrentPageHintText));
+
+        RefreshWorkflowStatus();
     }
+
     partial void OnSelectedSimulationChanged(SimulationDto? value)
     {
         ResetStreamAnalysisState();
 
-        if (value != null)
+        SelectedGraphNode = null;
+        Cells.Clear();
+        GraphNodes.Clear();
+        GraphEdges.Clear();
+
+        ClearSelectedIgnitionCells();
+        ClearSelectedIgnitionNodes();
+
+        HasSavedIgnitionPreview = false;
+        IsPreparedMapLoaded = false;
+        IsIgnitionSelectionEnabled = false;
+
+        if (value == null)
         {
-            SelectedSimulationStatus = value.Status;
-            SelectedSimulationGraphType = value.GraphType;
-            SelectedGraphNode = null;
-
-            IsPreparedMapLoaded = false;
-            IsIgnitionSelectionEnabled = false;
-            HasSavedIgnitionPreview = false;
-            SelectedIgnitionMode = IgnitionMode.Random;
-
-            ClearSelectedIgnitionCells();
-            ClearSelectedIgnitionNodes();
-
-            OnPropertyChanged(nameof(SimulationStatusText));
-            OnPropertyChanged(nameof(GraphTypeText));
-            OnPropertyChanged(nameof(CanStartSelectedSimulation));
-            OnPropertyChanged(nameof(CanExecuteStepSimulation));
-            OnPropertyChanged(nameof(IsGridSelected));
-            OnPropertyChanged(nameof(IsClusteredGraphSelected));
-                OnPropertyChanged(nameof(VisualizationMeaningText));
-            OnPropertyChanged(nameof(StructureScaleText));
-            OnPropertyChanged(nameof(SpreadBehaviorText));
-            OnPropertyChanged(nameof(IsRandomIgnitionMode));
-            OnPropertyChanged(nameof(IsManualIgnitionMode));
-            OnPropertyChanged(nameof(IgnitionModeText));
-            OnPropertyChanged(nameof(IgnitionSelectionSummary));
-            OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
-            OnPropertyChanged(nameof(CanEditIgnitionSetup));
-            OnPropertyChanged(nameof(ShowIgnitionControls));
-
-            CanResetSimulation = (value.Status == 2 || value.Status == 3 || value.Status == 1) && IsConnected;
-
-            SimulationInfoText = $"Загрузка данных симуляции «{value.Name}»...";
-
-            Task.Run(async () =>
-            {
-                await LoadSimulationStatusAsync(value.Id);
-
-                if (value.GraphType == GraphType.Grid)
-                    await LoadSimulationCellsAsync(value.Id);
-                else
-                    await LoadSimulationGraphAsync(value.Id);
-
-                await LoadSimulationMetricsHistoryAsync(value.Id);
-                await SubscribeToSelectedSimulationAsync(value.Id);
-            });
-        }
-        else
-        {
-            Task.Run(async () =>
-            {
-                await UnsubscribeFromCurrentSimulationAsync();
-                await ClearSimulationMetricsHistoryAsync();
-            });
-
             SelectedSimulationStatus = 0;
-            SelectedSimulationGraphType = GraphType.Grid;
-            IsSimulationRunning = false;
-            CurrentStep = 0;
-            FireArea = 0;
-            SelectedGraphNode = null;
+            SelectedSimulationGraphType = CurrentPage == AppPage.Grid
+                ? GraphType.Grid
+                : GraphType.ClusteredGraph;
 
-            IsPreparedMapLoaded = false;
-            IsIgnitionSelectionEnabled = false;
-            HasSavedIgnitionPreview = false;
-            SelectedIgnitionMode = IgnitionMode.Random;
-
-            ClearSelectedIgnitionCells();
-            ClearSelectedIgnitionNodes();
-
-            Cells.Clear();
-            GraphNodes.Clear();
-            GraphEdges.Clear();
-
-            WindInfo = "—";
-            TemperatureInfo = "—";
-            HumidityInfo = "—";
-            VegetationStats = "—";
-            PrecipitationInfo = "—";
-            SignalRStatus = IsSignalRConnected ? "Подключено" : "Не подключено";
-
-            CanResetSimulation = false;
             SimulationInfoText = CurrentPage == AppPage.Grid
-                ? "Выберите симуляцию типа «Сетка»"
-                : "Выберите графовую симуляцию";
-
-            OnPropertyChanged(nameof(SimulationStatusText));
-            OnPropertyChanged(nameof(GraphTypeText));
-            OnPropertyChanged(nameof(CanStartSelectedSimulation));
-            OnPropertyChanged(nameof(CanExecuteStepSimulation));
-            OnPropertyChanged(nameof(IsGridSelected));
-            OnPropertyChanged(nameof(IsClusteredGraphSelected));
-                OnPropertyChanged(nameof(VisualizationMeaningText));
-            OnPropertyChanged(nameof(StructureScaleText));
-            OnPropertyChanged(nameof(SpreadBehaviorText));
-            OnPropertyChanged(nameof(IsRandomIgnitionMode));
-            OnPropertyChanged(nameof(IsManualIgnitionMode));
-            OnPropertyChanged(nameof(IgnitionModeText));
-            OnPropertyChanged(nameof(IgnitionSelectionSummary));
-            OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
-            OnPropertyChanged(nameof(CanEditIgnitionSetup));
-            OnPropertyChanged(nameof(ShowIgnitionControls));
+                ? "Сеточная симуляция не выбрана."
+                : SelectedGraphCreationMode switch
+                {
+                    GraphCreationMode.Small => "Малый граф не выбран.",
+                    GraphCreationMode.Medium => "Средний граф не выбран.",
+                    GraphCreationMode.Large => "Большой граф не выбран.",
+                    _ => "Графовая симуляция не выбрана."
+                };
 
             RefreshWorkflowStatus();
+            return;
         }
+
+        SelectedSimulationStatus = value.Status;
+        SelectedSimulationGraphType = value.GraphType;
+
+        SimulationInfoText = value.GraphType == GraphType.Grid
+            ? $"Выбрана сеточная симуляция: {value.Name}"
+            : value.GraphScaleType switch
+            {
+                GraphScaleType.Small => $"Выбран малый граф: {value.Name}",
+                GraphScaleType.Medium => $"Выбран средний граф: {value.Name}",
+                GraphScaleType.Large => $"Выбран большой граф: {value.Name}",
+                _ => $"Выбрана графовая симуляция: {value.Name}"
+            };
+
+        OnPropertyChanged(nameof(GraphTypeText));
+        OnPropertyChanged(nameof(CurrentPageHintText));
+
+        RefreshWorkflowStatus();
+
     }
-    private void SetPersistentStatus(string message)
-    {
-        _persistentStatusText = message;
-        SetTransientStatus(message, false);
-    }
+
 
     private void SetTransientStatus(string message, bool autoClear = true)
     {
@@ -827,37 +891,63 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (SelectedSimulation == null)
         {
-            WorkflowStatusText = "Выберите симуляцию";
+            WorkflowStatusText = CurrentPage switch
+            {
+                AppPage.Grid =>
+                    "Сетка: выберите симуляцию или создайте новую клеточную карту.",
+                AppPage.Graph => SelectedGraphCreationMode switch
+                {
+                    GraphCreationMode.Small =>
+                        "Малый граф: выберите симуляцию или создайте topology-first граф.",
+                    GraphCreationMode.Medium =>
+                        "Средний граф: выберите симуляцию или создайте patch/cluster-граф.",
+                    GraphCreationMode.Large =>
+                        "Большой граф: выберите симуляцию или создайте area-like граф.",
+                    _ =>
+                        "Выберите симуляцию"
+                },
+                _ => "Выберите симуляцию"
+            };
             return;
         }
 
+        var selectedModelText = SelectedSimulationGraphType == GraphType.Grid
+            ? "сеточная симуляция"
+            : SelectedSimulation?.GraphScaleType switch
+            {
+                GraphScaleType.Small => "малый граф",
+                GraphScaleType.Medium => "средний граф",
+                GraphScaleType.Large => "большой граф",
+                _ => "графовая симуляция"
+            };
+
         if (IsAutoSimulationRunning && IsAutoSimulationPaused)
         {
-            WorkflowStatusText = "Авто-режим: пауза";
+            WorkflowStatusText = $"Авто-режим: пауза • {selectedModelText}";
             return;
         }
 
         if (IsAutoSimulationRunning)
         {
-            WorkflowStatusText = "Авто-режим: моделирование идёт";
+            WorkflowStatusText = $"Авто-режим: моделирование идёт • {selectedModelText}";
             return;
         }
 
         if (IsSimulationRunning && SelectedSimulationStatus == 1)
         {
-            WorkflowStatusText = "Симуляция идёт";
+            WorkflowStatusText = $"Симуляция идёт • {selectedModelText}";
             return;
         }
 
         if (SelectedSimulationStatus == 2)
         {
-            WorkflowStatusText = "Симуляция завершена";
+            WorkflowStatusText = $"Симуляция завершена • {selectedModelText}";
             return;
         }
 
         if (SelectedSimulationStatus == 3)
         {
-            WorkflowStatusText = "Симуляция отменена";
+            WorkflowStatusText = $"Симуляция отменена • {selectedModelText}";
             return;
         }
 
@@ -865,13 +955,17 @@ public partial class MainWindowViewModel : ObservableObject
         {
             if (!IsPreparedMapLoaded)
             {
-                WorkflowStatusText = "Карта загружается или подготавливается...";
+                WorkflowStatusText = SelectedSimulationGraphType == GraphType.Grid
+                    ? "Сеточная карта загружается или подготавливается..."
+                    : "Графовая структура загружается или подготавливается...";
                 return;
             }
 
             if (HasSavedIgnitionPreview)
             {
-                WorkflowStatusText = "Сохранённые стартовые очаги показаны на карте. Можно запускать или очистить их.";
+                WorkflowStatusText = SelectedSimulationGraphType == GraphType.Grid
+                    ? "Сохранённые стартовые очаги показаны на карте. Можно запускать или очистить их."
+                    : "Сохранённые стартовые очаги показаны на графе. Можно запускать или очистить их.";
                 return;
             }
 
@@ -882,12 +976,26 @@ public partial class MainWindowViewModel : ObservableObject
                     : SelectedIgnitionNodes.Count;
 
                 WorkflowStatusText = selectedCount > 0
-                    ? $"Очаги выбраны: {selectedCount}. Можно запускать симуляцию."
-                    : "Карта подготовлена. Выберите стартовые очаги вручную.";
+                    ? $"Очаги выбраны: {selectedCount}. Можно запускать {selectedModelText}."
+                    : SelectedSimulationGraphType == GraphType.Grid
+                        ? "Карта подготовлена. Выберите стартовые очаги вручную."
+                        : "Граф подготовлен. Выберите стартовые узлы вручную.";
                 return;
             }
 
-            WorkflowStatusText = "Карта подготовлена. Изучите территорию и запускайте пожар.";
+            WorkflowStatusText = SelectedSimulationGraphType == GraphType.Grid
+                ? "Карта подготовлена. Изучите территорию и запускайте пожар."
+                : SelectedSimulation?.GraphScaleType switch
+                {
+                    GraphScaleType.Small =>
+                        "Малый граф подготовлен. Можно запускать пожар и наблюдать переходы по узлам и мостам.",
+                    GraphScaleType.Medium =>
+                        "Средний граф подготовлен. Можно запускать пожар и анализировать patch-to-patch распространение.",
+                    GraphScaleType.Large =>
+                        "Большой граф подготовлен. Можно запускать пожар и анализировать макрозоны и corridor-связи.",
+                    _ =>
+                        "Граф подготовлен. Можно запускать симуляцию."
+                };
             return;
         }
 
@@ -1207,9 +1315,31 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void SelectClusteredGraphMode()
+    private void SelectSmallGraphMode()
     {
-        SelectedGraphCreationMode = GraphCreationMode.Clustered;
+        SelectedGraphCreationMode = GraphCreationMode.Small;
+    }
+
+    [RelayCommand]
+    private void SelectMediumGraphMode()
+    {
+        SelectedGraphCreationMode = GraphCreationMode.Medium;
+    }
+
+    [RelayCommand]
+    private void SelectLargeGraphMode()
+    {
+        SelectedGraphCreationMode = GraphCreationMode.Large;
+    }
+    private GraphScaleType GetSelectedGraphScaleType()
+    {
+        return SelectedGraphCreationMode switch
+        {
+            GraphCreationMode.Small => GraphScaleType.Small,
+            GraphCreationMode.Medium => GraphScaleType.Medium,
+            GraphCreationMode.Large => GraphScaleType.Large,
+            _ => GraphScaleType.Medium
+        };
     }
 
     [RelayCommand]
@@ -1381,13 +1511,13 @@ public partial class MainWindowViewModel : ObservableObject
             SetTransientStatus($"Список симуляций обновлён: {Simulations.Count}", true);
         });
     }
+
     [RelayCommand]
     private async Task CreateSimulationAsync()
     {
         if (!IsConnected)
             return;
 
-        var dialog = new CreateSimulationDialog(CurrentPage, SelectedGraphCreationMode);
         var mainWindow = GetMainWindow();
 
         if (mainWindow == null)
@@ -1396,26 +1526,46 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var result = await dialog.ShowDialog<bool>(mainWindow);
-        if (!result)
+        SimulationCreationResult? creation = null;
+        bool result;
+
+        if (CurrentPage == AppPage.Grid)
+        {
+            var dialog = new CreateGridSimulationDialog();
+            result = await dialog.ShowDialog<bool>(mainWindow);
+
+            if (result)
+                creation = dialog.GetResult();
+        }
+        else
+        {
+            var dialog = new CreateGraphSimulationDialog(SelectedGraphCreationMode);
+            result = await dialog.ShowDialog<bool>(mainWindow);
+
+            if (result)
+                creation = dialog.GetResult();
+        }
+
+        if (!result || creation == null)
             return;
 
         SetTransientStatus("Создание симуляции...", false);
 
         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {
-            WindInfo = $"{dialog.WindSpeed} м/с, {GetWindDirectionName(dialog.WindDirection)}";
-            TemperatureInfo = $"{dialog.Temperature} °C";
-            HumidityInfo = $"{dialog.Humidity}%";
-            PrecipitationInfo = $"{dialog.Precipitation:F1} мм/ч";
-            GridWidth = dialog.GridWidth;
-            GridHeight = dialog.GridHeight;
-            InitialFireCells = dialog.InitialFireCells;
+            WindInfo = $"{creation.WindSpeed} м/с, {GetWindDirectionName(creation.WindDirection)}";
+            TemperatureInfo = $"{creation.Temperature} °C";
+            HumidityInfo = $"{creation.Humidity}%";
+            PrecipitationInfo = $"{creation.Precipitation:F1} мм/ч";
+            GridWidth = creation.GridWidth;
+            GridHeight = creation.GridHeight;
+            InitialFireCells = creation.InitialFireCells;
         });
 
-        var graphType = GetCreateGraphType();
+        var graphType = creation.GraphType;
+        var graphScaleType = creation.GraphScaleType;
 
-        var mapModeText = dialog.SelectedMapCreationMode switch
+        var mapModeText = creation.SelectedMapCreationMode switch
         {
             MapCreationMode.Random => "Случайная генерация",
             MapCreationMode.Scenario => "Сценарий",
@@ -1425,7 +1575,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         var scenarioText = graphType switch
         {
-            GraphType.Grid => dialog.SelectedScenarioType switch
+            GraphType.Grid => creation.SelectedScenarioType switch
             {
                 MapScenarioType.MixedForest => "Смешанный лес",
                 MapScenarioType.DryConiferousMassif => "Сухой хвойный массив",
@@ -1437,14 +1587,14 @@ public partial class MainWindowViewModel : ObservableObject
                 _ => string.Empty
             },
 
-            GraphType.ClusteredGraph => dialog.SelectedClusteredScenarioType switch
+            GraphType.ClusteredGraph => creation.SelectedClusteredScenarioType switch
             {
-                ClusteredScenarioType.DenseDryConiferous => "Плотный сухой хвойный массив",
-                ClusteredScenarioType.WaterBarrier => "Кластеры, разделённые водным барьером",
-                ClusteredScenarioType.FirebreakGap => "Кластеры с просекой / разрывом",
-                ClusteredScenarioType.HillyClusters => "Холмистые кластеры",
-                ClusteredScenarioType.WetAfterRain => "Влажные патчи после дождя",
-                ClusteredScenarioType.MixedDryHotspots => "Смешанные патчи с очагами сухости",
+                ClusteredScenarioType.DenseDryConiferous => "Плотный сухой граф",
+                ClusteredScenarioType.WaterBarrier => "Граф с водным барьером",
+                ClusteredScenarioType.FirebreakGap => "Граф с разрывом / просекой",
+                ClusteredScenarioType.HillyClusters => "Холмистая графовая структура",
+                ClusteredScenarioType.WetAfterRain => "Влажный граф после дождя",
+                ClusteredScenarioType.MixedDryHotspots => "Смешанный граф с сухими очагами",
                 _ => string.Empty
             },
 
@@ -1454,95 +1604,84 @@ public partial class MainWindowViewModel : ObservableObject
         var baseShapeText = graphType switch
         {
             GraphType.Grid =>
-                $"Сетка {dialog.GridWidth}x{dialog.GridHeight}",
+                $"Сетка {creation.GridWidth}x{creation.GridHeight}",
 
-            GraphType.ClusteredGraph => dialog.SelectedMapCreationMode switch
+            GraphType.ClusteredGraph => graphScaleType switch
             {
-                MapCreationMode.Random =>
-                    $"Кластерный граф в области {dialog.GridWidth}x{dialog.GridHeight}",
-
-                MapCreationMode.Scenario =>
-                    $"Сценарный кластерный граф в области {dialog.GridWidth}x{dialog.GridHeight}",
-
-                MapCreationMode.SemiManual when dialog.ClusteredBlueprint != null =>
-                    $"Clustered blueprint: узлов {dialog.ClusteredBlueprint.Nodes.Count}, рёбер {dialog.ClusteredBlueprint.Edges.Count}",
-
-                MapCreationMode.SemiManual =>
-                    $"Полуручной кластерный граф в области {dialog.GridWidth}x{dialog.GridHeight}",
-
-                _ =>
-                    $"Кластерный граф {dialog.GridWidth}x{dialog.GridHeight}"
+                GraphScaleType.Small => $"Малый граф • поле {creation.GridWidth}x{creation.GridHeight}",
+                GraphScaleType.Medium => $"Средний граф • поле {creation.GridWidth}x{creation.GridHeight}",
+                GraphScaleType.Large => $"Большой граф • поле {creation.GridWidth}x{creation.GridHeight}",
+                _ => $"Граф • поле {creation.GridWidth}x{creation.GridHeight}"
             },
 
-            _ =>
-                $"Сетка {dialog.GridWidth}x{dialog.GridHeight}"
+            _ => $"{creation.GridWidth}x{creation.GridHeight}"
         };
 
-        var description =
-            $"{baseShapeText} | Режим карты: {mapModeText}" +
-            (string.IsNullOrWhiteSpace(scenarioText) ? string.Empty : $" | Сценарий: {scenarioText}") +
-            $" | Сухость: {dialog.MapDrynessFactor:F2}" +
-            $" | Рельеф: {dialog.ReliefStrengthFactor:F2}" +
-            $" | Горючий покров: {dialog.FuelDensityFactor:F2}" +
-            $" | Ветер: {dialog.WindSpeed} м/с, {GetWindDirectionName(dialog.WindDirection)}" +
-            $" | Осадки: {dialog.Precipitation:F1} мм/ч" +
-            (dialog.RandomSeed.HasValue ? $" | Seed: {dialog.RandomSeed.Value}" : string.Empty);
+        var summaryParts = new List<string>
+    {
+        baseShapeText,
+        mapModeText
+    };
 
-        var dto = new CreateSimulationDto
+        if (!string.IsNullOrWhiteSpace(scenarioText))
+            summaryParts.Add(scenarioText);
+
+        var createDto = new CreateSimulationDto
         {
-            Name = string.IsNullOrWhiteSpace(dialog.SimulationName)
-         ? $"Симуляция {DateTime.Now:dd.MM HH:mm}"
-         : dialog.SimulationName.Trim(),
-            Description = description,
-            GridWidth = dialog.GridWidth,
-            GridHeight = dialog.GridHeight,
+            Name = string.IsNullOrWhiteSpace(creation.SimulationName)
+                ? $"Симуляция {DateTime.Now:HH:mm:ss}"
+                : creation.SimulationName,
+
+            Description = string.Join(" • ", summaryParts),
+
+            GridWidth = creation.GridWidth,
+            GridHeight = creation.GridHeight,
             GraphType = (int)graphType,
-            InitialMoistureMin = dialog.MoistureMin,
-            InitialMoistureMax = dialog.MoistureMax,
-            ElevationVariation = dialog.ElevationVariation,
-            InitialFireCellsCount = dialog.InitialFireCells,
-            SimulationSteps = dialog.SimulationSteps,
-            StepDurationSeconds = dialog.StepDurationSeconds,
-            RandomSeed = dialog.RandomSeed,
-            Precipitation = dialog.Precipitation,
-            MapCreationMode = dialog.SelectedMapCreationMode,
+            GraphScaleType = graphScaleType,
 
-            ScenarioType = graphType == GraphType.Grid
-         ? dialog.SelectedScenarioType
-         : null,
+            InitialMoistureMin = creation.MoistureMin,
+            InitialMoistureMax = creation.MoistureMax,
+            ElevationVariation = creation.ElevationVariation,
+            InitialFireCellsCount = creation.InitialFireCells,
+            SimulationSteps = creation.SimulationSteps,
+            StepDurationSeconds = creation.StepDurationSeconds,
+            RandomSeed = creation.RandomSeed,
 
-            ClusteredScenarioType = graphType == GraphType.ClusteredGraph
-         ? dialog.SelectedClusteredScenarioType
-         : null,
+            MapCreationMode = creation.SelectedMapCreationMode,
+            ScenarioType = graphType == GraphType.Grid ? creation.SelectedScenarioType : null,
+            ClusteredScenarioType = graphType == GraphType.ClusteredGraph ? creation.SelectedClusteredScenarioType : null,
 
-            MapNoiseStrength = dialog.MapNoiseStrength,
-            MapDrynessFactor = dialog.MapDrynessFactor,
-            ReliefStrengthFactor = dialog.ReliefStrengthFactor,
-            FuelDensityFactor = dialog.FuelDensityFactor,
+            MapNoiseStrength = creation.MapNoiseStrength,
+            MapDrynessFactor = creation.MapDrynessFactor,
+            ReliefStrengthFactor = creation.ReliefStrengthFactor,
+            FuelDensityFactor = creation.FuelDensityFactor,
+            Precipitation = creation.Precipitation,
 
             MapRegionObjects = graphType == GraphType.Grid
-         ? dialog.MapRegionObjects?.ToList() ?? new List<MapRegionObjectDto>()
-         : new List<MapRegionObjectDto>(),
+                ? creation.MapRegionObjects
+                : new List<MapRegionObjectDto>(),
 
             ClusteredBlueprint = graphType == GraphType.ClusteredGraph
-         ? dialog.ClusteredBlueprint
-         : null,
+                ? creation.ClusteredBlueprint
+                : null,
 
-            VegetationDistributions = (dialog.VegetationDistributions ?? new List<(int VegetationType, double Probability)>())
-         .Select(v => new VegetationDistributionDto
-         {
-             VegetationType = (VegetationType)v.VegetationType,
-             Probability = v.Probability
-         })
-         .ToList()
+            InitialFirePositions = new List<InitialFirePositionDto>(),
+
+            VegetationDistributions = creation.VegetationDistributions
+                .Select(x => new VegetationDistributionDto
+                {
+                    VegetationType = (VegetationType)x.VegetationType,
+                    Probability = x.Probability
+                })
+                .ToList()
         };
 
         var simulationId = await _apiService.CreateSimulationAsync(
-            dto,
-            dialog.Temperature,
-            dialog.Humidity,
-            dialog.WindSpeed,
-            dialog.WindDirection);
+            createDto,
+            creation.Temperature,
+            creation.Humidity,
+            creation.WindSpeed,
+            creation.WindDirection);
 
         if (!simulationId.HasValue)
         {
@@ -1552,18 +1691,25 @@ public partial class MainWindowViewModel : ObservableObject
 
         await LoadSimulationsAsync();
 
-        var created = Simulations.FirstOrDefault(s => s.Id == simulationId.Value);
+        var created = Simulations.FirstOrDefault(x => x.Id == simulationId.Value);
         if (created != null)
         {
-            var fitsCurrentPage =
-                (CurrentPage == AppPage.Grid && created.GraphType == GraphType.Grid) ||
-                (CurrentPage == AppPage.Graph && created.GraphType != GraphType.Grid);
-
-            if (fitsCurrentPage)
-                SelectedSimulation = created;
+            SelectedSimulation = created;
+            SelectedSimulationStatus = created.Status;
+            SelectedSimulationGraphType = created.GraphType;
         }
 
-        SetTransientStatus($"Симуляция создана: {dto.Name}", true);
+        var createdName = graphType == GraphType.Grid
+            ? "сеточная симуляция"
+            : graphScaleType switch
+            {
+                GraphScaleType.Small => "малый граф",
+                GraphScaleType.Medium => "средний граф",
+                GraphScaleType.Large => "большой граф",
+                _ => "графовая симуляция"
+            };
+
+        SetTransientStatus($"Создана {createdName}", true);
     }
 
     [RelayCommand]
@@ -2015,7 +2161,7 @@ public partial class MainWindowViewModel : ObservableObject
 
                 OnPropertyChanged(nameof(IsGridSelected));
                 OnPropertyChanged(nameof(IsClusteredGraphSelected));
-                        OnPropertyChanged(nameof(VisualizationMeaningText));
+                OnPropertyChanged(nameof(VisualizationMeaningText));
                 OnPropertyChanged(nameof(StructureScaleText));
                 OnPropertyChanged(nameof(SpreadBehaviorText));
 

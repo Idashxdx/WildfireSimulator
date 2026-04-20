@@ -36,6 +36,8 @@ public class Simulation
         CreatedAt = DateTime.UtcNow;
         Status = SimulationStatus.Created;
         Parameters = Guard.Against.Null(parameters, nameof(parameters));
+
+        NormalizeGraphSettings();
     }
 
     public void ClearInitialFirePositions()
@@ -83,7 +85,21 @@ public class Simulation
         if (Status == SimulationStatus.Created)
         {
             Parameters = Guard.Against.Null(newParameters, nameof(newParameters));
+            NormalizeGraphSettings();
         }
+    }
+    public void NormalizeGraphSettings()
+    {
+        if (Parameters == null)
+            return;
+
+        if (Parameters.GraphType == GraphType.Grid)
+        {
+            Parameters.GraphScaleType = null;
+            return;
+        }
+
+        Parameters.GraphScaleType ??= GraphScaleType.Medium;
     }
 
     public void SaveGraph(ForestGraph graph)
@@ -363,6 +379,13 @@ public enum ClusteredScenarioType
     MixedDryHotspots = 5
 }
 
+public enum GraphScaleType
+{
+    Small = 0,
+    Medium = 1,
+    Large = 2
+}
+
 public enum MapObjectType
 {
     ConiferousArea = 0,
@@ -444,6 +467,8 @@ public class SimulationParameters
     public int GridHeight { get; set; }
     public GraphType GraphType { get; set; }
 
+    public GraphScaleType? GraphScaleType { get; set; }
+
     [NotMapped]
     public List<VegetationDistribution> VegetationDistributions { get; set; } = new();
 
@@ -502,6 +527,8 @@ public class SimulationParameters
         GridWidth = 20;
         GridHeight = 20;
         GraphType = GraphType.Grid;
+        GraphScaleType = null;
+
         InitialMoistureMin = 0.3;
         InitialMoistureMax = 0.7;
         ElevationVariation = 50.0;

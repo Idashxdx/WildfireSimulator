@@ -122,16 +122,28 @@
                             CornerRadius="10"
                             IsVisible="{Binding IsGraphPage}">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="Тип создаваемой графовой симуляции"
+                                <TextBlock Text="Масштаб создаваемой графовой симуляции"
                                     Foreground="#2F2A3A"
                                     FontSize="14"
                                     FontWeight="Bold" />
 
                                 <StackPanel Spacing="8">
                                     <Button Classes="uniformButton"
-                                        Content="Граф"
-                                        Command="{Binding SelectClusteredGraphModeCommand}"
-                                        Background="{Binding IsClusteredGraphCreationMode, Converter={StaticResource BoolToBrushConverter}, ConverterParameter='#DDEFD5;#ECE6FA'}"
+                                        Content="Малый граф"
+                                        Command="{Binding SelectSmallGraphModeCommand}"
+                                        Background="{Binding IsSmallGraphCreationMode, Converter={StaticResource BoolToBrushConverter}, ConverterParameter='#DDEFD5;#ECE6FA'}"
+                                        Foreground="#2F2A3A" />
+
+                                    <Button Classes="uniformButton"
+                                        Content="Средний граф"
+                                        Command="{Binding SelectMediumGraphModeCommand}"
+                                        Background="{Binding IsMediumGraphCreationMode, Converter={StaticResource BoolToBrushConverter}, ConverterParameter='#DDEFD5;#ECE6FA'}"
+                                        Foreground="#2F2A3A" />
+
+                                    <Button Classes="uniformButton"
+                                        Content="Большой граф"
+                                        Command="{Binding SelectLargeGraphModeCommand}"
+                                        Background="{Binding IsLargeGraphCreationMode, Converter={StaticResource BoolToBrushConverter}, ConverterParameter='#DDEFD5;#ECE6FA'}"
                                         Foreground="#2F2A3A" />
                                 </StackPanel>
 

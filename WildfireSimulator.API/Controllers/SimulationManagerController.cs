@@ -1019,7 +1019,7 @@ public class SimulationManagerController : ControllerBase
                 simulation.Parameters),
 
             GraphType.ClusteredGraph => await _graphGenerator.GenerateClusteredGraphAsync(
-                simulation.Parameters.GridWidth * simulation.Parameters.GridHeight / 2,
+                GetGraphNodeCountForScale(simulation.Parameters),
                 simulation.Parameters),
 
             _ => await _graphGenerator.GenerateGridAsync(
@@ -1029,6 +1029,33 @@ public class SimulationManagerController : ControllerBase
         };
     }
 
+    private int GetGraphNodeCountForScale(SimulationParameters parameters)
+    {
+        var scale = parameters.GraphScaleType ?? GraphScaleType.Medium;
+
+        return scale switch
+        {
+            GraphScaleType.Small => Math.Clamp(
+                Math.Max(parameters.GridWidth, parameters.GridHeight),
+                8,
+                20),
+
+            GraphScaleType.Medium => Math.Clamp(
+                parameters.GridWidth * parameters.GridHeight / 2,
+                20,
+                80),
+
+            GraphScaleType.Large => Math.Clamp(
+                parameters.GridWidth * parameters.GridHeight,
+                80,
+                250),
+
+            _ => Math.Clamp(
+                parameters.GridWidth * parameters.GridHeight / 2,
+                20,
+                80)
+        };
+    }
 
     private SimulationGraphDto BuildGraphDto(Simulation simulation, ForestGraph graph)
     {
@@ -1041,7 +1068,8 @@ public class SimulationManagerController : ControllerBase
             SimulationId = simulation.Id,
             SimulationName = simulation.Name,
             GraphType = simulation.Parameters.GraphType,
-            LayoutHint = GetLayoutHint(simulation.Parameters.GraphType),
+            GraphScaleType = simulation.Parameters.GraphScaleType,
+            LayoutHint = GetLayoutHint(simulation.Parameters),
             Width = graph.Width,
             Height = graph.Height,
             StepDurationSeconds = graph.StepDurationSeconds,
@@ -1141,14 +1169,19 @@ public class SimulationManagerController : ControllerBase
             .ToList();
     }
 
-
-    private string GetLayoutHint(GraphType graphType)
+    private string GetLayoutHint(SimulationParameters parameters)
     {
-        return graphType switch
+        if (parameters.GraphType == GraphType.Grid)
+            return "grid";
+
+        var scale = parameters.GraphScaleType ?? GraphScaleType.Medium;
+
+        return scale switch
         {
-            GraphType.Grid => "grid",
-            GraphType.ClusteredGraph => "node-link",
-            _ => "grid"
+            GraphScaleType.Small => "graph-small",
+            GraphScaleType.Medium => "graph-medium",
+            GraphScaleType.Large => "graph-large",
+            _ => "graph-medium"
         };
     }
 

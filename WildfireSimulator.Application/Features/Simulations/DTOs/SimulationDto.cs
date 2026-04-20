@@ -12,6 +12,7 @@ public class SimulationDto
     public DateTime? FinishedAt { get; set; }
     public SimulationStatus Status { get; set; }
     public GraphType GraphType { get; set; }
+    public GraphScaleType? GraphScaleType { get; set; }
 
     public static SimulationDto FromEntity(Simulation simulation)
     {
@@ -24,7 +25,8 @@ public class SimulationDto
             StartedAt = simulation.StartedAt,
             FinishedAt = simulation.FinishedAt,
             Status = simulation.Status,
-            GraphType = simulation.Parameters.GraphType
+            GraphType = simulation.Parameters.GraphType,
+            GraphScaleType = simulation.Parameters.GraphScaleType
         };
     }
 }

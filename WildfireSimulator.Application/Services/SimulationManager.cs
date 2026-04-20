@@ -517,7 +517,7 @@ public partial class SimulationManager
                 simulation.Parameters),
 
             GraphType.ClusteredGraph => await graphGenerator.GenerateClusteredGraphAsync(
-                simulation.Parameters.GridWidth * simulation.Parameters.GridHeight / 2,
+                GetGraphNodeCountForScale(simulation.Parameters),
                 simulation.Parameters),
 
             _ => await graphGenerator.GenerateGridAsync(
@@ -531,6 +531,33 @@ public partial class SimulationManager
             : 60;
 
         return graph;
+    }
+    private int GetGraphNodeCountForScale(SimulationParameters parameters)
+    {
+        var scale = parameters.GraphScaleType ?? GraphScaleType.Medium;
+
+        return scale switch
+        {
+            GraphScaleType.Small => Math.Clamp(
+                Math.Max(parameters.GridWidth, parameters.GridHeight),
+                8,
+                20),
+
+            GraphScaleType.Medium => Math.Clamp(
+                parameters.GridWidth * parameters.GridHeight / 2,
+                20,
+                80),
+
+            GraphScaleType.Large => Math.Clamp(
+                parameters.GridWidth * parameters.GridHeight,
+                80,
+                250),
+
+            _ => Math.Clamp(
+                parameters.GridWidth * parameters.GridHeight / 2,
+                20,
+                80)
+        };
     }
     private List<(int X, int Y)> GetValidatedIgnitionPositions(
         ForestGraph graph,

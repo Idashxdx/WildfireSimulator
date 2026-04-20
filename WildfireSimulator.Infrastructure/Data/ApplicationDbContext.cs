@@ -113,44 +113,48 @@ public class ApplicationDbContext : DbContext
                 .HasColumnType("jsonb");
 
             entity.OwnsOne(e => e.Parameters, p =>
- {
-     p.Property(pp => pp.GridWidth).IsRequired();
-     p.Property(pp => pp.GridHeight).IsRequired();
-     p.Property(pp => pp.GraphType).IsRequired().HasConversion<int>();
-     p.Property(pp => pp.InitialMoistureMin).IsRequired().HasPrecision(3, 2);
-     p.Property(pp => pp.InitialMoistureMax).IsRequired().HasPrecision(3, 2);
-     p.Property(pp => pp.ElevationVariation).IsRequired().HasPrecision(8, 2);
-     p.Property(pp => pp.InitialFireCellsCount).IsRequired();
-     p.Property(pp => pp.SimulationSteps).IsRequired();
-     p.Property(pp => pp.StepDurationSeconds).IsRequired();
-     p.Property(pp => pp.RandomSeed).IsRequired(false);
+            {
+                p.Property(pp => pp.GridWidth).IsRequired();
+                p.Property(pp => pp.GridHeight).IsRequired();
+                p.Property(pp => pp.GraphType).IsRequired().HasConversion<int>();
 
-     p.Property(pp => pp.MapCreationMode)
-         .IsRequired()
-         .HasConversion<int>();
+                p.Property(pp => pp.GraphScaleType)
+                    .HasConversion<int?>();
 
-     p.Property(pp => pp.ScenarioType)
-         .HasConversion<int?>();
+                p.Property(pp => pp.InitialMoistureMin).IsRequired().HasPrecision(3, 2);
+                p.Property(pp => pp.InitialMoistureMax).IsRequired().HasPrecision(3, 2);
+                p.Property(pp => pp.ElevationVariation).IsRequired().HasPrecision(8, 2);
+                p.Property(pp => pp.InitialFireCellsCount).IsRequired();
+                p.Property(pp => pp.SimulationSteps).IsRequired();
+                p.Property(pp => pp.StepDurationSeconds).IsRequired();
+                p.Property(pp => pp.RandomSeed).IsRequired(false);
 
-     p.Property(pp => pp.ClusteredScenarioType)
-         .HasConversion<int?>();
+                p.Property(pp => pp.MapCreationMode)
+                    .IsRequired()
+                    .HasConversion<int>();
 
-     p.Property(pp => pp.MapNoiseStrength)
-         .IsRequired()
-         .HasPrecision(4, 3);
+                p.Property(pp => pp.ScenarioType)
+                    .HasConversion<int?>();
 
-     p.Property(pp => pp.VegetationDistributionsJson)
-         .HasColumnName("VegetationDistributions")
-         .HasColumnType("jsonb");
+                p.Property(pp => pp.ClusteredScenarioType)
+                    .HasConversion<int?>();
 
-     p.Property(pp => pp.MapRegionObjectsJson)
-         .HasColumnName("MapRegionObjects")
-         .HasColumnType("jsonb");
+                p.Property(pp => pp.MapNoiseStrength)
+                    .IsRequired()
+                    .HasPrecision(4, 3);
 
-     p.Property(pp => pp.ClusteredBlueprintJson)
-         .HasColumnName("ClusteredBlueprint")
-         .HasColumnType("jsonb");
- });
+                p.Property(pp => pp.VegetationDistributionsJson)
+                    .HasColumnName("VegetationDistributions")
+                    .HasColumnType("jsonb");
+
+                p.Property(pp => pp.MapRegionObjectsJson)
+                    .HasColumnName("MapRegionObjects")
+                    .HasColumnType("jsonb");
+
+                p.Property(pp => pp.ClusteredBlueprintJson)
+                    .HasColumnName("ClusteredBlueprint")
+                    .HasColumnType("jsonb");
+            });
 
             entity.HasOne(e => e.WeatherCondition)
                 .WithMany()
