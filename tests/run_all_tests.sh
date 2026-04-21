@@ -30,6 +30,12 @@ TESTS=(
     "test_large_graph_corridor_logic.sh"
     "test_medium_graph_cluster_cohesion.sh"
     "test_small_graph_topology_profile.sh"
+    "test_large_graph_macro_corridor_scenario.sh"
+    "test_medium_graph_barrier_scenario.sh"
+    "test_small_graph_bridge_critical_scenario.sh"
+    "test_graph_scenario_distinction.sh"
+    "test_clustered_blueprint_validation.sh"
+    "test_clustered_blueprint_source_of_truth.sh"
 )
 
 cd tests

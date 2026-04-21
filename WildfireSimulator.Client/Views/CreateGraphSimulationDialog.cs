@@ -252,9 +252,9 @@ public partial class CreateGraphSimulationDialog : Window
         {
             Content = _mode switch
             {
-                GraphCreationMode.Small => "Два кластера и мост",
-                GraphCreationMode.Medium => "Сухие clustered patches",
-                GraphCreationMode.Large => "Сухие крупные сектора",
+                GraphCreationMode.Small => "Критический мост между двумя частями",
+                GraphCreationMode.Medium => "Сухие локальные патчи",
+                GraphCreationMode.Large => "Сухие макросекторы",
                 _ => "Базовый graph-сценарий"
             }
         });
@@ -263,9 +263,9 @@ public partial class CreateGraphSimulationDialog : Window
         {
             Content = _mode switch
             {
-                GraphCreationMode.Small => "Водный узел-барьер",
-                GraphCreationMode.Medium => "Водный барьер между патчами",
-                GraphCreationMode.Large => "Макро-водный барьер",
+                GraphCreationMode.Small => "Водный узел-блокиратор",
+                GraphCreationMode.Medium => "Барьер между патчами",
+                GraphCreationMode.Large => "Макробарьер с обходами",
                 _ => "Водный барьер"
             }
         });
@@ -274,8 +274,8 @@ public partial class CreateGraphSimulationDialog : Window
         {
             Content = _mode switch
             {
-                GraphCreationMode.Small => "Разрыв / firebreak",
-                GraphCreationMode.Medium => "Firebreak gap между патчами",
+                GraphCreationMode.Small => "Разрыв единственного перехода",
+                GraphCreationMode.Medium => "Firebreak gap между кластерами",
                 GraphCreationMode.Large => "Разрывы corridor-связей",
                 _ => "Разрыв / firebreak"
             }
@@ -285,9 +285,9 @@ public partial class CreateGraphSimulationDialog : Window
         {
             Content = _mode switch
             {
-                GraphCreationMode.Small => "Холмистая topology",
-                GraphCreationMode.Medium => "Холмистые кластеры",
-                GraphCreationMode.Large => "Крупные зоны с рельефом",
+                GraphCreationMode.Small => "Рельефно-зависимая topology",
+                GraphCreationMode.Medium => "Кластеры по высоте",
+                GraphCreationMode.Large => "Крупные высотные зоны",
                 _ => "Холмистый graph"
             }
         });
@@ -296,9 +296,9 @@ public partial class CreateGraphSimulationDialog : Window
         {
             Content = _mode switch
             {
-                GraphCreationMode.Small => "Влажный граф после дождя",
+                GraphCreationMode.Small => "Локально затухающий влажный граф",
                 GraphCreationMode.Medium => "Влажные patch-зоны",
-                GraphCreationMode.Large => "Влажные крупные области",
+                GraphCreationMode.Large => "Влажные макрообласти",
                 _ => "Влажный graph"
             }
         });
@@ -307,9 +307,9 @@ public partial class CreateGraphSimulationDialog : Window
         {
             Content = _mode switch
             {
-                GraphCreationMode.Small => "Компактные dry hot spots",
-                GraphCreationMode.Medium => "Mixed hot spots",
-                GraphCreationMode.Large => "Неоднородные зоны сухости",
+                GraphCreationMode.Small => "Контрастные dry hot spots",
+                GraphCreationMode.Medium => "Неоднородные сухие очаги",
+                GraphCreationMode.Large => "Гетерогенные зоны и corridors",
                 _ => "Mixed hot spots"
             }
         });
@@ -518,15 +518,15 @@ public partial class CreateGraphSimulationDialog : Window
             return;
 
         _presetHintTextBlock.Text =
-            "Готовые сценарии для графа. Кнопка подставляет scale-aware настройки: сценарий, погоду и режим подготовки graph structure.";
+            "Готовые сценарии для графа. Кнопка подставляет scale-aware конфигурацию, чтобы сразу получить осмысленный исследовательский кейс для Small / Medium / Large.";
 
         if (_presetButton1 != null)
         {
             _presetButton1.Content = _mode switch
             {
-                GraphCreationMode.Small => "Два кластера и мост",
-                GraphCreationMode.Medium => "Сухие clustered patches",
-                GraphCreationMode.Large => "Сухие крупные сектора",
+                GraphCreationMode.Small => "Критический мост",
+                GraphCreationMode.Medium => "Сухие патчи",
+                GraphCreationMode.Large => "Сухие макросекторы",
                 _ => "Сценарий 1"
             };
             _presetButton1.Tag = "dry-coniferous";
@@ -536,9 +536,9 @@ public partial class CreateGraphSimulationDialog : Window
         {
             _presetButton2.Content = _mode switch
             {
-                GraphCreationMode.Small => "Водный узел-барьер",
-                GraphCreationMode.Medium => "Водный барьер между патчами",
-                GraphCreationMode.Large => "Макро-водный барьер",
+                GraphCreationMode.Small => "Водный блокиратор",
+                GraphCreationMode.Medium => "Барьер между патчами",
+                GraphCreationMode.Large => "Макроводный барьер",
                 _ => "Сценарий 2"
             };
             _presetButton2.Tag = "river";
@@ -548,9 +548,9 @@ public partial class CreateGraphSimulationDialog : Window
         {
             _presetButton3.Content = _mode switch
             {
-                GraphCreationMode.Small => "Плотный сухой граф",
-                GraphCreationMode.Medium => "Смешанные hot spots",
-                GraphCreationMode.Large => "Неоднородные зоны",
+                GraphCreationMode.Small => "Dry hot spots",
+                GraphCreationMode.Medium => "Неоднородные hot spots",
+                GraphCreationMode.Large => "Гетерогенные зоны",
                 _ => "Сценарий 3"
             };
             _presetButton3.Tag = "wet";
@@ -560,9 +560,9 @@ public partial class CreateGraphSimulationDialog : Window
         {
             _presetButton4.Content = _mode switch
             {
-                GraphCreationMode.Small => "Разрыв / firebreak",
-                GraphCreationMode.Medium => "Просека между патчами",
-                GraphCreationMode.Large => "Bridge corridors",
+                GraphCreationMode.Small => "Разрыв перехода",
+                GraphCreationMode.Medium => "Firebreak gap",
+                GraphCreationMode.Large => "Разрыв corridors",
                 _ => "Сценарий 4"
             };
             _presetButton4.Tag = "firebreak";
@@ -572,9 +572,9 @@ public partial class CreateGraphSimulationDialog : Window
         {
             _presetButton5.Content = _mode switch
             {
-                GraphCreationMode.Small => "Компактный demo-граф",
-                GraphCreationMode.Medium => "Холмистые кластеры",
-                GraphCreationMode.Large => "Крупные area-переходы",
+                GraphCreationMode.Small => "Рельефная topology",
+                GraphCreationMode.Medium => "Высотные кластеры",
+                GraphCreationMode.Large => "Высотные макрозоны",
                 _ => "Сценарий 5"
             };
             _presetButton5.Tag = "hills";
@@ -644,18 +644,78 @@ public partial class CreateGraphSimulationDialog : Window
 
         _scenarioDescriptionTextBlock.Text = SelectedClusteredScenarioType switch
         {
-            ClusteredScenarioType.DenseDryConiferous =>
-                "Сухая плотная graph-структура с высокой проводимостью огня и выраженными локальными связями.",
-            ClusteredScenarioType.WaterBarrier =>
-                "Water/barrier scenario: часть узлов и переходов ослабляется водной преградой.",
-            ClusteredScenarioType.FirebreakGap =>
-                "Firebreak scenario: разрывы и слабые мосты мешают непрерывному распространению.",
-            ClusteredScenarioType.HillyClusters =>
-                "Холмистая graph-структура с неоднородным рельефом и patch-like поведением.",
-            ClusteredScenarioType.WetAfterRain =>
-                "Влажный graph после осадков: воспламенение и развитие фронта заметно замедлены.",
-            ClusteredScenarioType.MixedDryHotspots =>
-                "Неоднородная graph-карта с локальными сухими очагами и контрастными зонами.",
+            ClusteredScenarioType.DenseDryConiferous => _mode switch
+            {
+                GraphCreationMode.Small =>
+                    "SmallGraph: две компактные части, соединённые критическим мостом. Исход моделирования в первую очередь определяется topology и судьбой одного перехода.",
+                GraphCreationMode.Medium =>
+                    "MediumGraph: несколько сухих кластеров с повышенной связностью внутри патчей и ограниченными переходами между ними. Сценарий нужен для исследования локальной неоднородности.",
+                GraphCreationMode.Large =>
+                    "LargeGraph: сухие макросекторы и усиленные магистральные переходы. Сценарий подчеркивает глобальное распространение между крупными зонами.",
+                _ =>
+                    "Сухой сценарий графа."
+            },
+
+            ClusteredScenarioType.WaterBarrier => _mode switch
+            {
+                GraphCreationMode.Small =>
+                    "SmallGraph: один водный узел или короткий водный барьер блокирует ключевой путь распространения.",
+                GraphCreationMode.Medium =>
+                    "MediumGraph: водная преграда разделяет несколько патчей и ослабляет межкластерное распространение.",
+                GraphCreationMode.Large =>
+                    "LargeGraph: макробарьер делит территорию на сектора, а пожар может обходить его только по ограниченным боковым путям.",
+                _ =>
+                    "Сценарий водного барьера."
+            },
+
+            ClusteredScenarioType.FirebreakGap => _mode switch
+            {
+                GraphCreationMode.Small =>
+                    "SmallGraph: один ослабленный разрыв между двумя частями. Сценарий показывает влияние единственного слабого перехода.",
+                GraphCreationMode.Medium =>
+                    "MediumGraph: firebreak gap между кластерами создаёт узкое место распространения.",
+                GraphCreationMode.Large =>
+                    "LargeGraph: corridor-связи разорваны и пожар вынужден искать редкие обходные маршруты между макрозонами.",
+                _ =>
+                    "Сценарий firebreak."
+            },
+
+            ClusteredScenarioType.HillyClusters => _mode switch
+            {
+                GraphCreationMode.Small =>
+                    "SmallGraph: небольшая topology, где рельеф заметно меняет относительную проводимость рёбер.",
+                GraphCreationMode.Medium =>
+                    "MediumGraph: группы узлов различаются по высоте и создают elevation-driven локальные эффекты.",
+                GraphCreationMode.Large =>
+                    "LargeGraph: крупные зоны с разным рельефом и усилением/ослаблением распространения на масштабе секторов.",
+                _ =>
+                    "Холмистый сценарий."
+            },
+
+            ClusteredScenarioType.WetAfterRain => _mode switch
+            {
+                GraphCreationMode.Small =>
+                    "SmallGraph: почти затухающий влажный граф, полезен как контрастный сценарий к dry topology.",
+                GraphCreationMode.Medium =>
+                    "MediumGraph: влажные patch-зоны тормозят распространение внутри кластеров и между ними.",
+                GraphCreationMode.Large =>
+                    "LargeGraph: крупные влажные области формируют слабопроводящие макрозоны.",
+                _ =>
+                    "Влажный сценарий."
+            },
+
+            ClusteredScenarioType.MixedDryHotspots => _mode switch
+            {
+                GraphCreationMode.Small =>
+                    "SmallGraph: компактные dry hot spots и контрастные локальные связи внутри небольшой topology.",
+                GraphCreationMode.Medium =>
+                    "MediumGraph: неоднородные сухие очаги внутри patch-структуры. Сценарий нужен для анализа локальных ускорений фронта.",
+                GraphCreationMode.Large =>
+                    "LargeGraph: гетерогенные сектора с dry hot spots и corridor-переходами между ними.",
+                _ =>
+                    "Неоднородный сценарий."
+            },
+
             _ =>
                 "Сценарий графа выбран."
         };
