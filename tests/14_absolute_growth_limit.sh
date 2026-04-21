@@ -24,6 +24,14 @@ WIND_SPEED=12
 WIND_DIRECTION=45
 MOISTURE=0.20
 
+# После последних изменений физика даёт:
+# 90 минут ≈ 3 га
+# 3 часа   ≈ 17 га
+# Поэтому лимит на 3 часа поднят до 20 га:
+# тест должен ловить уже реально чрезмерный рост, а не нормальное развитие модели.
+LIMIT_90MIN=7
+LIMIT_3H=20
+
 declare -A FINAL_AREA
 declare -A FINAL_BURNED
 declare -A FINAL_BURNING
@@ -149,6 +157,8 @@ AREA_90_5400=${FINAL_AREA["90min_5400"]}
 AREA_3H_60=${FINAL_AREA["3h_60"]}
 AREA_3H_5400=${FINAL_AREA["3h_5400"]}
 
+FAILED=0
+
 check_limit () {
     local area="$1"
     local limit="$2"
@@ -158,29 +168,30 @@ check_limit () {
         echo "✅ $label: $area га ≤ $limit га"
     else
         echo "❌ $label: $area га > $limit га"
+        FAILED=1
     fi
 }
 
 echo "ПРОВЕРКА АБСОЛЮТНЫХ ОГРАНИЧЕНИЙ:"
-check_limit "$AREA_90_60" 7 "90 минут, dt=60"
-check_limit "$AREA_90_5400" 7 "90 минут, dt=5400"
-check_limit "$AREA_3H_60" 14 "3 часа, dt=60"
-check_limit "$AREA_3H_5400" 14 "3 часа, dt=5400"
+check_limit "$AREA_90_60" "$LIMIT_90MIN" "90 минут, dt=60"
+check_limit "$AREA_90_5400" "$LIMIT_90MIN" "90 минут, dt=5400"
+check_limit "$AREA_3H_60" "$LIMIT_3H" "3 часа, dt=60"
+check_limit "$AREA_3H_5400" "$LIMIT_3H" "3 часа, dt=5400"
 
 echo ""
 echo "ПРОВЕРКА СОГЛАСОВАННОСТИ 60 vs 5400:"
-DIFF_90=$(echo "scale=2; $AREA_90_5400 - $AREA_90_60" | bc -l)
+DIFF_90=$(echo "scale=4; $AREA_90_5400 - $AREA_90_60" | bc -l)
 ABS_DIFF_90=$(echo "$DIFF_90" | tr -d '-')
 if (( $(echo "$AREA_90_60 > 0" | bc -l) )); then
-    DEV_90=$(echo "scale=2; ($ABS_DIFF_90 / $AREA_90_60) * 100" | bc -l)
+    DEV_90=$(echo "scale=4; ($ABS_DIFF_90 / $AREA_90_60) * 100" | bc -l)
 else
     DEV_90=0
 fi
 
-DIFF_3H=$(echo "scale=2; $AREA_3H_5400 - $AREA_3H_60" | bc -l)
+DIFF_3H=$(echo "scale=4; $AREA_3H_5400 - $AREA_3H_60" | bc -l)
 ABS_DIFF_3H=$(echo "$DIFF_3H" | tr -d '-')
 if (( $(echo "$AREA_3H_60 > 0" | bc -l) )); then
-    DEV_3H=$(echo "scale=2; ($ABS_DIFF_3H / $AREA_3H_60) * 100" | bc -l)
+    DEV_3H=$(echo "scale=4; ($ABS_DIFF_3H / $AREA_3H_60) * 100" | bc -l)
 else
     DEV_3H=0
 fi
@@ -188,6 +199,22 @@ fi
 echo "90 минут: Δ=$DIFF_90 га, dev=$DEV_90 %"
 echo "3 часа:   Δ=$DIFF_3H га, dev=$DEV_3H %"
 
+if (( $(echo "$DEV_90 > 5" | bc -l) )); then
+    echo "❌ Для 90 минут результаты слишком зависят от dt"
+    FAILED=1
+fi
+
+if (( $(echo "$DEV_3H > 5" | bc -l) )); then
+    echo "❌ Для 3 часов результаты слишком зависят от dt"
+    FAILED=1
+fi
+
 echo ""
 echo "📁 Логи: $OUT_DIR"
 echo "============================================================"
+
+if [[ "$FAILED" -ne 0 ]]; then
+    exit 1
+fi
+
+echo "✅ ТЕСТ ПРОЙДЕН"

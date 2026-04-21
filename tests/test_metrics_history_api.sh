@@ -10,7 +10,7 @@ STEP2_JSON="$TMP_DIR/step2.json"
 METRICS_JSON="$TMP_DIR/metrics.json"
 
 echo "============================================================"
-echo " ТЕСТ 11.8: FireMetrics history должен писаться и читаться через API"
+echo " ТЕСТ: FireMetrics history должен писаться и читаться через API"
 echo "============================================================"
 
 create_payload='{
@@ -56,25 +56,50 @@ curl -sS -X POST "$BASE_URL/api/SimulationManager/$SIM_ID/step" > "$STEP2_JSON"
 
 curl -sS "$BASE_URL/api/simulations/$SIM_ID/metrics" > "$METRICS_JSON"
 
-python3 - "$METRICS_JSON" << 'PY'
-import json, sys
+python3 - "$METRICS_JSON" "$SIM_ID" << 'PY'
+import json
+import sys
 
 path = sys.argv[1]
+expected_sim_id = sys.argv[2]
+
 with open(path, "r", encoding="utf-8") as f:
     data = json.load(f)
 
-if not isinstance(data, list):
-    print("❌ API вернул не список метрик")
+if isinstance(data, list):
+    metrics = data
+    success = True
+    response_sim_id = expected_sim_id
+    count = len(metrics)
+else:
+    success = bool(data.get("success", False))
+    response_sim_id = str(data.get("simulationId", ""))
+    count = int(data.get("count", 0))
+    metrics = data.get("metrics")
+
+if success is not True:
+    print("❌ success=false в ответе metrics API")
     sys.exit(1)
 
-count = len(data)
-print("metrics_count =", count)
+if not isinstance(metrics, list):
+    print("❌ Поле metrics отсутствует или не является списком")
+    sys.exit(1)
 
-if count < 2:
+if response_sim_id and response_sim_id != expected_sim_id:
+    print(f"❌ simulationId в ответе не совпадает: {response_sim_id} != {expected_sim_id}")
+    sys.exit(1)
+
+if count != len(metrics):
+    print(f"❌ count не совпадает с длиной списка: count={count}, len={len(metrics)}")
+    sys.exit(1)
+
+print("metrics_count =", len(metrics))
+
+if len(metrics) < 2:
     print("❌ Ожидалось минимум 2 записи метрик после двух шагов")
     sys.exit(1)
 
-steps = [m["step"] for m in data]
+steps = [m["step"] for m in metrics]
 print("steps =", steps)
 
 if steps != sorted(steps):
@@ -93,19 +118,19 @@ required_fields = [
     "averageWindSpeed"
 ]
 
-for i, item in enumerate(data):
+for i, item in enumerate(metrics):
     for field in required_fields:
         if field not in item:
             print(f"❌ В метрике #{i} отсутствует поле {field}")
             sys.exit(1)
 
-print("first_metric =", data[0])
-print("last_metric  =", data[-1])
+print("first_metric =", metrics[0])
+print("last_metric  =", metrics[-1])
 
 print("✅ История FireMetrics корректно читается через API")
 PY
 
 echo "============================================================"
-echo "✅ ТЕСТ 11.8 ПРОЙДЕН"
+echo "✅ ТЕСТ ПРОЙДЕН"
 echo "Временные файлы: $TMP_DIR"
 echo "============================================================"
