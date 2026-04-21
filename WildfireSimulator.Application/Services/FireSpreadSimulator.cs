@@ -256,21 +256,44 @@ public class FireSpreadSimulator : IFireSpreadSimulator
             double threshold = _calculator.CalculateIgnitionThreshold(target, weather);
             double ratio = threshold > 0.0 ? accumulatedHeat / threshold : 0.0;
 
-            if (ratio >= 0.7 && ratio < 1.0)
+            if (ratio >= 0.60 && ratio < 1.0)
             {
-                double boost = 1.0 + (ratio - 0.7) * 0.6;
+                double boost = ratio switch
+                {
+                    >= 0.90 => 1.20,
+                    >= 0.80 => 1.15,
+                    >= 0.70 => 1.10,
+                    _ => 1.05
+                };
+
                 accumulatedHeat *= boost;
+                ratio = threshold > 0.0 ? accumulatedHeat / threshold : ratio;
             }
 
             target.SetAccumulatedHeatJ(accumulatedHeat);
 
             double probability = _calculator.CalculateIgnitionProbability(accumulatedHeat, threshold);
 
+            if (ratio >= 0.85)
+                probability = Math.Max(probability, 0.18);
+            else if (ratio >= 0.75)
+                probability = Math.Max(probability, 0.11);
+            else if (ratio >= 0.65)
+                probability = Math.Max(probability, 0.055);
+            else if (ratio >= 0.55)
+                probability = Math.Max(probability, 0.020);
+
             target.SetBurnProbability(probability);
 
-            if (probability < 0.003 &&
-                ratio < 0.75 &&
-                residualEdgeHeat < 250000.0)
+            bool hasMeaningfulTransientHeat = transientHeat >= 40_000.0;
+            bool hasMeaningfulResidualHeat = residualEdgeHeat >= 90_000.0;
+            bool hasStoredCellHeat = target.AccumulatedHeatJ >= 120_000.0;
+
+            if (probability < 0.002 &&
+                ratio < 0.55 &&
+                !hasMeaningfulTransientHeat &&
+                !hasMeaningfulResidualHeat &&
+                !hasStoredCellHeat)
             {
                 continue;
             }
@@ -328,11 +351,11 @@ public class FireSpreadSimulator : IFireSpreadSimulator
     }
 
     private double ApplyEdgeAwareTransferAdjustment(
-        ForestGraph graph,
-        ForestCell source,
-        ForestCell target,
-        ForestEdge edge,
-        double baseHeatFlow)
+     ForestGraph graph,
+     ForestCell source,
+     ForestCell target,
+     ForestEdge edge,
+     double baseHeatFlow)
     {
         if (baseHeatFlow <= 0.0)
             return 0.0;
@@ -351,6 +374,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         int minDegree = Math.Max(1, Math.Min(sourceDegree, targetDegree));
 
         double directionalFactor = GetDirectionalEdgeFactor(source, target, edge, graph, topology);
+        bool isCorridor = edge.IsCorridor;
 
         if (topology == SpreadTopology.ClusteredArea)
         {
@@ -412,6 +436,10 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
                 double clusterResistanceFactor = 1.08;
 
+                double corridorFactor = isCorridor
+                    ? (edge.Distance >= 5.0 ? 1.08 : 1.05)
+                    : 1.0;
+
                 double adjusted =
                     baseHeatFlow *
                     edgeModifier *
@@ -421,7 +449,8 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                     neighborhoodSupport *
                     interiorBonus *
                     directionalFactor *
-                    clusterResistanceFactor;
+                    clusterResistanceFactor *
+                    corridorFactor;
 
                 return Math.Min(adjusted, baseHeatFlow * 7.45);
             }
@@ -514,6 +543,16 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
                 double clusterResistanceFactor = 0.65;
 
+                double corridorFactor = isCorridor
+                    ? edge.Distance switch
+                    {
+                        >= 6.0 => 1.20,
+                        >= 5.0 => 1.16,
+                        >= 4.0 => 1.12,
+                        _ => 1.08
+                    }
+                    : 1.0;
+
                 double adjusted =
                     baseHeatFlow *
                     edgeModifier *
@@ -524,91 +563,76 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                     sourceBridgeExposureFactor *
                     frontierPressureFactor *
                     directionalFactor *
-                    clusterResistanceFactor;
+                    clusterResistanceFactor *
+                    corridorFactor;
 
-                return Math.Min(adjusted, baseHeatFlow * 3.05);
+                return Math.Min(adjusted, baseHeatFlow * 3.15);
             }
         }
 
         return baseHeatFlow * edgeModifier;
     }
     private double GetDirectionalEdgeFactor(
-    ForestCell source,
-    ForestCell target,
-    ForestEdge edge,
-    ForestGraph graph,
-    SpreadTopology topology)
+     ForestCell source,
+     ForestCell target,
+     ForestEdge edge,
+     ForestGraph graph,
+     SpreadTopology topology)
     {
         if (topology == SpreadTopology.Grid)
             return 1.0;
 
-        double windSpeed = 0.0;
-        double windToDirection = 0.0;
+        double dx = target.X - source.X;
+        double dy = target.Y - source.Y;
 
-        double edgeDirection = GetDirectionToTarget(source, target);
+        double length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 0.0001)
+            return 1.0;
 
-        double localDirectionalBias = 1.0;
+        dx /= length;
+        dy /= length;
 
-        int interClusterNeighborsSource = CountInterClusterNeighbors(graph, source);
-        int interClusterNeighborsTarget = CountInterClusterNeighbors(graph, target);
+        var neighbors = graph.GetNeighbors(source);
+        if (neighbors.Count <= 1)
+            return 1.0;
 
-        bool sameCluster = string.Equals(source.ClusterId, target.ClusterId, StringComparison.Ordinal);
-        bool corridorLike = IsCorridorLikeEdge(graph, source, target, edge);
+        double avgDx = 0.0;
+        double avgDy = 0.0;
 
-        if (sameCluster)
+        foreach (var n in neighbors)
         {
-            if (corridorLike)
-                localDirectionalBias *= 1.05;
+            double ndx = n.X - source.X;
+            double ndy = n.Y - source.Y;
+            double nl = Math.Sqrt(ndx * ndx + ndy * ndy);
+            if (nl < 0.0001)
+                continue;
+
+            avgDx += ndx / nl;
+            avgDy += ndy / nl;
+        }
+
+        double avgLen = Math.Sqrt(avgDx * avgDx + avgDy * avgDy);
+        if (avgLen < 0.0001)
+            return 1.0;
+
+        avgDx /= avgLen;
+        avgDy /= avgLen;
+
+        double alignment = dx * avgDx + dy * avgDy;
+        alignment = Math.Clamp(alignment, -1.0, 1.0);
+
+        double factor;
+
+        if (edge.IsCorridor)
+        {
+            factor = 1.0 + alignment * 0.22;
         }
         else
         {
-            localDirectionalBias *= 1.04;
-
-            if (corridorLike)
-                localDirectionalBias *= 1.08;
-
-            if (interClusterNeighborsSource <= 2 || interClusterNeighborsTarget <= 2)
-                localDirectionalBias *= 1.03;
+            factor = 1.0 + alignment * 0.08;
         }
 
-        double geometricAxisBias = GetGeometricAxisBias(source, target, graph);
-        localDirectionalBias *= geometricAxisBias;
-
-        return Math.Clamp(localDirectionalBias, 0.92, 1.18);
-    }
-
-    private bool IsCorridorLikeEdge(
-        ForestGraph graph,
-        ForestCell source,
-        ForestCell target,
-        ForestEdge edge)
-    {
-        if (graph.Cells.Count < 80)
-            return false;
-
-        bool crossCluster = !string.Equals(source.ClusterId, target.ClusterId, StringComparison.Ordinal);
-        if (!crossCluster)
-            return false;
-
-        double avgIncidentDistanceSource = graph.GetIncidentEdges(source)
-            .Select(e => e.Distance)
-            .DefaultIfEmpty(edge.Distance)
-            .Average();
-
-        double avgIncidentDistanceTarget = graph.GetIncidentEdges(target)
-            .Select(e => e.Distance)
-            .DefaultIfEmpty(edge.Distance)
-            .Average();
-
-        double localReferenceDistance = Math.Max(0.25, (avgIncidentDistanceSource + avgIncidentDistanceTarget) / 2.0);
-
-        int sourceDegree = graph.GetIncidentEdges(source).Count;
-        int targetDegree = graph.GetIncidentEdges(target).Count;
-
-        bool longRelativeToLocal = edge.Distance >= localReferenceDistance * 1.45;
-        bool sparseBridgeEndpoints = sourceDegree <= 5 && targetDegree <= 5;
-
-        return longRelativeToLocal && sparseBridgeEndpoints;
+        return Math.Clamp(factor, 0.82, 1.35);
     }
 
     private double GetGeometricAxisBias(

@@ -1094,12 +1094,12 @@ public class SimulationManagerController : ControllerBase
                     ToRenderY = nodeMap[e.ToCellId].RenderY,
                     Distance = Math.Round(e.Distance, 3),
                     Slope = Math.Round(e.Slope, 6),
-                    FireSpreadModifier = Math.Round(e.FireSpreadModifier, 6)
+                    FireSpreadModifier = Math.Round(e.FireSpreadModifier, 6),
+                    IsCorridor = e.IsCorridor
                 })
                 .ToList()
         };
     }
-
     private List<SimulationGraphNodeDto> BuildNodeDtos(Simulation simulation, ForestGraph graph)
     {
         return simulation.Parameters.GraphType switch
