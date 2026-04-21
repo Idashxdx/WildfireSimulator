@@ -136,15 +136,16 @@ public class FireSpreadSimulator : IFireSpreadSimulator
     }
 
     private void ExecuteInternalSubstep(
-        ForestGraph graph,
-        WeatherCondition weather,
-        int currentStep,
-        Guid simulationId,
-        double stepDurationSeconds,
-        int internalSubstepIndex,
-        List<SimulationEvent> events,
-        ref int totalNewlyIgnited)
+     ForestGraph graph,
+     WeatherCondition weather,
+     int currentStep,
+     Guid simulationId,
+     double stepDurationSeconds,
+     int internalSubstepIndex,
+     List<SimulationEvent> events,
+     ref int totalNewlyIgnited)
     {
+        CoolDownEdgeHeat(graph, stepDurationSeconds);
         CoolDownNormalCells(graph, stepDurationSeconds);
 
         var burningCellsAtStepStart = graph.Cells
@@ -177,6 +178,10 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                     continue;
 
                 totalIncomingHeat[target.Id] = totalIncomingHeat.GetValueOrDefault(target.Id) + heatFlow;
+
+                double edgeMemoryHeat = ConvertToEdgeMemoryHeat(heatFlow, edge, stepDurationSeconds);
+                if (edgeMemoryHeat > 0.0)
+                    edge.AddAccumulatedHeat(edgeMemoryHeat);
 
                 if (!heatSources.ContainsKey(target.Id))
                     heatSources[target.Id] = new List<Guid>();
@@ -218,18 +223,121 @@ public class FireSpreadSimulator : IFireSpreadSimulator
             weather,
             stepDurationSeconds);
     }
+    private void CoolDownEdgeHeat(ForestGraph graph, double stepDurationSeconds)
+    {
+        double retentionFactor = Math.Exp(-stepDurationSeconds / 300.0);
+        retentionFactor = Math.Clamp(retentionFactor, 0.0, 1.0);
+
+        foreach (var edge in graph.Edges)
+            edge.CoolDownHeat(retentionFactor);
+    }
+    private List<(ForestCell Cell, double Probability, double AccumulatedHeat, double Threshold, double Ratio)> BuildCandidates(
+     ForestGraph graph,
+     WeatherCondition weather,
+     Dictionary<Guid, double> totalIncomingHeat,
+     Dictionary<Guid, List<Guid>> heatSources)
+    {
+        var candidates = new List<(ForestCell Cell, double Probability, double AccumulatedHeat, double Threshold, double Ratio)>();
+
+        foreach (var target in graph.Cells.Where(c => c.State == CellState.Normal))
+        {
+            double transientHeat = totalIncomingHeat.GetValueOrDefault(target.Id);
+            double residualEdgeHeat = GetResidualEdgeHeatForTarget(graph, target);
+
+            if (transientHeat <= 0.0 &&
+                residualEdgeHeat <= 0.0 &&
+                target.AccumulatedHeatJ <= 0.0)
+            {
+                continue;
+            }
+
+            double accumulatedHeat = target.AccumulatedHeatJ + transientHeat + residualEdgeHeat;
+
+            double threshold = _calculator.CalculateIgnitionThreshold(target, weather);
+            double ratio = threshold > 0.0 ? accumulatedHeat / threshold : 0.0;
+
+            if (ratio >= 0.7 && ratio < 1.0)
+            {
+                double boost = 1.0 + (ratio - 0.7) * 0.6;
+                accumulatedHeat *= boost;
+            }
+
+            target.SetAccumulatedHeatJ(accumulatedHeat);
+
+            double probability = _calculator.CalculateIgnitionProbability(accumulatedHeat, threshold);
+
+            target.SetBurnProbability(probability);
+
+            if (probability < 0.003 &&
+                ratio < 0.75 &&
+                residualEdgeHeat < 250000.0)
+            {
+                continue;
+            }
+
+            candidates.Add((target, probability, accumulatedHeat, threshold, ratio));
+        }
+
+        return candidates;
+    }
+    private double GetResidualEdgeHeatForTarget(ForestGraph graph, ForestCell target)
+    {
+        var orderedEdgeHeat = graph.GetIncidentEdges(target)
+            .Select(e => e.AccumulatedHeat)
+            .Where(h => h > 0.0)
+            .OrderByDescending(h => h)
+            .ToList();
+
+        if (orderedEdgeHeat.Count == 0)
+            return 0.0;
+
+        double primaryContribution = orderedEdgeHeat.Take(1).Sum() * 0.65;
+        double secondaryContribution = orderedEdgeHeat.Skip(1).Take(2).Sum() * 0.25;
+        double tertiaryContribution = orderedEdgeHeat.Skip(3).Sum() * 0.05;
+
+        double coupledHeat = primaryContribution + secondaryContribution + tertiaryContribution;
+        return Math.Clamp(coupledHeat, 0.0, 2_500_000.0);
+    }
+    private double ConvertToEdgeMemoryHeat(
+        double heatFlow,
+        ForestEdge edge,
+        double stepDurationSeconds)
+    {
+        if (heatFlow <= 0.0)
+            return 0.0;
+
+        double distanceFactor = edge.Distance switch
+        {
+            <= 1.45 => 1.00,
+            <= 2.10 => 0.78,
+            <= 2.80 => 0.58,
+            <= 3.60 => 0.40,
+            _ => 0.28
+        };
+
+        double modifierFactor = Math.Clamp(edge.FireSpreadModifier, 0.05, 1.35);
+        double durationFactor = Math.Clamp(stepDurationSeconds / 300.0, 0.10, 1.00);
+
+        double memoryFraction =
+            0.018 *
+            distanceFactor *
+            (0.82 + 0.18 * modifierFactor) *
+            durationFactor;
+
+        return heatFlow * memoryFraction;
+    }
+
     private double ApplyEdgeAwareTransferAdjustment(
-       ForestGraph graph,
-       ForestCell source,
-       ForestCell target,
-       ForestEdge edge,
-       double baseHeatFlow)
+        ForestGraph graph,
+        ForestCell source,
+        ForestCell target,
+        ForestEdge edge,
+        double baseHeatFlow)
     {
         if (baseHeatFlow <= 0.0)
             return 0.0;
 
         double edgeModifier = Math.Clamp(edge.FireSpreadModifier, 0.02, 1.35);
-
         var topology = DetectTopology(graph);
 
         if (topology == SpreadTopology.Grid)
@@ -242,215 +350,301 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         int targetDegree = graph.GetIncidentEdges(target).Count;
         int minDegree = Math.Max(1, Math.Min(sourceDegree, targetDegree));
 
+        double directionalFactor = GetDirectionalEdgeFactor(source, target, edge, graph, topology);
+
         if (topology == SpreadTopology.ClusteredArea)
         {
-            double distanceSupport = edge.Distance switch
+            bool sameCluster = string.Equals(source.ClusterId, target.ClusterId, StringComparison.Ordinal);
+
+            if (sameCluster)
             {
-                <= 1.45 => 1.34,
-                <= 2.10 => 1.72,
-                <= 2.80 => 1.96,
-                <= 3.60 => 2.12,
-                <= 4.50 => 2.22,
-                _ => 2.30
-            };
+                int sameClusterNeighborsSource = graph.GetNeighbors(source).Count(n => n.ClusterId == source.ClusterId);
+                int sameClusterNeighborsTarget = graph.GetNeighbors(target).Count(n => n.ClusterId == target.ClusterId);
 
-            double sparseConnectivityFactor = 1.0 + 0.20 / Math.Sqrt(minDegree);
-            sparseConnectivityFactor = Math.Clamp(sparseConnectivityFactor, 1.0, 1.20);
+                int interClusterNeighborsSource = graph.GetNeighbors(source).Count(n => n.ClusterId != source.ClusterId);
+                int interClusterNeighborsTarget = graph.GetNeighbors(target).Count(n => n.ClusterId != target.ClusterId);
 
-            double similarityFactor = 1.0;
+                double intraClusterSupport = edge.Distance switch
+                {
+                    <= 1.05 => 1.95,
+                    <= 1.45 => 2.45,
+                    <= 2.20 => 3.05,
+                    <= 3.00 => 3.30,
+                    _ => 3.35
+                };
 
-            if (source.Vegetation == target.Vegetation)
-                similarityFactor += 0.08;
+                double sparseConnectivityFactor = 1.0 + 0.24 / Math.Sqrt(minDegree);
+                sparseConnectivityFactor = Math.Clamp(sparseConnectivityFactor, 1.0, 1.24);
 
-            double moistureGap = Math.Abs(source.Moisture - target.Moisture);
-            if (moistureGap <= 0.08)
-                similarityFactor += 0.05;
-            else if (moistureGap <= 0.16)
-                similarityFactor += 0.02;
+                double similarityFactor = 1.0;
 
-            similarityFactor = Math.Clamp(similarityFactor, 1.0, 1.12);
+                if (source.Vegetation == target.Vegetation)
+                    similarityFactor += 0.10;
 
-            double localEdgeBonus = edge.Distance <= 2.20 ? 1.20 : 1.0;
+                double moistureGap = Math.Abs(source.Moisture - target.Moisture);
+                if (moistureGap <= 0.08)
+                    similarityFactor += 0.05;
+                else if (moistureGap <= 0.16)
+                    similarityFactor += 0.02;
 
-            double adjusted =
-                baseHeatFlow *
-                edgeModifier *
-                distanceSupport *
-                sparseConnectivityFactor *
-                similarityFactor *
-                localEdgeBonus;
+                similarityFactor = Math.Clamp(similarityFactor, 1.0, 1.15);
 
-            return Math.Min(adjusted, baseHeatFlow * 4.4);
+                double neighborhoodSupport =
+                    1.0 +
+                    Math.Max(0, Math.Min(sameClusterNeighborsSource, sameClusterNeighborsTarget) - 2) * 0.08;
+
+                neighborhoodSupport = Math.Clamp(neighborhoodSupport, 1.0, 1.28);
+
+                double interiorBonus = 1.0;
+
+                if (interClusterNeighborsSource == 0)
+                    interiorBonus += 0.12;
+
+                if (interClusterNeighborsTarget == 0)
+                    interiorBonus += 0.12;
+
+                if (sameClusterNeighborsSource >= 4 && sameClusterNeighborsTarget >= 4)
+                    interiorBonus += 0.10;
+                else if (sameClusterNeighborsSource >= 3 && sameClusterNeighborsTarget >= 3)
+                    interiorBonus += 0.06;
+
+                interiorBonus = Math.Clamp(interiorBonus, 1.0, 1.34);
+
+                double clusterResistanceFactor = 1.08;
+
+                double adjusted =
+                    baseHeatFlow *
+                    edgeModifier *
+                    intraClusterSupport *
+                    sparseConnectivityFactor *
+                    similarityFactor *
+                    neighborhoodSupport *
+                    interiorBonus *
+                    directionalFactor *
+                    clusterResistanceFactor;
+
+                return Math.Min(adjusted, baseHeatFlow * 7.45);
+            }
+            else
+            {
+                double sourceBurnDuration = FireModelCatalog.Get(source.Vegetation).BaseBurnDurationSeconds;
+                double sourceBurnProgress =
+                    sourceBurnDuration > 0.0 && !double.IsInfinity(sourceBurnDuration)
+                        ? Math.Clamp(source.BurningElapsedSeconds / sourceBurnDuration, 0.0, 1.0)
+                        : 0.0;
+
+                var sourceNeighbors = graph.GetNeighbors(source);
+
+                int sameClusterAffectedNeighbors = sourceNeighbors.Count(n =>
+                    n.ClusterId == source.ClusterId &&
+                    (n.State == CellState.Burning || n.State == CellState.Burned));
+
+                int sameClusterBurningNeighbors = sourceNeighbors.Count(n =>
+                    n.ClusterId == source.ClusterId &&
+                    n.State == CellState.Burning);
+
+                int sameClusterSupportNeighbors = sourceNeighbors.Count(n =>
+                    n.ClusterId == source.ClusterId);
+
+                double maturityFactor = sourceBurnProgress switch
+                {
+                    < 0.08 => 0.62,
+                    < 0.15 => 0.78,
+                    < 0.25 => 0.94,
+                    < 0.40 => 1.08,
+                    < 0.60 => 1.24,
+                    _ => 1.34
+                };
+
+                double bridgeDistanceFactor = edge.Distance switch
+                {
+                    <= 1.60 => 1.20,
+                    <= 2.00 => 1.10,
+                    <= 2.40 => 1.00,
+                    <= 2.80 => 0.92,
+                    <= 3.20 => 0.86,
+                    _ => 0.78
+                };
+
+                double bridgeQualityFactor = 1.0 + 0.16 / Math.Sqrt(minDegree);
+                bridgeQualityFactor = Math.Clamp(bridgeQualityFactor, 1.0, 1.14);
+
+                double similarityFactor = 1.0;
+
+                if (source.Vegetation == target.Vegetation)
+                    similarityFactor += 0.04;
+
+                double moistureGap = Math.Abs(source.Moisture - target.Moisture);
+                if (moistureGap <= 0.10)
+                    similarityFactor += 0.03;
+                else if (moistureGap <= 0.18)
+                    similarityFactor += 0.01;
+
+                similarityFactor = Math.Clamp(similarityFactor, 1.0, 1.08);
+
+                double sourceBridgeExposureFactor =
+                    sourceDegree <= 3 ? 1.05 :
+                    sourceDegree <= 4 ? 1.03 :
+                    sourceDegree <= 5 ? 1.01 : 1.00;
+
+                double frontierPressureFactor = 1.0;
+
+                if (sameClusterAffectedNeighbors >= 2)
+                    frontierPressureFactor += 0.10;
+
+                if (sameClusterAffectedNeighbors >= 3)
+                    frontierPressureFactor += 0.10;
+
+                if (sameClusterAffectedNeighbors >= 4)
+                    frontierPressureFactor += 0.08;
+
+                if (sameClusterBurningNeighbors >= 2)
+                    frontierPressureFactor += 0.08;
+
+                if (sameClusterSupportNeighbors >= 4)
+                    frontierPressureFactor += 0.04;
+
+                if (sourceBurnProgress >= 0.35 && sameClusterAffectedNeighbors >= 2)
+                    frontierPressureFactor += 0.10;
+
+                if (sourceBurnProgress >= 0.50 && sameClusterAffectedNeighbors >= 3)
+                    frontierPressureFactor += 0.08;
+
+                frontierPressureFactor = Math.Clamp(frontierPressureFactor, 1.0, 1.42);
+
+                double clusterResistanceFactor = 0.65;
+
+                double adjusted =
+                    baseHeatFlow *
+                    edgeModifier *
+                    bridgeDistanceFactor *
+                    bridgeQualityFactor *
+                    similarityFactor *
+                    maturityFactor *
+                    sourceBridgeExposureFactor *
+                    frontierPressureFactor *
+                    directionalFactor *
+                    clusterResistanceFactor;
+
+                return Math.Min(adjusted, baseHeatFlow * 3.05);
+            }
         }
 
+        return baseHeatFlow * edgeModifier;
+    }
+    private double GetDirectionalEdgeFactor(
+    ForestCell source,
+    ForestCell target,
+    ForestEdge edge,
+    ForestGraph graph,
+    SpreadTopology topology)
+    {
+        if (topology == SpreadTopology.Grid)
+            return 1.0;
+
+        double windSpeed = 0.0;
+        double windToDirection = 0.0;
+
+        double edgeDirection = GetDirectionToTarget(source, target);
+
+        double localDirectionalBias = 1.0;
+
+        int interClusterNeighborsSource = CountInterClusterNeighbors(graph, source);
+        int interClusterNeighborsTarget = CountInterClusterNeighbors(graph, target);
+
         bool sameCluster = string.Equals(source.ClusterId, target.ClusterId, StringComparison.Ordinal);
+        bool corridorLike = IsCorridorLikeEdge(graph, source, target, edge);
 
         if (sameCluster)
         {
-            int sameClusterNeighborsSource = graph.GetNeighbors(source).Count(n => n.ClusterId == source.ClusterId);
-            int sameClusterNeighborsTarget = graph.GetNeighbors(target).Count(n => n.ClusterId == target.ClusterId);
-
-            int interClusterNeighborsSource = graph.GetNeighbors(source).Count(n => n.ClusterId != source.ClusterId);
-            int interClusterNeighborsTarget = graph.GetNeighbors(target).Count(n => n.ClusterId != target.ClusterId);
-
-            double intraClusterSupport = edge.Distance switch
-            {
-                <= 1.05 => 1.95,
-                <= 1.45 => 2.45,
-                <= 2.20 => 3.05,
-                <= 3.00 => 3.30,
-                _ => 3.35
-            };
-
-            double sparseConnectivityFactor = 1.0 + 0.24 / Math.Sqrt(minDegree);
-            sparseConnectivityFactor = Math.Clamp(sparseConnectivityFactor, 1.0, 1.24);
-
-            double similarityFactor = 1.0;
-
-            if (source.Vegetation == target.Vegetation)
-                similarityFactor += 0.10;
-
-            double moistureGap = Math.Abs(source.Moisture - target.Moisture);
-            if (moistureGap <= 0.08)
-                similarityFactor += 0.05;
-            else if (moistureGap <= 0.16)
-                similarityFactor += 0.02;
-
-            similarityFactor = Math.Clamp(similarityFactor, 1.0, 1.15);
-
-            double neighborhoodSupport =
-                1.0 +
-                Math.Max(0, Math.Min(sameClusterNeighborsSource, sameClusterNeighborsTarget) - 2) * 0.08;
-
-            neighborhoodSupport = Math.Clamp(neighborhoodSupport, 1.0, 1.28);
-
-            double interiorBonus = 1.0;
-
-            if (interClusterNeighborsSource == 0)
-                interiorBonus += 0.12;
-
-            if (interClusterNeighborsTarget == 0)
-                interiorBonus += 0.12;
-
-            if (sameClusterNeighborsSource >= 4 && sameClusterNeighborsTarget >= 4)
-                interiorBonus += 0.10;
-            else if (sameClusterNeighborsSource >= 3 && sameClusterNeighborsTarget >= 3)
-                interiorBonus += 0.06;
-
-            interiorBonus = Math.Clamp(interiorBonus, 1.0, 1.34);
-
-            double adjusted =
-                baseHeatFlow *
-                edgeModifier *
-                intraClusterSupport *
-                sparseConnectivityFactor *
-                similarityFactor *
-                neighborhoodSupport *
-                interiorBonus;
-
-            return Math.Min(adjusted, baseHeatFlow * 7.2);
+            if (corridorLike)
+                localDirectionalBias *= 1.05;
         }
         else
         {
-            double sourceBurnDuration = FireModelCatalog.Get(source.Vegetation).BaseBurnDurationSeconds;
-            double sourceBurnProgress =
-                sourceBurnDuration > 0.0 && !double.IsInfinity(sourceBurnDuration)
-                    ? Math.Clamp(source.BurningElapsedSeconds / sourceBurnDuration, 0.0, 1.0)
-                    : 0.0;
+            localDirectionalBias *= 1.04;
 
-            var sourceNeighbors = graph.GetNeighbors(source);
+            if (corridorLike)
+                localDirectionalBias *= 1.08;
 
-            int sameClusterAffectedNeighbors = sourceNeighbors.Count(n =>
-                n.ClusterId == source.ClusterId &&
-                (n.State == CellState.Burning || n.State == CellState.Burned));
-
-            int sameClusterBurningNeighbors = sourceNeighbors.Count(n =>
-                n.ClusterId == source.ClusterId &&
-                n.State == CellState.Burning);
-
-            int sameClusterSupportNeighbors = sourceNeighbors.Count(n =>
-                n.ClusterId == source.ClusterId);
-
-            double maturityFactor = sourceBurnProgress switch
-            {
-                < 0.08 => 0.62,
-                < 0.15 => 0.78,
-                < 0.25 => 0.94,
-                < 0.40 => 1.08,
-                < 0.60 => 1.24,
-                _ => 1.34
-            };
-
-            double bridgeDistanceFactor = edge.Distance switch
-            {
-                <= 1.60 => 1.20,
-                <= 2.00 => 1.10,
-                <= 2.40 => 1.00,
-                <= 2.80 => 0.92,
-                <= 3.20 => 0.86,
-                _ => 0.78
-            };
-
-            double bridgeQualityFactor = 1.0 + 0.16 / Math.Sqrt(minDegree);
-            bridgeQualityFactor = Math.Clamp(bridgeQualityFactor, 1.0, 1.14);
-
-            double similarityFactor = 1.0;
-
-            if (source.Vegetation == target.Vegetation)
-                similarityFactor += 0.04;
-
-            double moistureGap = Math.Abs(source.Moisture - target.Moisture);
-            if (moistureGap <= 0.10)
-                similarityFactor += 0.03;
-            else if (moistureGap <= 0.18)
-                similarityFactor += 0.01;
-
-            similarityFactor = Math.Clamp(similarityFactor, 1.0, 1.08);
-
-            double sourceBridgeExposureFactor =
-                sourceDegree <= 3 ? 1.05 :
-                sourceDegree <= 4 ? 1.03 :
-                sourceDegree <= 5 ? 1.01 : 1.00;
-
-            double frontierPressureFactor = 1.0;
-
-            if (sameClusterAffectedNeighbors >= 2)
-                frontierPressureFactor += 0.10;
-
-            if (sameClusterAffectedNeighbors >= 3)
-                frontierPressureFactor += 0.10;
-
-            if (sameClusterAffectedNeighbors >= 4)
-                frontierPressureFactor += 0.08;
-
-            if (sameClusterBurningNeighbors >= 2)
-                frontierPressureFactor += 0.08;
-
-            if (sameClusterSupportNeighbors >= 4)
-                frontierPressureFactor += 0.04;
-
-            if (sourceBurnProgress >= 0.35 && sameClusterAffectedNeighbors >= 2)
-                frontierPressureFactor += 0.10;
-
-            if (sourceBurnProgress >= 0.50 && sameClusterAffectedNeighbors >= 3)
-                frontierPressureFactor += 0.08;
-
-            frontierPressureFactor = Math.Clamp(frontierPressureFactor, 1.0, 1.42);
-
-            double adjusted =
-                baseHeatFlow *
-                edgeModifier *
-                bridgeDistanceFactor *
-                bridgeQualityFactor *
-                similarityFactor *
-                maturityFactor *
-                sourceBridgeExposureFactor *
-                frontierPressureFactor;
-
-            return Math.Min(adjusted, baseHeatFlow * 2.85);
+            if (interClusterNeighborsSource <= 2 || interClusterNeighborsTarget <= 2)
+                localDirectionalBias *= 1.03;
         }
+
+        double geometricAxisBias = GetGeometricAxisBias(source, target, graph);
+        localDirectionalBias *= geometricAxisBias;
+
+        return Math.Clamp(localDirectionalBias, 0.92, 1.18);
     }
 
+    private bool IsCorridorLikeEdge(
+        ForestGraph graph,
+        ForestCell source,
+        ForestCell target,
+        ForestEdge edge)
+    {
+        if (graph.Cells.Count < 80)
+            return false;
+
+        bool crossCluster = !string.Equals(source.ClusterId, target.ClusterId, StringComparison.Ordinal);
+        if (!crossCluster)
+            return false;
+
+        double avgIncidentDistanceSource = graph.GetIncidentEdges(source)
+            .Select(e => e.Distance)
+            .DefaultIfEmpty(edge.Distance)
+            .Average();
+
+        double avgIncidentDistanceTarget = graph.GetIncidentEdges(target)
+            .Select(e => e.Distance)
+            .DefaultIfEmpty(edge.Distance)
+            .Average();
+
+        double localReferenceDistance = Math.Max(0.25, (avgIncidentDistanceSource + avgIncidentDistanceTarget) / 2.0);
+
+        int sourceDegree = graph.GetIncidentEdges(source).Count;
+        int targetDegree = graph.GetIncidentEdges(target).Count;
+
+        bool longRelativeToLocal = edge.Distance >= localReferenceDistance * 1.45;
+        bool sparseBridgeEndpoints = sourceDegree <= 5 && targetDegree <= 5;
+
+        return longRelativeToLocal && sparseBridgeEndpoints;
+    }
+
+    private double GetGeometricAxisBias(
+        ForestCell source,
+        ForestCell target,
+        ForestGraph graph)
+    {
+        if (graph.Width <= 0 || graph.Height <= 0)
+            return 1.0;
+
+        double centerX = graph.Width / 2.0;
+        double centerY = graph.Height / 2.0;
+
+        double sourceRadius = CalculateDistance(source.X, source.Y, centerX, centerY);
+        double targetRadius = CalculateDistance(target.X, target.Y, centerX, centerY);
+
+        double radialDelta = targetRadius - sourceRadius;
+
+        if (graph.Cells.Count >= 80)
+        {
+            if (radialDelta > 0.75)
+                return 1.04;
+
+            if (radialDelta < -0.75)
+                return 0.98;
+        }
+
+        return 1.0;
+    }
+    private int CountInterClusterNeighbors(ForestGraph graph, ForestCell cell)
+    {
+        if (string.IsNullOrWhiteSpace(cell.ClusterId))
+            return 0;
+
+        return graph.GetNeighbors(cell).Count(n => n.ClusterId != cell.ClusterId);
+    }
     private SpreadTopology DetectTopology(ForestGraph graph)
     {
         bool hasGroupedGraphNodes = graph.Cells.Any(c => !string.IsNullOrWhiteSpace(c.ClusterId));
@@ -696,36 +890,6 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         }
     }
 
-    private List<(ForestCell Cell, double Probability, double AccumulatedHeat, double Threshold, double Ratio)> BuildCandidates(
-        ForestGraph graph,
-        WeatherCondition weather,
-        Dictionary<Guid, double> totalIncomingHeat,
-        Dictionary<Guid, List<Guid>> heatSources)
-    {
-        var candidates = new List<(ForestCell Cell, double Probability, double AccumulatedHeat, double Threshold, double Ratio)>();
-
-        foreach (var target in graph.Cells.Where(c => c.State == CellState.Normal))
-        {
-            if (!totalIncomingHeat.TryGetValue(target.Id, out var incomingHeat))
-                continue;
-
-            double accumulatedHeat = target.AccumulatedHeatJ + incomingHeat;
-            target.SetAccumulatedHeatJ(accumulatedHeat);
-
-            double threshold = _calculator.CalculateIgnitionThreshold(target, weather);
-            double probability = _calculator.CalculateIgnitionProbability(accumulatedHeat, threshold);
-            double ratio = threshold > 0.0 ? accumulatedHeat / threshold : 0.0;
-
-            target.SetBurnProbability(probability);
-
-
-            if (probability < 0.003 && ratio < 0.75)
-                continue;
-            candidates.Add((target, probability, accumulatedHeat, threshold, ratio));
-        }
-
-        return candidates;
-    }
 
     private int IgniteCandidates(
         List<(ForestCell Cell, double Probability, double AccumulatedHeat, double Threshold, double Ratio)> sortedCandidates,
@@ -1056,56 +1220,6 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                     regionClusterBoundaryPenalty =
                         interClusterNeighborCount * 14.0 +
                         Math.Max(0, 2 - sameClusterNeighborCount) * 6.0;
-
-                    /* if (topology == SpreadTopology.RegionClusterAreas)
-                    {
-                        int bridgeHopDistance = FindNearestBridgeHopDistance(graph, cell);
-                        int clusterSize = clusterCells.Count;
-
-                        double bridgeHopBonus = bridgeHopDistance switch
-                        {
-                            int.MaxValue => -18.0,
-                            0 => -28.0,
-                            1 => 10.0,
-                            2 => 34.0,
-                            3 => 30.0,
-                            4 => 18.0,
-                            5 => 8.0,
-                            6 => 2.0,
-                            _ => -8.0
-                        };
-
-                        double sameClusterSupportBonus =
-                            sameClusterNeighborCount * 2.5 +
-                            closeNeighbors * 2.0 +
-                            veryCloseNeighbors * 2.0;
-
-                        double deepInteriorPenalty =
-                            bridgeHopDistance >= 7 && bridgeHopDistance != int.MaxValue
-                                ? (bridgeHopDistance - 6) * 4.0
-                                : 0.0;
-
-                        double oversizedClusterPenalty =
-                            clusterSize switch
-                            {
-                                >= 55 => 10.0,
-                                >= 45 => 6.0,
-                                >= 35 => 3.0,
-                                _ => 0.0
-                            };
-
-                        regionClusterBridgeCorridorBonus =
-                            bridgeHopBonus +
-                            sameClusterSupportBonus -
-                            deepInteriorPenalty -
-                            oversizedClusterPenalty;
-
-                        if (interClusterNeighborCount > 0)
-                            regionClusterBridgeCorridorBonus -= 18.0;
-
-                        if (sameClusterNeighborCount < 3)
-                            regionClusterBridgeCorridorBonus -= 8.0;
-                    } */
                 }
 
                 double score =
@@ -1186,14 +1300,6 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
         return interClusterNeighbors > 0 && sameClusterNeighbors >= 2;
     }
-    private int CountInterClusterNeighbors(ForestGraph graph, ForestCell cell)
-    {
-        if (string.IsNullOrWhiteSpace(cell.ClusterId))
-            return 0;
-
-        return graph.GetNeighbors(cell).Count(n => n.ClusterId != cell.ClusterId);
-    }
-
     private ForestCell CreateVirtualInitialSource(ForestCell original)
     {
         var source = new ForestCell(

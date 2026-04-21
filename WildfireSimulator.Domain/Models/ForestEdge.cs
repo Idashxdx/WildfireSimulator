@@ -11,6 +11,8 @@ public class ForestEdge
     public double Distance { get; private set; }
     public double Slope { get; private set; }
     public double FireSpreadModifier { get; private set; }
+    public double AccumulatedHeat { get; private set; }
+    public bool IsCorridor { get; private set; }
 
     [JsonIgnore]
     public virtual ForestCell FromCell { get; private set; } = null!;
@@ -30,6 +32,9 @@ public class ForestEdge
         FromCell = fromCell;
         ToCell = toCell;
         FireSpreadModifier = CalculateSpreadModifier();
+        IsCorridor = DetectCorridor();
+        ApplyCorridorAmplification();
+        AccumulatedHeat = 0.0;
     }
 
     private double CalculateSpreadModifier()
@@ -45,13 +50,89 @@ public class ForestEdge
         return Math.Clamp(modifier, 0.02, 1.35);
     }
 
+    private bool DetectCorridor()
+    {
+        if (FromCell == null || ToCell == null)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(FromCell.ClusterId) ||
+            string.IsNullOrWhiteSpace(ToCell.ClusterId))
+        {
+            return false;
+        }
+
+        bool crossCluster = !string.Equals(
+            FromCell.ClusterId,
+            ToCell.ClusterId,
+            StringComparison.Ordinal);
+
+        if (!crossCluster)
+            return false;
+
+        return Distance >= 3.0;
+    }
+
+    private void ApplyCorridorAmplification()
+    {
+        if (!IsCorridor)
+            return;
+
+        double corridorMultiplier = Distance switch
+        {
+            >= 6.0 => 2.40,
+            >= 5.0 => 2.20,
+            >= 4.0 => 2.00,
+            >= 3.5 => 1.85,
+            _ => 1.70
+        };
+
+        FireSpreadModifier = Math.Clamp(
+            FireSpreadModifier * corridorMultiplier,
+            0.02,
+            2.50);
+    }
+
     public void ApplyBridgeSpreadBonus(double multiplier)
     {
         if (multiplier <= 0.0)
             return;
 
-        FireSpreadModifier = Math.Clamp(FireSpreadModifier * multiplier, 0.02, 1.85);
+        FireSpreadModifier = Math.Clamp(FireSpreadModifier * multiplier, 0.02, 2.50);
     }
+
+    public void AddAccumulatedHeat(double heat)
+    {
+        if (double.IsNaN(heat) || double.IsInfinity(heat) || heat <= 0.0)
+            return;
+
+        AccumulatedHeat = Math.Clamp(AccumulatedHeat + heat, 0.0, 1e12);
+    }
+
+    public void CoolDownHeat(double retentionFactor)
+    {
+        retentionFactor = Math.Clamp(retentionFactor, 0.0, 1.0);
+        AccumulatedHeat *= retentionFactor;
+
+        if (AccumulatedHeat < 1.0)
+            AccumulatedHeat = 0.0;
+    }
+
+    public void ResetAccumulatedHeat()
+    {
+        AccumulatedHeat = 0.0;
+    }
+
+    public void SetAccumulatedHeat(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value) || value < 0.0)
+        {
+            AccumulatedHeat = 0.0;
+            return;
+        }
+
+        AccumulatedHeat = Math.Clamp(value, 0.0, 1e12);
+    }
+
     private double CalculateWindDirectionModifier(WindDirection windDirection)
     {
         if (FromCell == null || ToCell == null)

@@ -88,6 +88,7 @@ public class Simulation
             NormalizeGraphSettings();
         }
     }
+
     public void NormalizeGraphSettings()
     {
         if (Parameters == null)
@@ -141,7 +142,9 @@ public class Simulation
                 ToCellId = e.ToCellId,
                 Distance = e.Distance,
                 Slope = e.Slope,
-                FireSpreadModifier = e.FireSpreadModifier
+                FireSpreadModifier = e.FireSpreadModifier,
+                AccumulatedHeat = e.AccumulatedHeat,
+                IsCorridor = e.IsCorridor
             }).ToList()
         };
 
@@ -224,6 +227,8 @@ public class Simulation
 
             SetBackingField(edge, "<Id>k__BackingField", edgeDto.Id);
             SetBackingField(edge, "<FireSpreadModifier>k__BackingField", edgeDto.FireSpreadModifier);
+            SetBackingField(edge, "<AccumulatedHeat>k__BackingField", edgeDto.AccumulatedHeat);
+            SetBackingField(edge, "<IsCorridor>k__BackingField", edgeDto.IsCorridor);
 
             graph.Edges.Add(edge);
         }
@@ -343,6 +348,7 @@ public class Simulation
         public int Y { get; set; }
     }
 }
+
 public enum SimulationStatus
 {
     Created = 0,

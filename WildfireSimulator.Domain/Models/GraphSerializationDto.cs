@@ -41,4 +41,6 @@ public class EdgeSerializationDto
     public double Distance { get; set; }
     public double Slope { get; set; }
     public double FireSpreadModifier { get; set; }
+    public double AccumulatedHeat { get; set; }
+    public bool IsCorridor { get; set; }
 }
