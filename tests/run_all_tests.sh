@@ -36,6 +36,12 @@ TESTS=(
     "test_graph_scenario_distinction.sh"
     "test_clustered_blueprint_validation.sh"
     "test_clustered_blueprint_source_of_truth.sh"
+    "test_corridor_runtime_spread.sh"
+    "test_edge_memory_effect.sh"
+    "test_baseline_not_dying_too_fast.sh"
+    "test_humidity_runtime_effect.sh"
+    "test_temperature_runtime_effect.sh"
+
 )
 
 cd tests

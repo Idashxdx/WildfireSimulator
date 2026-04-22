@@ -1092,9 +1092,10 @@ public class SimulationManagerController : ControllerBase
                     ToY = domainNodeMap[e.ToCellId].Y,
                     ToRenderX = nodeMap[e.ToCellId].RenderX,
                     ToRenderY = nodeMap[e.ToCellId].RenderY,
-                    Distance = Math.Round(e.Distance, 3),
+                    Distance = Math.Round(e.Distance, 6),
                     Slope = Math.Round(e.Slope, 6),
                     FireSpreadModifier = Math.Round(e.FireSpreadModifier, 6),
+                    AccumulatedHeat = Math.Round(e.AccumulatedHeat, 3),
                     IsCorridor = e.IsCorridor
                 })
                 .ToList()

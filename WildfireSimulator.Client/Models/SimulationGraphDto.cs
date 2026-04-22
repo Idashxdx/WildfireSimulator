@@ -156,6 +156,9 @@ public class SimulationGraphEdgeDto
     [JsonPropertyName("fireSpreadModifier")]
     public double FireSpreadModifier { get; set; }
 
+    [JsonPropertyName("accumulatedHeat")]
+    public double AccumulatedHeat { get; set; }
+
     [JsonPropertyName("isCorridor")]
     public bool IsCorridor { get; set; }
 }

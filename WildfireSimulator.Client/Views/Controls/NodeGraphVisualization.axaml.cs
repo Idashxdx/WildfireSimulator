@@ -252,6 +252,8 @@ public partial class NodeGraphVisualization : UserControl
                 CanvasPadding + (n.RenderX - bounds.MinX) * scale,
                 CanvasPadding + (n.RenderY - bounds.MinY) * scale));
 
+        var nodeMap = nodes.ToDictionary(n => n.Id);
+
         var selectedNodeId = SelectedNode?.Id;
         var selectedEdgeIds = GetSelectedEdgeIds(edges, selectedNodeId);
         var neighborIds = GetNeighborIds(edges, selectedNodeId);
@@ -259,12 +261,20 @@ public partial class NodeGraphVisualization : UserControl
         DrawClusterPatchBackgrounds(nodes, points);
 
         foreach (var edge in edges)
-            DrawEdge(edge, points, selectedNodeId, selectedEdgeIds, isBridge: false);
+        {
+            var isCrossCluster =
+                nodeMap.TryGetValue(edge.FromCellId, out var fromNode) &&
+                nodeMap.TryGetValue(edge.ToCellId, out var toNode) &&
+                !string.IsNullOrWhiteSpace(fromNode.GroupKey) &&
+                !string.IsNullOrWhiteSpace(toNode.GroupKey) &&
+                !string.Equals(fromNode.GroupKey, toNode.GroupKey, StringComparison.Ordinal);
+
+            DrawEdge(edge, points, selectedNodeId, selectedEdgeIds, isCrossCluster);
+        }
 
         foreach (var node in nodes.OrderBy(n => n.IsBurning ? 0 : 1))
             DrawNode(node, edges, points, selectedNodeId, neighborIds, useMapStyle: false);
     }
-
     private double GetStandardGraphScale(
         List<SimulationGraphNodeDto> nodes,
         (double MinX, double MaxX, double MinY, double MaxY) bounds)
@@ -380,11 +390,11 @@ public partial class NodeGraphVisualization : UserControl
         return Color.FromArgb(120, 110, 103, 90);
     }
     private void DrawEdge(
-        SimulationGraphEdgeDto edge,
-        Dictionary<Guid, Point> points,
-        Guid? selectedNodeId,
-        HashSet<Guid> selectedEdgeIds,
-        bool isBridge)
+     SimulationGraphEdgeDto edge,
+     Dictionary<Guid, Point> points,
+     Guid? selectedNodeId,
+     HashSet<Guid> selectedEdgeIds,
+     bool isBridge)
     {
         if (_graphCanvas == null)
             return;
@@ -396,27 +406,39 @@ public partial class NodeGraphVisualization : UserControl
         bool isSelectedEdge = selectedEdgeIds.Contains(edge.Id);
 
         double thickness = GetEdgeThickness(edge);
-        double opacity = isBridge ? 0.52 : 0.72;
+        double opacity = edge.IsCorridor
+            ? 0.96
+            : isBridge
+                ? 0.58
+                : 0.72;
 
         if (selectedNodeId.HasValue)
         {
             if (isSelectedEdge)
             {
-                thickness += 1.2;
+                thickness += edge.IsCorridor ? 1.4 : 1.2;
                 opacity = 1.0;
             }
             else
             {
                 thickness = Math.Max(0.9, thickness - 0.2);
-                opacity = isBridge ? 0.14 : 0.18;
+                opacity = edge.IsCorridor
+                    ? 0.34
+                    : isBridge
+                        ? 0.16
+                        : 0.18;
             }
         }
+
+        var strokeColor = edge.IsCorridor
+            ? GetBridgeColor(edge)
+            : (isBridge ? GetBridgeColor(edge) : GetEdgeColor(edge));
 
         var line = new Line
         {
             StartPoint = fromPoint,
             EndPoint = toPoint,
-            Stroke = new SolidColorBrush(isBridge ? GetBridgeColor(edge) : GetEdgeColor(edge)),
+            Stroke = new SolidColorBrush(strokeColor),
             StrokeThickness = thickness,
             Opacity = opacity,
             IsHitTestVisible = true
@@ -428,18 +450,22 @@ public partial class NodeGraphVisualization : UserControl
 
     private string BuildEdgeTooltip(SimulationGraphEdgeDto edge, bool isBridge)
     {
-        var edgeType = isBridge
-            ? "Межкластерное ребро"
-            : "Локальное ребро";
+        string edgeType = edge.IsCorridor
+            ? "Corridor edge"
+            : isBridge
+                ? "Межкластерное ребро"
+                : "Локальное ребро";
+
+        string corridorText = edge.IsCorridor ? "yes" : "no";
 
         return $"{edgeType}\n" +
                $"От: ({edge.FromX}, {edge.FromY})\n" +
                $"К: ({edge.ToX}, {edge.ToY})\n" +
                $"Расстояние: {edge.Distance:F3}\n" +
                $"Уклон: {edge.Slope:F6}\n" +
-               $"Fire spread modifier: {edge.FireSpreadModifier:F6}";
+               $"Fire spread modifier: {edge.FireSpreadModifier:F6}\n" +
+               $"Corridor: {corridorText}";
     }
-
     private void DrawNode(
         SimulationGraphNodeDto node,
         List<SimulationGraphEdgeDto> edges,
@@ -759,17 +785,24 @@ public partial class NodeGraphVisualization : UserControl
 
     private double GetEdgeThickness(SimulationGraphEdgeDto edge)
     {
+        double thickness = BaseEdgeThickness;
+
         if (edge.FireSpreadModifier >= 0.70)
-            return BaseEdgeThickness + 1.0;
+            thickness += 1.0;
+        else if (edge.FireSpreadModifier >= 0.35)
+            thickness += 0.3;
 
-        if (edge.FireSpreadModifier >= 0.35)
-            return BaseEdgeThickness + 0.3;
+        if (edge.IsCorridor)
+            thickness += 1.4;
 
-        return BaseEdgeThickness;
+        return thickness;
     }
 
     private Color GetEdgeColor(SimulationGraphEdgeDto edge)
     {
+        if (edge.IsCorridor)
+            return Color.Parse("#C2410C");
+
         if (edge.FireSpreadModifier >= 0.70)
             return Color.Parse("#9D4EDD");
 
@@ -781,6 +814,9 @@ public partial class NodeGraphVisualization : UserControl
 
     private Color GetBridgeColor(SimulationGraphEdgeDto edge)
     {
+        if (edge.IsCorridor)
+            return Color.Parse("#EA580C");
+
         if (edge.FireSpreadModifier >= 0.70)
             return Color.Parse("#C05621");
 
