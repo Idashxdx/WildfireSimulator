@@ -5,7 +5,9 @@
     xmlns:viewModels="clr-namespace:WildfireSimulator.Client.ViewModels"
     xmlns:controls="clr-namespace:WildfireSimulator.Client.Views.Controls"
     xmlns:converters="clr-namespace:WildfireSimulator.Client.Converters"
-    mc:Ignorable="d" d:DesignWidth="1500" d:DesignHeight="900"
+    mc:Ignorable="d"
+    d:DesignWidth="1500"
+    d:DesignHeight="900"
     x:Class="WildfireSimulator.Client.Views.MainWindow"
     x:DataType="viewModels:MainWindowViewModel"
     Title="Wildfire Simulator - Моделирование лесных пожаров"
@@ -673,76 +675,164 @@
                     <StackPanel Spacing="14">
 
                         <Expander Header="Легенда"
-                            IsExpanded="False">
+                            IsExpanded="True">
                             <Border Background="#FFF9DE"
                                 BorderBrush="#F0E3A4"
                                 BorderThickness="1"
                                 Padding="12"
                                 CornerRadius="10"
                                 Margin="0,8,0,0">
-                                <StackPanel Spacing="8">
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#FF7A59" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Горит" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
+                                <StackPanel Spacing="12">
 
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#777777" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Сгорело" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
+                                    <Border Background="#FFFDF8"
+                                        BorderBrush="#F4EBC1"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="10">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="Состояния пожара"
+                                                Foreground="#2F2A3A"
+                                                FontWeight="Bold" />
 
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#5E9B5E" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Хвойный лес" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Rectangle Width="20" Height="20" Fill="#FF7A59" RadiusX="4" RadiusY="4" />
+                                                <TextBlock Text="Горит"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center" />
+                                            </StackPanel>
 
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#8ACB88" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Лиственный лес" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Rectangle Width="20" Height="20" Fill="#777777" RadiusX="4" RadiusY="4" />
+                                                <TextBlock Text="Сгорело"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center" />
+                                            </StackPanel>
 
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#E7D36F" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Трава" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Rectangle Width="20" Height="20" Fill="#D9D5CF" RadiusX="4" RadiusY="4" />
+                                                <TextBlock Text="Нормальное состояние"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
 
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#A8C97F" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Смешанный лес" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
+                                    <Border Background="#FFFDF8"
+                                        BorderBrush="#F4EBC1"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="10">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="Типы поверхности / растительности"
+                                                Foreground="#2F2A3A"
+                                                FontWeight="Bold" />
 
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#CFA46A" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Кустарник" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Rectangle Width="20" Height="20" Fill="#5E9B5E" RadiusX="4" RadiusY="4" />
+                                                <TextBlock Text="Хвойный лес"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center" />
+                                            </StackPanel>
 
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#7CC6F2" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Вода" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Rectangle Width="20" Height="20" Fill="#8ACB88" RadiusX="4" RadiusY="4" />
+                                                <TextBlock Text="Лиственный лес"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center" />
+                                            </StackPanel>
 
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <Rectangle Width="20" Height="20" Fill="#C9B7A7" RadiusX="4"
-                                            RadiusY="4" />
-                                        <TextBlock Text="Пустая поверхность" Foreground="#2F2A3A"
-                                            VerticalAlignment="Center" />
-                                    </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Rectangle Width="20" Height="20" Fill="#A8C97F" RadiusX="4" RadiusY="4" />
+                                                <TextBlock Text="Смешанный лес"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center" />
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Rectangle Width="20" Height="20" Fill="#E7D36F" RadiusX="4" RadiusY="4" />
+                                                <TextBlock Text="Трава"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center" />
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Rectangle Width="20" Height="20" Fill="#CFA46A" RadiusX="4" RadiusY="4" />
+                                                <TextBlock Text="Кустарник"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center" />
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Rectangle Width="20" Height="20" Fill="#7CC6F2" RadiusX="4" RadiusY="4" />
+                                                <TextBlock Text="Вода"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center" />
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Rectangle Width="20" Height="20" Fill="#C9B7A7" RadiusX="4" RadiusY="4" />
+                                                <TextBlock Text="Пустая поверхность"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Background="#FFFDF8"
+                                        BorderBrush="#F4EBC1"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="10"
+                                        IsVisible="{Binding IsGraphPage}">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="Graph-обозначения"
+                                                Foreground="#2F2A3A"
+                                                FontWeight="Bold" />
+
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Border Width="26"
+                                                    Height="14"
+                                                    Background="#EA580C"
+                                                    CornerRadius="4" />
+                                                <TextBlock Text="Corridor edge — усиленный межзонный переход"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center"
+                                                    TextWrapping="Wrap" />
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Border Width="20"
+                                                    Height="20"
+                                                    Background="#FFF7ED"
+                                                    BorderBrush="#D97706"
+                                                    BorderThickness="2"
+                                                    CornerRadius="10" />
+                                                <TextBlock Text="Стартовый ignition node"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center"
+                                                    TextWrapping="Wrap" />
+                                            </StackPanel>
+
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Border Width="20"
+                                                    Height="20"
+                                                    Background="#F5F3FF"
+                                                    BorderBrush="#4C1D95"
+                                                    BorderThickness="2"
+                                                    CornerRadius="10" />
+                                                <TextBlock Text="Выбранный узел"
+                                                    Foreground="#2F2A3A"
+                                                    VerticalAlignment="Center"
+                                                    TextWrapping="Wrap" />
+                                            </StackPanel>
+
+                                            <TextBlock Text="Для graph-модели важны cluster ID, мосты между группами и corridor-рёбра. Они влияют на макротраекторию распространения."
+                                                Foreground="#7A7486"
+                                                FontSize="12"
+                                                TextWrapping="Wrap"
+                                                Margin="0,4,0,0" />
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
                             </Border>
                         </Expander>
@@ -782,6 +872,52 @@
                                 </StackPanel>
                             </Border>
                         </Expander>
+
+                        <Border Background="#F8F5FF"
+                            BorderBrush="#E6DFF1"
+                            BorderThickness="1"
+                            Padding="12"
+                            CornerRadius="10"
+                            IsVisible="{Binding IsGraphPage}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Graph overview"
+                                    Foreground="#2F2A3A"
+                                    FontSize="16"
+                                    FontWeight="Bold" />
+
+                                <Border Background="#FFFDF8"
+                                    BorderBrush="#ECE4F6"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="10">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Текущий тип graph"
+                                            Foreground="#7A7486"
+                                            FontSize="12" />
+                                        <TextBlock Text="{Binding GraphTypeText}"
+                                            Foreground="#2F2A3A"
+                                            FontWeight="Bold" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="#FFFDF8"
+                                    BorderBrush="#ECE4F6"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="10">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Workflow"
+                                            Foreground="#7A7486"
+                                            FontSize="12" />
+                                        <TextBlock Text="{Binding WorkflowStatusText}"
+                                            Foreground="#2F2A3A"
+                                            FontWeight="SemiBold"
+                                            TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
                         <Expander Header="Выбранная вершина"
                             IsExpanded="True"
                             IsVisible="{Binding IsGraphPage}">
@@ -791,7 +927,7 @@
                                 Padding="12"
                                 CornerRadius="10"
                                 Margin="0,8,0,0">
-                                <StackPanel Spacing="8">
+                                <StackPanel Spacing="10">
 
                                     <Border Background="#FFFDF8"
                                         BorderBrush="#EEE2D3"
@@ -806,6 +942,44 @@
                                             <TextBlock Text="{Binding SelectedGraphNodeStateText}"
                                                 Foreground="#6E6A78"
                                                 FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding SelectedGraphNodeVegetationText}"
+                                                Foreground="#8E7CC3"
+                                                FontWeight="SemiBold"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Background="#FFFDF8"
+                                        BorderBrush="#EEE2D3"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="10">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="Интерпретация графа"
+                                                Foreground="#7A7486"
+                                                FontSize="12" />
+                                            <TextBlock Text="{Binding VisualizationMeaningText}"
+                                                Foreground="#2F2A3A"
+                                                FontWeight="SemiBold"
+                                                TextWrapping="Wrap" />
+
+                                            <TextBlock Text="Масштаб модели"
+                                                Foreground="#7A7486"
+                                                FontSize="12"
+                                                Margin="0,4,0,0" />
+                                            <TextBlock Text="{Binding StructureScaleText}"
+                                                Foreground="#2F2A3A"
+                                                FontWeight="SemiBold"
+                                                TextWrapping="Wrap" />
+
+                                            <TextBlock Text="Ожидаемое поведение spread"
+                                                Foreground="#7A7486"
+                                                FontSize="12"
+                                                Margin="0,4,0,0" />
+                                            <TextBlock Text="{Binding SpreadBehaviorText}"
+                                                Foreground="#2F2A3A"
+                                                FontWeight="SemiBold"
+                                                TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
 
@@ -823,20 +997,17 @@
                                                 <TextBlock Text="Тип поверхности"
                                                     Foreground="#7A7486"
                                                     FontSize="12" />
-                                                <TextBlock
-                                                    Text="{Binding SelectedGraphNodeVegetationText}"
+                                                <TextBlock Text="{Binding SelectedGraphNodeVegetationText}"
                                                     Foreground="#2F2A3A"
                                                     FontWeight="SemiBold"
                                                     TextWrapping="Wrap" />
                                             </StackPanel>
 
                                             <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2">
-                                                <TextBlock
-                                                    Text="{Binding SelectedGraphNodeGroupCaption}"
+                                                <TextBlock Text="{Binding SelectedGraphNodeGroupCaption}"
                                                     Foreground="#7A7486"
                                                     FontSize="12" />
-                                                <TextBlock
-                                                    Text="{Binding SelectedGraphNodeGroupText}"
+                                                <TextBlock Text="{Binding SelectedGraphNodeGroupText}"
                                                     Foreground="#2F2A3A"
                                                     FontWeight="SemiBold"
                                                     TextWrapping="Wrap" />
@@ -846,8 +1017,7 @@
                                                 <TextBlock Text="Влажность"
                                                     Foreground="#7A7486"
                                                     FontSize="12" />
-                                                <TextBlock
-                                                    Text="{Binding SelectedGraphNodeMoistureText}"
+                                                <TextBlock Text="{Binding SelectedGraphNodeMoistureText}"
                                                     Foreground="#2F2A3A"
                                                     FontWeight="SemiBold" />
                                             </StackPanel>
@@ -856,8 +1026,7 @@
                                                 <TextBlock Text="Высота"
                                                     Foreground="#7A7486"
                                                     FontSize="12" />
-                                                <TextBlock
-                                                    Text="{Binding SelectedGraphNodeElevationText}"
+                                                <TextBlock Text="{Binding SelectedGraphNodeElevationText}"
                                                     Foreground="#2F2A3A"
                                                     FontWeight="SemiBold" />
                                             </StackPanel>
@@ -866,8 +1035,7 @@
                                                 <TextBlock Text="Вероятность возгорания"
                                                     Foreground="#7A7486"
                                                     FontSize="12" />
-                                                <TextBlock
-                                                    Text="{Binding SelectedGraphNodeProbabilityText}"
+                                                <TextBlock Text="{Binding SelectedGraphNodeProbabilityText}"
                                                     Foreground="#2F2A3A"
                                                     FontWeight="SemiBold" />
                                             </StackPanel>
@@ -876,31 +1044,26 @@
                                                 <TextBlock Text="Координаты схемы"
                                                     Foreground="#7A7486"
                                                     FontSize="12" />
-                                                <TextBlock
-                                                    Text="{Binding SelectedGraphNodeRenderPositionText}"
+                                                <TextBlock Text="{Binding SelectedGraphNodeRenderPositionText}"
                                                     Foreground="#2F2A3A"
                                                     FontWeight="SemiBold" />
                                             </StackPanel>
 
-                                            <StackPanel Grid.Row="3" Grid.Column="0"
-                                                Grid.ColumnSpan="2" Spacing="2">
+                                            <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Spacing="2">
                                                 <TextBlock Text="Степень и связи"
                                                     Foreground="#7A7486"
                                                     FontSize="12" />
-                                                <TextBlock
-                                                    Text="{Binding SelectedGraphNodeDegreeSummaryText}"
+                                                <TextBlock Text="{Binding SelectedGraphNodeDegreeSummaryText}"
                                                     Foreground="#2F2A3A"
                                                     FontWeight="SemiBold"
                                                     TextWrapping="Wrap" />
                                             </StackPanel>
 
-                                            <StackPanel Grid.Row="4" Grid.Column="0"
-                                                Grid.ColumnSpan="2" Spacing="2">
+                                            <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Spacing="2">
                                                 <TextBlock Text="Стадия огня"
                                                     Foreground="#7A7486"
                                                     FontSize="12" />
-                                                <TextBlock
-                                                    Text="{Binding SelectedGraphNodeFireSummaryText}"
+                                                <TextBlock Text="{Binding SelectedGraphNodeFireSummaryText}"
                                                     Foreground="#2F2A3A"
                                                     FontWeight="SemiBold"
                                                     TextWrapping="Wrap" />
@@ -917,8 +1080,7 @@
                                             <TextBlock Text="Топливо"
                                                 Foreground="#7A7486"
                                                 FontSize="12" />
-                                            <TextBlock
-                                                Text="{Binding SelectedGraphNodeFuelSummaryText}"
+                                            <TextBlock Text="{Binding SelectedGraphNodeFuelSummaryText}"
                                                 Foreground="#2F2A3A"
                                                 FontWeight="SemiBold"
                                                 TextWrapping="Wrap" />
@@ -927,16 +1089,30 @@
                                                 Foreground="#7A7486"
                                                 FontSize="12"
                                                 Margin="0,4,0,0" />
-                                            <TextBlock
-                                                Text="{Binding SelectedGraphNodeThermalSummaryText}"
+                                            <TextBlock Text="{Binding SelectedGraphNodeThermalSummaryText}"
                                                 Foreground="#2F2A3A"
                                                 FontWeight="SemiBold"
                                                 TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
 
-                                    <TextBlock
-                                        Text="Выберите вершину на графе, чтобы посмотреть её свойства."
+                                    <Border Background="#FFFDF8"
+                                        BorderBrush="#EEE2D3"
+                                        BorderThickness="1"
+                                        CornerRadius="8"
+                                        Padding="10">
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="Как читать graph"
+                                                Foreground="#7A7486"
+                                                FontSize="12" />
+                                            <TextBlock Text="Сильные рёбра ускоряют spread, межкластерные связи показывают переходы между patch-зонами, corridor-рёбра особенно важны для LargeGraph."
+                                                Foreground="#2F2A3A"
+                                                FontWeight="SemiBold"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <TextBlock Text="Выберите вершину на графе, чтобы посмотреть её свойства."
                                         Foreground="#8A8495"
                                         FontSize="12"
                                         TextWrapping="Wrap"
@@ -1000,7 +1176,7 @@
                                     Padding="10"
                                     CornerRadius="8">
                                     <StackPanel Spacing="4">
-                                        <TextBlock Text="Динамика"
+                                        <TextBlock Text="Тренд"
                                             Foreground="#7A7486"
                                             FontSize="12" />
                                         <TextBlock Text="{Binding TrendText}"
@@ -1012,7 +1188,6 @@
                                             TextWrapping="Wrap" />
                                         <TextBlock Text="{Binding StreamCriticalText}"
                                             Foreground="#6E6A78"
-                                            FontSize="11"
                                             TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
@@ -1027,7 +1202,7 @@
                                             Foreground="#7A7486"
                                             FontSize="12" />
                                         <TextBlock Text="{Binding ForecastSummaryText}"
-                                            Foreground="#8E7CC3"
+                                            Foreground="#2F2A3A"
                                             FontWeight="Bold"
                                             TextWrapping="Wrap" />
                                         <TextBlock Text="{Binding ForecastErrorSummaryText}"
@@ -1042,7 +1217,7 @@
                                     Padding="10"
                                     CornerRadius="8">
                                     <StackPanel Spacing="4">
-                                        <TextBlock Text="Аномалия"
+                                        <TextBlock Text="Аномалии"
                                             Foreground="#7A7486"
                                             FontSize="12" />
                                         <TextBlock Text="{Binding LastAnomalyText}"
@@ -1051,43 +1226,35 @@
                                             TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
-                            </StackPanel>
-                        </Border>
 
-                        <Border Background="#FFFDF8"
-                            BorderBrush="#E7E0F2"
-                            BorderThickness="1"
-                            Padding="12"
-                            CornerRadius="10">
-                            <StackPanel>
-                                <TextBlock Text="Лог событий"
-                                    Foreground="#2F2A3A"
-                                    FontSize="15"
-                                    FontWeight="Bold"
-                                    Margin="0,0,0,8" />
-
-                                <ListBox ItemsSource="{Binding EventLog}"
-                                    Background="#FAF8F2"
-                                    Foreground="#6E6A78"
+                                <Border Background="#FFFDF8"
                                     BorderBrush="#ECE4F6"
                                     BorderThickness="1"
-                                    CornerRadius="8"
-                                    MinHeight="220">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding}"
-                                                FontSize="11"
-                                                Margin="8,6"
-                                                TextWrapping="Wrap" />
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
+                                    Padding="10"
+                                    CornerRadius="8">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="Журнал событий"
+                                            Foreground="#7A7486"
+                                            FontSize="12" />
+
+                                        <ListBox ItemsSource="{Binding EventLog}"
+                                            Background="#FAF8F2"
+                                            Foreground="#2F2A3A"
+                                            BorderBrush="#ECE4F6"
+                                            BorderThickness="1"
+                                            CornerRadius="8"
+                                            MinHeight="120"
+                                            MaxHeight="220" />
+                                    </StackPanel>
+                                </Border>
+
                             </StackPanel>
                         </Border>
 
                     </StackPanel>
                 </ScrollViewer>
             </Border>
+
         </Grid>
     </Grid>
 </Window>

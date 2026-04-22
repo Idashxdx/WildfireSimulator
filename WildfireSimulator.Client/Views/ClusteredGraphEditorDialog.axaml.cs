@@ -25,6 +25,7 @@ public partial class ClusteredGraphEditorDialog : Window
     private const double CanvasPadding = 34.0;
     private const double CandidateRadius = 4.0;
     private const double NodeRadius = 8.5;
+    private const double ManualPlacementSnapDistance = 0.42;
 
     private Canvas? _graphCanvas;
     private ComboBox? _modeBox;
@@ -72,9 +73,9 @@ public partial class ClusteredGraphEditorDialog : Window
     public ClusteredGraphBlueprintDto EditedBlueprint { get; private set; } = new();
 
     public ClusteredGraphEditorDialog(
-    int canvasWidth,
-    int canvasHeight,
-    ClusteredGraphBlueprintDto? existingBlueprint = null)
+        int canvasWidth,
+        int canvasHeight,
+        ClusteredGraphBlueprintDto? existingBlueprint = null)
     {
         _canvasWidth = Math.Max(8, canvasWidth);
         _canvasHeight = Math.Max(8, canvasHeight);
@@ -84,13 +85,9 @@ public partial class ClusteredGraphEditorDialog : Window
         AttachEvents();
 
         if (existingBlueprint != null)
-        {
             LoadBlueprint(existingBlueprint);
-        }
         else
-        {
             RegenerateCandidates(90);
-        }
 
         RefreshNodeEditor();
         RefreshEdgeEditor();
@@ -98,13 +95,12 @@ public partial class ClusteredGraphEditorDialog : Window
         ScheduleDraw();
     }
 
-
     private void InitializeComponent()
     {
         AvaloniaXamlLoader.Load(this);
     }
 
-private bool _drawScheduled;
+    private bool _drawScheduled;
 
     private void ScheduleDraw()
     {
@@ -158,12 +154,50 @@ private bool _drawScheduled;
 
     private void AttachEvents()
     {
+        if (_graphCanvas != null)
+        {
+            _graphCanvas.PointerPressed += OnCanvasPointerPressed;
+        }
+
+        if (_modeBox != null)
+        {
+            _modeBox.SelectionChanged += (_, _) =>
+            {
+                _pendingEdgeStartNodeId = null;
+                _selectedEdgeId = null;
+
+                if (_hintTextBlock != null)
+                {
+                    _hintTextBlock.Text = GetMode() switch
+                    {
+                        EditorMode.SelectNodes =>
+                            "ЛКМ по canvas — создать узел. ЛКМ по узлу — выбрать. ПКМ по узлу — удалить узел вместе со связями.",
+                        EditorMode.CreateEdges =>
+                            "ЛКМ по первому узлу — начало ребра. ЛКМ по второму — создать ребро. Повторный клик по тому же узлу отменяет выбор.",
+                        EditorMode.DeleteEdges =>
+                            "ЛКМ по ребру — удалить связь. ЛКМ по узлу — только выбрать его для просмотра свойств.",
+                        _ =>
+                            "Выберите режим редактирования."
+                    };
+                }
+
+                RefreshSummary();
+                RefreshEdgeEditor();
+                RefreshNodeEditor();
+                ScheduleDraw();
+            };
+        }
+
         if (_regenerateCandidatesButton != null)
         {
             _regenerateCandidatesButton.Click += (_, _) =>
             {
                 int count = ParseInt(_candidateCountBox?.Text, 90);
                 RegenerateCandidates(Math.Clamp(count, 20, 300));
+
+                if (_hintTextBlock != null)
+                    _hintTextBlock.Text = $"Кандидатные точки обновлены: {_candidates.Count}. Уже созданные узлы и рёбра сохранены.";
+
                 ScheduleDraw();
             };
         }
@@ -173,6 +207,10 @@ private bool _drawScheduled;
             _autoConnectButton.Click += (_, _) =>
             {
                 AutoConnectSelectedNodes();
+
+                if (_hintTextBlock != null)
+                    _hintTextBlock.Text = "Автосвязь выполнена: ближайшие узлы соединены рёбрами.";
+
                 ScheduleDraw();
             };
         }
@@ -182,6 +220,10 @@ private bool _drawScheduled;
             _autoGroupButton.Click += (_, _) =>
             {
                 AutoAssignClusters();
+
+                if (_hintTextBlock != null)
+                    _hintTextBlock.Text = "Узлы автоматически распределены по cluster ID.";
+
                 ScheduleDraw();
             };
         }
@@ -191,6 +233,10 @@ private bool _drawScheduled;
             _normalizeEdgesButton.Click += (_, _) =>
             {
                 NormalizeEdges();
+
+                if (_hintTextBlock != null)
+                    _hintTextBlock.Text = "Все modifiers рёбер нормализованы к 1.0.";
+
                 ScheduleDraw();
             };
         }
@@ -200,6 +246,10 @@ private bool _drawScheduled;
             _weakenBridgesButton.Click += (_, _) =>
             {
                 WeakenBridges();
+
+                if (_hintTextBlock != null)
+                    _hintTextBlock.Text = "Межкластерные bridge-рёбра ослаблены.";
+
                 ScheduleDraw();
             };
         }
@@ -209,6 +259,10 @@ private bool _drawScheduled;
             _boostLocalEdgesButton.Click += (_, _) =>
             {
                 BoostLocalEdges();
+
+                if (_hintTextBlock != null)
+                    _hintTextBlock.Text = "Локальные внутрикластерные рёбра усилены.";
+
                 ScheduleDraw();
             };
         }
@@ -218,6 +272,10 @@ private bool _drawScheduled;
             _applyNodeButton.Click += (_, _) =>
             {
                 ApplyNodeChanges();
+
+                if (_hintTextBlock != null && _selectedNodeId != null)
+                    _hintTextBlock.Text = "Свойства узла обновлены.";
+
                 ScheduleDraw();
             };
         }
@@ -227,6 +285,10 @@ private bool _drawScheduled;
             _applyEdgeButton.Click += (_, _) =>
             {
                 ApplyEdgeChanges();
+
+                if (_hintTextBlock != null && _selectedEdgeId != null)
+                    _hintTextBlock.Text = "Свойства ребра обновлены.";
+
                 ScheduleDraw();
             };
         }
@@ -238,12 +300,92 @@ private bool _drawScheduled;
         {
             _applyButton.Click += (_, _) =>
             {
+                if (!TryValidateBeforeApply(out var validationMessage))
+                {
+                    if (_hintTextBlock != null)
+                        _hintTextBlock.Text = validationMessage;
+
+                    return;
+                }
+
                 EditedBlueprint = BuildBlueprint();
+
+                if (_hintTextBlock != null)
+                    _hintTextBlock.Text = "Blueprint успешно подготовлен и сохранён.";
+
                 Close(true);
             };
         }
     }
 
+    private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var point = e.GetPosition(_graphCanvas);
+        var mode = GetMode();
+        var currentPoint = e.GetCurrentPoint(_graphCanvas).Properties;
+
+        if (mode != EditorMode.SelectNodes)
+            return;
+
+        var gridPoint = TryGetGridCoordinateFromCanvas(point);
+        if (gridPoint == null)
+            return;
+
+        var existingNode = _nodes.FirstOrDefault(n => n.X == gridPoint.Value.X && n.Y == gridPoint.Value.Y);
+
+        if (currentPoint.IsRightButtonPressed)
+        {
+            if (existingNode == null)
+                return;
+
+            RemoveNode(existingNode.Id);
+
+            if (_hintTextBlock != null)
+                _hintTextBlock.Text = $"Узел ({gridPoint.Value.X}, {gridPoint.Value.Y}) удалён вместе со связанными рёбрами.";
+
+            RefreshNodeEditor();
+            RefreshEdgeEditor();
+            RefreshSummary();
+            ScheduleDraw();
+            e.Handled = true;
+            return;
+        }
+
+        if (!currentPoint.IsLeftButtonPressed)
+            return;
+
+        if (existingNode != null)
+        {
+            _selectedNodeId = existingNode.Id;
+            _selectedEdgeId = null;
+            _pendingEdgeStartNodeId = null;
+
+            if (_hintTextBlock != null)
+                _hintTextBlock.Text = $"Выбран узел ({existingNode.X}, {existingNode.Y}). Измените его свойства слева.";
+
+            RefreshNodeEditor();
+            RefreshEdgeEditor();
+            RefreshSummary();
+            ScheduleDraw();
+            e.Handled = true;
+            return;
+        }
+
+        if (TryAddNodeAt(gridPoint.Value.X, gridPoint.Value.Y, selectAfterCreate: true))
+        {
+            if (_hintTextBlock != null)
+                _hintTextBlock.Text = $"Создан новый узел ({gridPoint.Value.X}, {gridPoint.Value.Y}).";
+
+            RefreshNodeEditor();
+            RefreshEdgeEditor();
+            RefreshSummary();
+            ScheduleDraw();
+            e.Handled = true;
+        }
+    }
 
     private void LoadBlueprint(ClusteredGraphBlueprintDto blueprint)
     {
@@ -260,20 +402,206 @@ private bool _drawScheduled;
         if (blueprint.Edges != null)
             _edges.AddRange(blueprint.Edges.Select(CloneEdge));
 
+        NormalizeCurrentGraphData();
+
         if (_candidates.Count == 0)
             RegenerateCandidates(Math.Max(60, _nodes.Count * 2));
     }
 
     private ClusteredGraphBlueprintDto BuildBlueprint()
     {
+        NormalizeCurrentGraphData();
+
         return new ClusteredGraphBlueprintDto
         {
             CanvasWidth = _canvasWidth,
             CanvasHeight = _canvasHeight,
-            Candidates = _candidates.Select(CloneCandidate).ToList(),
-            Nodes = _nodes.Select(CloneNode).ToList(),
-            Edges = _edges.Select(CloneEdge).ToList()
+            Candidates = _candidates
+                .Select(CloneCandidate)
+                .GroupBy(x => (x.X, x.Y))
+                .Select(g => g.First())
+                .OrderBy(x => x.X)
+                .ThenBy(x => x.Y)
+                .ToList(),
+            Nodes = _nodes
+                .Select(CloneNode)
+                .OrderBy(x => x.X)
+                .ThenBy(x => x.Y)
+                .ToList(),
+            Edges = _edges
+                .Select(CloneEdge)
+                .OrderBy(x => x.FromNodeId)
+                .ThenBy(x => x.ToNodeId)
+                .ToList()
         };
+    }
+
+    private bool TryValidateBeforeApply(out string message)
+    {
+        NormalizeCurrentGraphData();
+
+        if (_nodes.Count == 0)
+        {
+            message = "Нельзя сохранить пустой graph blueprint: добавьте хотя бы один узел.";
+            return false;
+        }
+
+        if (_nodes.Count < 2)
+        {
+            message = "Для semi-manual graph нужно минимум 2 узла.";
+            return false;
+        }
+
+        if (_edges.Count == 0)
+        {
+            message = "Для semi-manual graph нужно хотя бы одно ребро между узлами.";
+            return false;
+        }
+
+        if (_nodes.Any(n => string.IsNullOrWhiteSpace(n.ClusterId)))
+        {
+            message = "У некоторых узлов пустой Cluster ID. Заполните cluster для всех узлов.";
+            return false;
+        }
+
+        bool hasInvalidMoisture = _nodes.Any(n => n.Moisture < 0.02 || n.Moisture > 0.98);
+        if (hasInvalidMoisture)
+        {
+            message = "Влажность узлов должна быть в диапазоне 0.02 .. 0.98.";
+            return false;
+        }
+
+        var nodeIds = _nodes.Select(n => n.Id).ToHashSet();
+
+        bool hasInvalidEdge = _edges.Any(e =>
+            e.FromNodeId == e.ToNodeId ||
+            !nodeIds.Contains(e.FromNodeId) ||
+            !nodeIds.Contains(e.ToNodeId));
+
+        if (hasInvalidEdge)
+        {
+            message = "В графе есть некорректные рёбра. Проверьте связи между узлами.";
+            return false;
+        }
+
+        bool hasInvalidModifier = _edges.Any(e => e.FireSpreadModifier < 0.02 || e.FireSpreadModifier > 1.85);
+        if (hasInvalidModifier)
+        {
+            message = "У одного или нескольких рёбер fireSpreadModifier вне допустимого диапазона 0.02 .. 1.85.";
+            return false;
+        }
+
+        bool hasInvalidDistance = _edges.Any(e => e.DistanceOverride.HasValue && e.DistanceOverride.Value <= 0.0);
+        if (hasInvalidDistance)
+        {
+            message = "Distance override у рёбер должен быть больше 0.";
+            return false;
+        }
+
+        bool hasIsolatedNodes = _nodes.Any(node =>
+            !_edges.Any(e => e.FromNodeId == node.Id || e.ToNodeId == node.Id));
+
+        if (hasIsolatedNodes)
+        {
+            message = "Есть изолированные узлы без рёбер. Соедините их или удалите.";
+            return false;
+        }
+
+        int clusterCount = _nodes
+            .Select(n => n.ClusterId?.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+
+        if (clusterCount == 0)
+        {
+            message = "Не удалось определить ни одного cluster ID.";
+            return false;
+        }
+
+        message = $"Blueprint валиден: узлов {_nodes.Count}, рёбер {_edges.Count}, clusters {clusterCount}.";
+        return true;
+    }
+
+    private void NormalizeCurrentGraphData()
+    {
+        var normalizedNodes = _nodes
+            .Where(n => n != null)
+            .GroupBy(n => (Math.Clamp(n.X, 0, _canvasWidth - 1), Math.Clamp(n.Y, 0, _canvasHeight - 1)))
+            .Select(g =>
+            {
+                var first = g.First();
+                first.X = Math.Clamp(first.X, 0, _canvasWidth - 1);
+                first.Y = Math.Clamp(first.Y, 0, _canvasHeight - 1);
+                first.ClusterId = string.IsNullOrWhiteSpace(first.ClusterId) ? "patch-manual-1" : first.ClusterId.Trim();
+                first.Moisture = Math.Clamp(first.Moisture, 0.02, 0.98);
+                return first;
+            })
+            .ToList();
+
+        _nodes.Clear();
+        _nodes.AddRange(normalizedNodes);
+
+        var nodeIds = _nodes.Select(n => n.Id).ToHashSet();
+        var uniqueEdges = new Dictionary<string, ClusteredEdgeDraftDto>(StringComparer.Ordinal);
+
+        foreach (var edge in _edges)
+        {
+            if (edge.FromNodeId == edge.ToNodeId)
+                continue;
+
+            if (!nodeIds.Contains(edge.FromNodeId) || !nodeIds.Contains(edge.ToNodeId))
+                continue;
+
+            var ordered = GetOrderedEdgeIds(edge.FromNodeId, edge.ToNodeId);
+            string key = $"{ordered.A:N}:{ordered.B:N}";
+
+            edge.FromNodeId = ordered.A;
+            edge.ToNodeId = ordered.B;
+            edge.FireSpreadModifier = Math.Clamp(edge.FireSpreadModifier, 0.02, 1.85);
+
+            if (edge.DistanceOverride.HasValue)
+                edge.DistanceOverride = Math.Max(0.1, edge.DistanceOverride.Value);
+
+            if (!uniqueEdges.ContainsKey(key))
+                uniqueEdges[key] = edge;
+        }
+
+        _edges.Clear();
+        _edges.AddRange(uniqueEdges.Values);
+
+        var occupied = _nodes.Select(n => (n.X, n.Y)).ToHashSet();
+
+        foreach (var node in _nodes)
+        {
+            if (!_candidates.Any(c => c.X == node.X && c.Y == node.Y))
+            {
+                _candidates.Add(new ClusteredCandidateNodeDto
+                {
+                    Id = Guid.NewGuid(),
+                    X = node.X,
+                    Y = node.Y
+                });
+            }
+        }
+
+        _candidates.RemoveAll(c => c.X < 0 || c.Y < 0 || c.X >= _canvasWidth || c.Y >= _canvasHeight);
+        var uniqueCandidates = _candidates
+            .GroupBy(c => (c.X, c.Y))
+            .Select(g => g.First())
+            .ToList();
+
+        _candidates.Clear();
+        _candidates.AddRange(uniqueCandidates);
+
+        if (_selectedNodeId.HasValue && !_nodes.Any(n => n.Id == _selectedNodeId.Value))
+            _selectedNodeId = null;
+
+        if (_selectedEdgeId.HasValue && !_edges.Any(e => e.Id == _selectedEdgeId.Value))
+            _selectedEdgeId = null;
+
+        if (_pendingEdgeStartNodeId.HasValue && !_nodes.Any(n => n.Id == _pendingEdgeStartNodeId.Value))
+            _pendingEdgeStartNodeId = null;
     }
 
     private void RegenerateCandidates(int count)
@@ -354,12 +682,12 @@ private bool _drawScheduled;
         _graphCanvas.Children.Clear();
 
         DrawBackground();
+        DrawGridOverlay();
         DrawEdges();
         DrawCandidates();
         DrawNodes();
         DrawPendingEdgeHint();
     }
-
 
     private void DrawBackground()
     {
@@ -381,6 +709,55 @@ private bool _drawScheduled;
         };
 
         _graphCanvas.Children.Add(background);
+    }
+
+    private void DrawGridOverlay()
+    {
+        if (_graphCanvas == null)
+            return;
+
+        double scale = GetScale();
+
+        for (int x = 0; x < _canvasWidth; x++)
+        {
+            for (int y = 0; y < _canvasHeight; y++)
+            {
+                var point = ToCanvasPoint(x, y);
+
+                var dot = new Ellipse
+                {
+                    Width = 2,
+                    Height = 2,
+                    Fill = new SolidColorBrush(Color.FromArgb(70, 160, 156, 170)),
+                    IsHitTestVisible = false
+                };
+
+                Canvas.SetLeft(dot, point.X - 1);
+                Canvas.SetTop(dot, point.Y - 1);
+                _graphCanvas.Children.Add(dot);
+            }
+        }
+
+        var info = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(230, 255, 253, 248)),
+            BorderBrush = new SolidColorBrush(Color.Parse("#E2DCEB")),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(8, 4),
+            IsHitTestVisible = false,
+            Child = new TextBlock
+            {
+                Text = $"Canvas: {_canvasWidth}×{_canvasHeight} • шаг визуализации {scale:F1}",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.Parse("#5B5568"))
+            }
+        };
+
+        info.Measure(Size.Infinity);
+        Canvas.SetLeft(info, 14);
+        Canvas.SetTop(info, 12);
+        _graphCanvas.Children.Add(info);
     }
 
     private void DrawCandidates()
@@ -413,14 +790,21 @@ private bool _drawScheduled;
                 Cursor = new Cursor(StandardCursorType.Hand)
             };
 
-            ToolTip.SetTip(ellipse, $"Кандидат ({candidate.X}, {candidate.Y})");
+            ToolTip.SetTip(
+                ellipse,
+                $"Кандидат ({candidate.X}, {candidate.Y})\n" +
+                $"ЛКМ: добавить/снять узел");
 
             Canvas.SetLeft(ellipse, point.X - CandidateRadius);
             Canvas.SetTop(ellipse, point.Y - CandidateRadius);
 
-            ellipse.PointerPressed += (_, _) =>
+            ellipse.PointerPressed += (_, e) =>
             {
+                if (!e.GetCurrentPoint(ellipse).Properties.IsLeftButtonPressed)
+                    return;
+
                 HandleCandidateClick(candidate);
+                e.Handled = true;
             };
 
             _graphCanvas.Children.Add(ellipse);
@@ -438,10 +822,12 @@ private bool _drawScheduled;
             bool isSelected = node.Id == _selectedNodeId;
             bool isPendingStart = node.Id == _pendingEdgeStartNodeId;
 
+            double radius = isSelected ? NodeRadius + 1.8 : isPendingStart ? NodeRadius + 1.0 : NodeRadius;
+
             var shape = new Ellipse
             {
-                Width = NodeRadius * 2,
-                Height = NodeRadius * 2,
+                Width = radius * 2,
+                Height = radius * 2,
                 Fill = new SolidColorBrush(GetNodeColor(node)),
                 Stroke = new SolidColorBrush(
                     isSelected
@@ -449,30 +835,64 @@ private bool _drawScheduled;
                         : isPendingStart
                             ? Color.Parse("#D6402B")
                             : Color.Parse("#F8F5EE")),
-                StrokeThickness = isSelected ? 2.6 : isPendingStart ? 2.4 : 1.4,
+                StrokeThickness = isSelected ? 2.8 : isPendingStart ? 2.4 : 1.4,
                 Cursor = new Cursor(StandardCursorType.Hand)
             };
 
-            ToolTip.SetTip(shape,
-                $"Узел ({node.X}, {node.Y})\n" +
-                $"Cluster: {node.ClusterId}\n" +
-                $"Растительность: {node.Vegetation}\n" +
-                $"Влажность: {node.Moisture:F2}\n" +
-                $"Высота: {node.Elevation:F1}");
+            ToolTip.SetTip(shape, BuildNodeTooltip(node));
 
             shape.PointerPressed += (_, e) =>
             {
-                if (!e.GetCurrentPoint(shape).Properties.IsLeftButtonPressed)
+                var properties = e.GetCurrentPoint(shape).Properties;
+
+                if (properties.IsRightButtonPressed)
+                {
+                    RemoveNode(node.Id);
+                    e.Handled = true;
+                    return;
+                }
+
+                if (!properties.IsLeftButtonPressed)
                     return;
 
                 HandleNodeClick(node);
                 e.Handled = true;
             };
 
-            Canvas.SetLeft(shape, point.X - NodeRadius);
-            Canvas.SetTop(shape, point.Y - NodeRadius);
+            Canvas.SetLeft(shape, point.X - radius);
+            Canvas.SetTop(shape, point.Y - radius);
             _graphCanvas.Children.Add(shape);
+
+            DrawNodeLabel(node, point, radius);
         }
+    }
+
+    private void DrawNodeLabel(ClusteredNodeDraftDto node, Point point, double radius)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var label = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(228, 255, 253, 248)),
+            BorderBrush = new SolidColorBrush(Color.Parse("#DDD6E9")),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(5, 2),
+            IsHitTestVisible = false,
+            Child = new TextBlock
+            {
+                Text = $"{node.ClusterId}",
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.Parse("#564F64"))
+            }
+        };
+
+        label.Measure(Size.Infinity);
+        Canvas.SetLeft(label, point.X - label.DesiredSize.Width / 2.0);
+        Canvas.SetTop(label, point.Y + radius + 5.0);
+
+        _graphCanvas.Children.Add(label);
     }
 
     private void DrawEdges()
@@ -507,16 +927,12 @@ private bool _drawScheduled;
                             : modifier >= 1.05
                                 ? Color.Parse("#8E7CC3")
                                 : Color.Parse("#A89FB7")),
-                StrokeThickness = isSelected ? 3.6 : isBridge ? 2.2 : modifier >= 1.05 ? 2.5 : 1.8,
+                StrokeThickness = isSelected ? 3.7 : isBridge ? 2.3 : modifier >= 1.05 ? 2.5 : 1.8,
                 StrokeDashArray = isBridge ? new AvaloniaList<double> { 5, 3 } : null,
                 Cursor = new Cursor(StandardCursorType.Hand)
             };
 
-            ToolTip.SetTip(line,
-                $"Ребро\n" +
-                $"Bridge: {(isBridge ? "yes" : "no")}\n" +
-                $"Modifier: {edge.FireSpreadModifier:F2}\n" +
-                $"Distance override: {(edge.DistanceOverride.HasValue ? edge.DistanceOverride.Value.ToString("F2", CultureInfo.InvariantCulture) : "auto")}");
+            ToolTip.SetTip(line, BuildEdgeTooltip(edge, fromNode, toNode, isBridge));
 
             line.PointerPressed += (_, e) =>
             {
@@ -528,7 +944,55 @@ private bool _drawScheduled;
             };
 
             _graphCanvas.Children.Add(line);
+
+            DrawEdgeMidLabel(edge, fromNode, toNode, fromPoint, toPoint, isBridge, isSelected);
         }
+    }
+
+    private void DrawEdgeMidLabel(
+        ClusteredEdgeDraftDto edge,
+        ClusteredNodeDraftDto fromNode,
+        ClusteredNodeDraftDto toNode,
+        Point fromPoint,
+        Point toPoint,
+        bool isBridge,
+        bool isSelected)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        double centerX = (fromPoint.X + toPoint.X) / 2.0;
+        double centerY = (fromPoint.Y + toPoint.Y) / 2.0;
+
+        string text = isBridge
+            ? $"bridge • {edge.FireSpreadModifier:F2}"
+            : $"{edge.FireSpreadModifier:F2}";
+
+        var label = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(235, 255, 253, 248)),
+            BorderBrush = new SolidColorBrush(
+                isSelected
+                    ? Color.Parse("#D6402B")
+                    : isBridge
+                        ? Color.Parse("#7DA6C7")
+                        : Color.Parse("#D8D2E6")),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(5, 2),
+            IsHitTestVisible = false,
+            Child = new TextBlock
+            {
+                Text = text,
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.Parse("#5C5569"))
+            }
+        };
+
+        label.Measure(Size.Infinity);
+        Canvas.SetLeft(label, centerX - label.DesiredSize.Width / 2.0);
+        Canvas.SetTop(label, centerY - label.DesiredSize.Height / 2.0 - 10.0);
+        _graphCanvas.Children.Add(label);
     }
 
     private void DrawPendingEdgeHint()
@@ -544,50 +1008,47 @@ private bool _drawScheduled;
 
         var glow = new Ellipse
         {
-            Width = (NodeRadius + 5) * 2,
-            Height = (NodeRadius + 5) * 2,
+            Width = (NodeRadius + 6) * 2,
+            Height = (NodeRadius + 6) * 2,
             Fill = new SolidColorBrush(Color.FromArgb(60, 255, 230, 120)),
             Stroke = new SolidColorBrush(Color.Parse("#D6402B")),
             StrokeThickness = 1.8,
             IsHitTestVisible = false
         };
 
-        Canvas.SetLeft(glow, point.X - (NodeRadius + 5));
-        Canvas.SetTop(glow, point.Y - (NodeRadius + 5));
+        Canvas.SetLeft(glow, point.X - (NodeRadius + 6));
+        Canvas.SetTop(glow, point.Y - (NodeRadius + 6));
         _graphCanvas.Children.Add(glow);
     }
 
     private void HandleCandidateClick(ClusteredCandidateNodeDto candidate)
     {
+        if (GetMode() != EditorMode.SelectNodes)
+            return;
+
         var existingNode = _nodes.FirstOrDefault(n => n.X == candidate.X && n.Y == candidate.Y);
 
         if (existingNode != null)
         {
-            var removedNodeId = existingNode.Id;
-            _nodes.Remove(existingNode);
-            _edges.RemoveAll(e => e.FromNodeId == removedNodeId || e.ToNodeId == removedNodeId);
+            _selectedNodeId = existingNode.Id;
+            _selectedEdgeId = null;
+            _pendingEdgeStartNodeId = null;
 
-            if (_selectedNodeId == removedNodeId)
-                _selectedNodeId = null;
-
-            if (_pendingEdgeStartNodeId == removedNodeId)
-                _pendingEdgeStartNodeId = null;
+            if (_hintTextBlock != null)
+                _hintTextBlock.Text = $"Выбран существующий узел ({existingNode.X}, {existingNode.Y}).";
         }
         else
         {
-            var node = new ClusteredNodeDraftDto
-            {
-                Id = Guid.NewGuid(),
-                X = candidate.X,
-                Y = candidate.Y,
-                ClusterId = $"patch-manual-{GetSuggestedClusterIndex(candidate)}",
-                Vegetation = VegetationType.Mixed,
-                Moisture = 0.45,
-                Elevation = 0.0
-            };
-
+            var node = CreateDefaultNode(candidate.X, candidate.Y);
             _nodes.Add(node);
+            EnsureCandidateExists(node.X, node.Y);
+
             _selectedNodeId = node.Id;
+            _selectedEdgeId = null;
+            _pendingEdgeStartNodeId = null;
+
+            if (_hintTextBlock != null)
+                _hintTextBlock.Text = $"Создан узел ({node.X}, {node.Y}) с cluster {node.ClusterId}.";
         }
 
         RefreshNodeEditor();
@@ -595,7 +1056,6 @@ private bool _drawScheduled;
         RefreshSummary();
         ScheduleDraw();
     }
-
 
     private void HandleNodeClick(ClusteredNodeDraftDto node)
     {
@@ -608,29 +1068,60 @@ private bool _drawScheduled;
                 _pendingEdgeStartNodeId = node.Id;
                 _selectedNodeId = node.Id;
                 _selectedEdgeId = null;
+
+                if (_hintTextBlock != null)
+                    _hintTextBlock.Text = $"Начало ребра выбрано: ({node.X}, {node.Y}). Теперь выберите второй узел.";
             }
             else if (_pendingEdgeStartNodeId == node.Id)
             {
                 _pendingEdgeStartNodeId = null;
                 _selectedNodeId = node.Id;
+                _selectedEdgeId = null;
+
+                if (_hintTextBlock != null)
+                    _hintTextBlock.Text = "Создание ребра отменено: стартовый узел выбран повторно.";
             }
             else
             {
                 var fromId = _pendingEdgeStartNodeId.Value;
                 var toId = node.Id;
 
-                if (!TryAddEdge(fromId, toId))
+                if (TryAddEdge(fromId, toId))
+                {
                     _selectedEdgeId = FindEdgeId(fromId, toId);
+
+                    if (_hintTextBlock != null)
+                        _hintTextBlock.Text = $"Новое ребро создано между узлами ({_nodes.First(n => n.Id == fromId).X}, {_nodes.First(n => n.Id == fromId).Y}) и ({node.X}, {node.Y}).";
+                }
+                else
+                {
+                    _selectedEdgeId = FindEdgeId(fromId, toId);
+
+                    if (_hintTextBlock != null)
+                        _hintTextBlock.Text = "Такое ребро уже существует. Выбрано существующее ребро.";
+                }
 
                 _pendingEdgeStartNodeId = null;
                 _selectedNodeId = node.Id;
             }
+        }
+        else if (mode == EditorMode.DeleteEdges)
+        {
+            _selectedNodeId = node.Id;
+            _selectedEdgeId = null;
+            _pendingEdgeStartNodeId = null;
+
+            if (_hintTextBlock != null)
+                _hintTextBlock.Text = $"Выбран узел ({node.X}, {node.Y}). В режиме удаления связи удаляются кликом по ребру.";
         }
         else
         {
             _selectedNodeId = node.Id;
             _selectedEdgeId = null;
             _pendingEdgeStartNodeId = null;
+
+            if (_hintTextBlock != null)
+                _hintTextBlock.Text = $"Выбран узел ({node.X}, {node.Y}). Можно редактировать cluster, vegetation, moisture и elevation.";
         }
 
         RefreshNodeEditor();
@@ -638,27 +1129,110 @@ private bool _drawScheduled;
         RefreshSummary();
         ScheduleDraw();
     }
-private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
-{
-    var mode = GetMode();
 
-    if (mode == EditorMode.DeleteEdges)
+    private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
     {
-        _edges.RemoveAll(e => e.Id == edge.Id);
-        if (_selectedEdgeId == edge.Id)
+        var mode = GetMode();
+
+        if (mode == EditorMode.DeleteEdges)
+        {
+            _edges.RemoveAll(e => e.Id == edge.Id);
+
+            if (_selectedEdgeId == edge.Id)
+                _selectedEdgeId = null;
+
+            _pendingEdgeStartNodeId = null;
+
+            if (_hintTextBlock != null)
+                _hintTextBlock.Text = "Ребро удалено.";
+        }
+        else
+        {
+            _selectedEdgeId = edge.Id;
+            _selectedNodeId = null;
+
+            if (_hintTextBlock != null)
+                _hintTextBlock.Text = "Выбрано ребро. Можно изменить distance override и fireSpreadModifier.";
+        }
+
+        RefreshNodeEditor();
+        RefreshEdgeEditor();
+        RefreshSummary();
+        ScheduleDraw();
+    }
+
+    private void RemoveNode(Guid nodeId)
+    {
+        var removedNode = _nodes.FirstOrDefault(n => n.Id == nodeId);
+        if (removedNode == null)
+            return;
+
+        int removedEdgesCount = _edges.Count(e => e.FromNodeId == nodeId || e.ToNodeId == nodeId);
+
+        _nodes.RemoveAll(n => n.Id == nodeId);
+        _edges.RemoveAll(e => e.FromNodeId == nodeId || e.ToNodeId == nodeId);
+
+        if (_selectedNodeId == nodeId)
+            _selectedNodeId = null;
+
+        if (_pendingEdgeStartNodeId == nodeId)
+            _pendingEdgeStartNodeId = null;
+
+        if (_selectedEdgeId.HasValue && !_edges.Any(e => e.Id == _selectedEdgeId.Value))
             _selectedEdgeId = null;
+
+        if (_hintTextBlock != null)
+            _hintTextBlock.Text = $"Удалён узел ({removedNode.X}, {removedNode.Y}) и связанных рёбер: {removedEdgesCount}.";
     }
-    else
+    private bool TryAddNodeAt(int x, int y, bool selectAfterCreate)
     {
-        _selectedEdgeId = edge.Id;
-        _selectedNodeId = null;
+        x = Math.Clamp(x, 0, _canvasWidth - 1);
+        y = Math.Clamp(y, 0, _canvasHeight - 1);
+
+        if (_nodes.Any(n => n.X == x && n.Y == y))
+            return false;
+
+        var node = CreateDefaultNode(x, y);
+        _nodes.Add(node);
+        EnsureCandidateExists(x, y);
+
+        if (selectAfterCreate)
+        {
+            _selectedNodeId = node.Id;
+            _selectedEdgeId = null;
+            _pendingEdgeStartNodeId = null;
+        }
+
+        return true;
     }
 
-    RefreshNodeEditor();
-    RefreshEdgeEditor();
-    RefreshSummary();
-    ScheduleDraw();
-}
+    private ClusteredNodeDraftDto CreateDefaultNode(int x, int y)
+    {
+        return new ClusteredNodeDraftDto
+        {
+            Id = Guid.NewGuid(),
+            X = x,
+            Y = y,
+            ClusterId = $"patch-manual-{GetSuggestedClusterIndex(x, y)}",
+            Vegetation = VegetationType.Mixed,
+            Moisture = 0.45,
+            Elevation = 0.0
+        };
+    }
+
+    private void EnsureCandidateExists(int x, int y)
+    {
+        if (_candidates.Any(c => c.X == x && c.Y == y))
+            return;
+
+        _candidates.Add(new ClusteredCandidateNodeDto
+        {
+            Id = Guid.NewGuid(),
+            X = x,
+            Y = y
+        });
+    }
+
     private void AutoConnectSelectedNodes()
     {
         if (_nodes.Count < 2)
@@ -681,9 +1255,8 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
 
             foreach (var item in nearest)
             {
-                var a = node.Id.ToString();
-                var b = item.Node.Id.ToString();
-                var key = string.CompareOrdinal(a, b) <= 0 ? $"{a}|{b}" : $"{b}|{a}";
+                var ordered = GetOrderedEdgeIds(node.Id, item.Node.Id);
+                var key = $"{ordered.A:N}:{ordered.B:N}";
 
                 if (!orderedPairs.Add(key))
                     continue;
@@ -695,7 +1268,6 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
         RefreshSummary();
         RefreshEdgeEditor();
     }
-
 
     private void AutoAssignClusters()
     {
@@ -773,9 +1345,10 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
         if (fromId == toId)
             return false;
 
+        var ordered = GetOrderedEdgeIds(fromId, toId);
+
         bool exists = _edges.Any(e =>
-            (e.FromNodeId == fromId && e.ToNodeId == toId) ||
-            (e.FromNodeId == toId && e.ToNodeId == fromId));
+            e.FromNodeId == ordered.A && e.ToNodeId == ordered.B);
 
         if (exists)
             return false;
@@ -783,8 +1356,8 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
         _edges.Add(new ClusteredEdgeDraftDto
         {
             Id = Guid.NewGuid(),
-            FromNodeId = fromId,
-            ToNodeId = toId,
+            FromNodeId = ordered.A,
+            ToNodeId = ordered.B,
             DistanceOverride = null,
             FireSpreadModifier = 1.0
         });
@@ -794,11 +1367,16 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
 
     private Guid? FindEdgeId(Guid fromId, Guid toId)
     {
+        var ordered = GetOrderedEdgeIds(fromId, toId);
+
         return _edges
-            .FirstOrDefault(e =>
-                (e.FromNodeId == fromId && e.ToNodeId == toId) ||
-                (e.FromNodeId == toId && e.ToNodeId == fromId))
+            .FirstOrDefault(e => e.FromNodeId == ordered.A && e.ToNodeId == ordered.B)
             ?.Id;
+    }
+
+    private (Guid A, Guid B) GetOrderedEdgeIds(Guid first, Guid second)
+    {
+        return first.CompareTo(second) <= 0 ? (first, second) : (second, first);
     }
 
     private void ApplyNodeChanges()
@@ -810,7 +1388,8 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
         if (node == null)
             return;
 
-        node.ClusterId = (_nodeClusterIdBox?.Text ?? string.Empty).Trim();
+        string clusterText = (_nodeClusterIdBox?.Text ?? string.Empty).Trim();
+        node.ClusterId = string.IsNullOrWhiteSpace(clusterText) ? "patch-manual-1" : clusterText;
         node.Vegetation = GetSelectedVegetation();
         node.Moisture = Math.Clamp(ParseDouble(_nodeMoistureBox?.Text, node.Moisture), 0.02, 0.98);
         node.Elevation = ParseDouble(_nodeElevationBox?.Text, node.Elevation);
@@ -867,8 +1446,14 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
             return;
         }
 
+        int degree = _edges.Count(e => e.FromNodeId == node.Id || e.ToNodeId == node.Id);
+
         if (_selectedNodeSummaryTextBlock != null)
-            _selectedNodeSummaryTextBlock.Text = $"Узел ({node.X}, {node.Y}) • {node.ClusterId}";
+        {
+            _selectedNodeSummaryTextBlock.Text =
+                $"Узел ({node.X}, {node.Y}) • {node.ClusterId}\n" +
+                $"Степень: {degree} • {GetVegetationText(node.Vegetation)}";
+        }
 
         if (_nodeClusterIdBox != null)
             _nodeClusterIdBox.Text = node.ClusterId;
@@ -916,10 +1501,15 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
         var fromNode = _nodes.FirstOrDefault(n => n.Id == edge.FromNodeId);
         var toNode = _nodes.FirstOrDefault(n => n.Id == edge.ToNodeId);
 
+        bool isBridge = fromNode != null &&
+                        toNode != null &&
+                        !string.Equals(fromNode.ClusterId, toNode.ClusterId, StringComparison.Ordinal);
+
         if (_selectedEdgeSummaryTextBlock != null)
         {
             _selectedEdgeSummaryTextBlock.Text = fromNode != null && toNode != null
-                ? $"Ребро ({fromNode.X}, {fromNode.Y}) ↔ ({toNode.X}, {toNode.Y})"
+                ? $"Ребро ({fromNode.X}, {fromNode.Y}) ↔ ({toNode.X}, {toNode.Y})\n" +
+                  $"Тип: {(isBridge ? "межкластерное" : "локальное")}"
                 : "Ребро выбрано";
         }
 
@@ -949,10 +1539,13 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
             return !string.Equals(fromNode.ClusterId, toNode.ClusterId, StringComparison.Ordinal);
         });
 
+        int isolatedCount = _nodes.Count(node =>
+            !_edges.Any(e => e.FromNodeId == node.Id || e.ToNodeId == node.Id));
+
         if (_summaryTextBlock != null)
         {
             _summaryTextBlock.Text =
-                $"Выбрано узлов: {_nodes.Count} • рёбер: {_edges.Count} • групп: {clusterCount} • мостов: {bridgeCount}";
+                $"Узлов: {_nodes.Count} • рёбер: {_edges.Count} • групп: {clusterCount} • мостов: {bridgeCount} • изолированных: {isolatedCount}";
         }
 
         if (_hintTextBlock != null)
@@ -960,11 +1553,11 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
             _hintTextBlock.Text = GetMode() switch
             {
                 EditorMode.SelectNodes =>
-                    "Кликайте по серым точкам: клик добавляет узел, повторный клик снимает его.",
+                    "ЛКМ по canvas — создать узел. ЛКМ по серой точке — добавить/снять узел. ПКМ по узлу — удалить узел вместе с рёбрами.",
                 EditorMode.CreateEdges =>
-                    "Кликните по первому выбранному узлу, затем по второму — между ними появится ребро.",
+                    "ЛКМ по первому узлу, затем по второму — создать ребро. Повторный клик по тому же узлу снимает выбор старта.",
                 EditorMode.DeleteEdges =>
-                    "Кликайте по рёбрам, чтобы удалить их.",
+                    "ЛКМ по ребру удаляет его. Используйте этот режим для очистки лишних связей.",
                 _ => "Редактирование clustered graph."
             };
         }
@@ -988,6 +1581,31 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
             CanvasPadding + y * scale);
     }
 
+    private (int X, int Y)? TryGetGridCoordinateFromCanvas(Point canvasPoint)
+    {
+        double scale = GetScale();
+
+        double localX = (canvasPoint.X - CanvasPadding) / scale;
+        double localY = (canvasPoint.Y - CanvasPadding) / scale;
+
+        if (double.IsNaN(localX) || double.IsNaN(localY))
+            return null;
+
+        int x = (int)Math.Round(localX);
+        int y = (int)Math.Round(localY);
+
+        if (x < 0 || y < 0 || x >= _canvasWidth || y >= _canvasHeight)
+            return null;
+
+        if (Math.Abs(localX - x) > ManualPlacementSnapDistance ||
+            Math.Abs(localY - y) > ManualPlacementSnapDistance)
+        {
+            return null;
+        }
+
+        return (x, y);
+    }
+
     private double GetScale()
     {
         double usableWidth = 780.0;
@@ -1001,8 +1619,13 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
 
     private int GetSuggestedClusterIndex(ClusteredCandidateNodeDto candidate)
     {
-        int horizontalBand = Math.Max(0, candidate.X / Math.Max(1, _canvasWidth / 4));
-        int verticalBand = Math.Max(0, candidate.Y / Math.Max(1, _canvasHeight / 3));
+        return GetSuggestedClusterIndex(candidate.X, candidate.Y);
+    }
+
+    private int GetSuggestedClusterIndex(int x, int y)
+    {
+        int horizontalBand = Math.Max(0, x / Math.Max(1, _canvasWidth / 4));
+        int verticalBand = Math.Max(0, y / Math.Max(1, _canvasHeight / 3));
         return verticalBand * 4 + horizontalBand + 1;
     }
 
@@ -1040,6 +1663,52 @@ private void HandleEdgeClick(ClusteredEdgeDraftDto edge)
             6 => VegetationType.Bare,
             _ => VegetationType.Mixed
         };
+    }
+
+    private string GetVegetationText(VegetationType vegetation)
+    {
+        return vegetation switch
+        {
+            VegetationType.Grass => "Трава",
+            VegetationType.Shrub => "Кустарник",
+            VegetationType.Deciduous => "Лиственный лес",
+            VegetationType.Coniferous => "Хвойный лес",
+            VegetationType.Mixed => "Смешанный лес",
+            VegetationType.Water => "Вода",
+            VegetationType.Bare => "Пустая поверхность",
+            _ => vegetation.ToString()
+        };
+    }
+
+    private string BuildNodeTooltip(ClusteredNodeDraftDto node)
+    {
+        int degree = _edges.Count(e => e.FromNodeId == node.Id || e.ToNodeId == node.Id);
+
+        return
+            $"Узел: {node.Id}\n" +
+            $"Координаты: ({node.X}, {node.Y})\n" +
+            $"Cluster: {node.ClusterId}\n" +
+            $"Растительность: {GetVegetationText(node.Vegetation)}\n" +
+            $"Влажность: {node.Moisture:F2}\n" +
+            $"Высота: {node.Elevation:F2}\n" +
+            $"Степень: {degree}\n" +
+            $"ЛКМ: выбрать\n" +
+            $"ПКМ: удалить";
+    }
+
+    private string BuildEdgeTooltip(
+        ClusteredEdgeDraftDto edge,
+        ClusteredNodeDraftDto fromNode,
+        ClusteredNodeDraftDto toNode,
+        bool isBridge)
+    {
+        return
+            $"Ребро: {edge.Id}\n" +
+            $"From: ({fromNode.X}, {fromNode.Y}) • {fromNode.ClusterId}\n" +
+            $"To: ({toNode.X}, {toNode.Y}) • {toNode.ClusterId}\n" +
+            $"Тип: {(isBridge ? "межкластерное" : "локальное")}\n" +
+            $"Modifier: {edge.FireSpreadModifier:F2}\n" +
+            $"Distance override: {(edge.DistanceOverride.HasValue ? edge.DistanceOverride.Value.ToString("F2", CultureInfo.InvariantCulture) : "auto")}";
     }
 
     private static ClusteredCandidateNodeDto CloneCandidate(ClusteredCandidateNodeDto source)

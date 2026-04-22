@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
 using Avalonia;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
@@ -33,7 +34,7 @@ public partial class NodeGraphVisualization : UserControl
     private const double ZoomStep = 0.18;
 
     private const double BaseNodeRadius = 8.5;
-    private const double SelectedNodeRadius = 11.0;
+    private const double SelectedNodeRadius = 11.5;
     private const double NeighborNodeRadius = 9.5;
 
     private const double BaseEdgeThickness = 1.4;
@@ -259,22 +260,19 @@ public partial class NodeGraphVisualization : UserControl
         var neighborIds = GetNeighborIds(edges, selectedNodeId);
 
         DrawClusterPatchBackgrounds(nodes, points);
+        DrawClusterLabels(nodes, points);
 
         foreach (var edge in edges)
         {
-            var isCrossCluster =
-                nodeMap.TryGetValue(edge.FromCellId, out var fromNode) &&
-                nodeMap.TryGetValue(edge.ToCellId, out var toNode) &&
-                !string.IsNullOrWhiteSpace(fromNode.GroupKey) &&
-                !string.IsNullOrWhiteSpace(toNode.GroupKey) &&
-                !string.Equals(fromNode.GroupKey, toNode.GroupKey, StringComparison.Ordinal);
-
-            DrawEdge(edge, points, selectedNodeId, selectedEdgeIds, isCrossCluster);
+            DrawEdge(edge, points, nodeMap, selectedNodeId, selectedEdgeIds);
         }
 
         foreach (var node in nodes.OrderBy(n => n.IsBurning ? 0 : 1))
-            DrawNode(node, edges, points, selectedNodeId, neighborIds, useMapStyle: false);
+        {
+            DrawNode(node, edges, points, selectedNodeId, neighborIds);
+        }
     }
+
     private double GetStandardGraphScale(
         List<SimulationGraphNodeDto> nodes,
         (double MinX, double MaxX, double MinY, double MaxY) bounds)
@@ -306,8 +304,8 @@ public partial class NodeGraphVisualization : UserControl
     }
 
     private void DrawClusterPatchBackgrounds(
-      List<SimulationGraphNodeDto> nodes,
-      Dictionary<Guid, Point> points)
+        List<SimulationGraphNodeDto> nodes,
+        Dictionary<Guid, Point> points)
     {
         if (_graphCanvas == null)
             return;
@@ -319,8 +317,10 @@ public partial class NodeGraphVisualization : UserControl
             .OrderBy(g => g.Key)
             .ToList();
 
-        if (groups.Count < 2)
+        if (groups.Count == 0)
             return;
+
+        int colorIndex = 0;
 
         foreach (var group in groups)
         {
@@ -340,139 +340,177 @@ public partial class NodeGraphVisualization : UserControl
 
             var polygon = new Polygon
             {
-                Points = new Points(hull),
-                Fill = new SolidColorBrush(GetGroupFillColor(groupNodes)),
-                Stroke = new SolidColorBrush(GetGroupStrokeColor(groupNodes)),
-                StrokeThickness = 1.1,
-                Opacity = 0.40,
+                Points = new Avalonia.Collections.AvaloniaList<Point>(hull),
+                Fill = new SolidColorBrush(GetClusterTint(colorIndex), 0.12),
+                Stroke = new SolidColorBrush(GetClusterTint(colorIndex), 0.35),
+                StrokeThickness = 1.2,
                 IsHitTestVisible = false
             };
 
             _graphCanvas.Children.Add(polygon);
+            colorIndex++;
+        }
+    }
 
-            var centerX = groupPoints.Average(p => p.X);
-            var centerY = groupPoints.Average(p => p.Y);
+    private void DrawClusterLabels(
+        List<SimulationGraphNodeDto> nodes,
+        Dictionary<Guid, Point> points)
+    {
+        if (_graphCanvas == null)
+            return;
 
-            var label = new TextBlock
+        var groups = nodes
+            .Where(n => !string.IsNullOrWhiteSpace(n.GroupKey))
+            .GroupBy(n => n.GroupKey)
+            .OrderBy(g => g.Key)
+            .ToList();
+
+        int colorIndex = 0;
+
+        foreach (var group in groups)
+        {
+            var groupNodes = group
+                .Where(n => points.ContainsKey(n.Id))
+                .ToList();
+
+            if (groupNodes.Count == 0)
+                continue;
+
+            double centerX = groupNodes.Average(n => points[n.Id].X);
+            double minY = groupNodes.Min(n => points[n.Id].Y);
+
+            var labelBorder = new Border
             {
-                Text = group.Key ?? string.Empty,
-                Foreground = new SolidColorBrush(Color.Parse("#6E675A")),
-                FontSize = 11,
-                FontWeight = FontWeight.Bold,
+                Background = new SolidColorBrush(Color.FromArgb(230, 255, 253, 248)),
+                BorderBrush = new SolidColorBrush(GetClusterTint(colorIndex)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(8, 4),
+                Child = new TextBlock
+                {
+                    Text = group.Key ?? "cluster",
+                    FontSize = 11,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = new SolidColorBrush(GetClusterTint(colorIndex))
+                },
                 IsHitTestVisible = false
             };
 
-            label.Measure(Size.Infinity);
-            Canvas.SetLeft(label, centerX - label.DesiredSize.Width / 2.0);
-            Canvas.SetTop(label, centerY - label.DesiredSize.Height / 2.0);
-            _graphCanvas.Children.Add(label);
+            labelBorder.Measure(Size.Infinity);
+
+            Canvas.SetLeft(labelBorder, centerX - labelBorder.DesiredSize.Width / 2.0);
+            Canvas.SetTop(labelBorder, minY - 28.0);
+
+            _graphCanvas.Children.Add(labelBorder);
+            colorIndex++;
         }
     }
-    private Color GetGroupFillColor(List<SimulationGraphNodeDto> nodes)
-    {
-        if (nodes.Any(n => n.IsBurning))
-            return Color.FromArgb(60, 255, 122, 89);
 
-        if (nodes.All(n => n.IsBurned))
-            return Color.FromArgb(45, 120, 120, 120);
-
-        return Color.FromArgb(45, 142, 124, 195);
-    }
-
-    private Color GetGroupStrokeColor(List<SimulationGraphNodeDto> nodes)
-    {
-        if (nodes.Any(n => n.IsBurning))
-            return Color.FromArgb(150, 214, 64, 43);
-
-        if (nodes.All(n => n.IsBurned))
-            return Color.FromArgb(120, 110, 110, 110);
-
-        return Color.FromArgb(120, 110, 103, 90);
-    }
     private void DrawEdge(
      SimulationGraphEdgeDto edge,
      Dictionary<Guid, Point> points,
+     Dictionary<Guid, SimulationGraphNodeDto> nodeMap,
      Guid? selectedNodeId,
-     HashSet<Guid> selectedEdgeIds,
-     bool isBridge)
+     HashSet<Guid> selectedEdgeIds)
     {
         if (_graphCanvas == null)
             return;
 
         if (!points.TryGetValue(edge.FromCellId, out var fromPoint) ||
             !points.TryGetValue(edge.ToCellId, out var toPoint))
-            return;
-
-        bool isSelectedEdge = selectedEdgeIds.Contains(edge.Id);
-
-        double thickness = GetEdgeThickness(edge);
-        double opacity = edge.IsCorridor
-            ? 0.96
-            : isBridge
-                ? 0.58
-                : 0.72;
-
-        if (selectedNodeId.HasValue)
         {
-            if (isSelectedEdge)
-            {
-                thickness += edge.IsCorridor ? 1.4 : 1.2;
-                opacity = 1.0;
-            }
-            else
-            {
-                thickness = Math.Max(0.9, thickness - 0.2);
-                opacity = edge.IsCorridor
-                    ? 0.34
-                    : isBridge
-                        ? 0.16
-                        : 0.18;
-            }
+            return;
         }
 
-        var strokeColor = edge.IsCorridor
-            ? GetBridgeColor(edge)
-            : (isBridge ? GetBridgeColor(edge) : GetEdgeColor(edge));
+        bool isSelected = selectedEdgeIds.Contains(edge.Id);
+        bool isIncidentToSelection =
+            selectedNodeId.HasValue &&
+            (edge.FromCellId == selectedNodeId.Value || edge.ToCellId == selectedNodeId.Value);
+
+        bool isCrossCluster =
+            nodeMap.TryGetValue(edge.FromCellId, out var fromNode) &&
+            nodeMap.TryGetValue(edge.ToCellId, out var toNode) &&
+            !string.IsNullOrWhiteSpace(fromNode.GroupKey) &&
+            !string.IsNullOrWhiteSpace(toNode.GroupKey) &&
+            !string.Equals(fromNode.GroupKey, toNode.GroupKey, StringComparison.Ordinal);
 
         var line = new Line
         {
             StartPoint = fromPoint,
             EndPoint = toPoint,
-            Stroke = new SolidColorBrush(strokeColor),
-            StrokeThickness = thickness,
-            Opacity = opacity,
-            IsHitTestVisible = true
+            Stroke = new SolidColorBrush(GetEffectiveEdgeColor(edge, isCrossCluster, isSelected, isIncidentToSelection)),
+            StrokeThickness = GetEffectiveEdgeThickness(edge, isSelected, isIncidentToSelection),
+            Opacity = GetEffectiveEdgeOpacity(edge, isSelected, isIncidentToSelection),
+            ZIndex = edge.IsCorridor ? 4 : isSelected ? 5 : 2,
+            Cursor = new Cursor(StandardCursorType.Hand)
         };
 
-        ToolTip.SetTip(line, BuildEdgeTooltip(edge, isBridge));
+        ToolTip.SetTip(line, BuildEdgeTooltip(edge, nodeMap));
         _graphCanvas.Children.Add(line);
+
+        if (edge.IsCorridor)
+        {
+            DrawCorridorAccent(edge, fromPoint, toPoint, isSelected);
+        }
     }
 
-    private string BuildEdgeTooltip(SimulationGraphEdgeDto edge, bool isBridge)
+    private void DrawCorridorAccent(
+     SimulationGraphEdgeDto edge,
+     Point fromPoint,
+     Point toPoint,
+     bool isSelected)
     {
-        string edgeType = edge.IsCorridor
-            ? "Corridor edge"
-            : isBridge
-                ? "Межкластерное ребро"
-                : "Локальное ребро";
+        if (_graphCanvas == null)
+            return;
 
-        string corridorText = edge.IsCorridor ? "yes" : "no";
+        var accent = new Line
+        {
+            StartPoint = fromPoint,
+            EndPoint = toPoint,
+            Stroke = new SolidColorBrush(isSelected ? Color.Parse("#EA580C") : Color.Parse("#FDBA74")),
+            StrokeThickness = isSelected ? 2.2 : 1.2,
+            Opacity = 0.95,
+            ZIndex = 6,
+            StrokeDashArray = new AvaloniaList<double> { 6, 4 },
+            IsHitTestVisible = false
+        };
 
-        return $"{edgeType}\n" +
-               $"От: ({edge.FromX}, {edge.FromY})\n" +
-               $"К: ({edge.ToX}, {edge.ToY})\n" +
-               $"Расстояние: {edge.Distance:F3}\n" +
-               $"Уклон: {edge.Slope:F6}\n" +
-               $"Fire spread modifier: {edge.FireSpreadModifier:F6}\n" +
-               $"Corridor: {corridorText}";
+        _graphCanvas.Children.Add(accent);
+
+        var centerX = (fromPoint.X + toPoint.X) / 2.0;
+        var centerY = (fromPoint.Y + toPoint.Y) / 2.0;
+
+        var badge = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(235, 255, 247, 237)),
+            BorderBrush = new SolidColorBrush(Color.Parse("#EA580C")),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(6, 2),
+            IsHitTestVisible = false,
+            Child = new TextBlock
+            {
+                Text = "CORRIDOR",
+                FontSize = 10,
+                FontWeight = FontWeight.Bold,
+                Foreground = new SolidColorBrush(Color.Parse("#C2410C"))
+            }
+        };
+
+        badge.Measure(Size.Infinity);
+
+        Canvas.SetLeft(badge, centerX - badge.DesiredSize.Width / 2.0);
+        Canvas.SetTop(badge, centerY - badge.DesiredSize.Height / 2.0 - 12.0);
+
+        _graphCanvas.Children.Add(badge);
     }
+
     private void DrawNode(
-        SimulationGraphNodeDto node,
-        List<SimulationGraphEdgeDto> edges,
-        Dictionary<Guid, Point> points,
-        Guid? selectedNodeId,
-        HashSet<Guid> neighborIds,
-        bool useMapStyle)
+     SimulationGraphNodeDto node,
+     List<SimulationGraphEdgeDto> edges,
+     Dictionary<Guid, Point> points,
+     Guid? selectedNodeId,
+     HashSet<Guid> neighborIds)
     {
         if (_graphCanvas == null)
             return;
@@ -481,118 +519,276 @@ public partial class NodeGraphVisualization : UserControl
             return;
 
         bool isSelected = selectedNodeId.HasValue && node.Id == selectedNodeId.Value;
-        bool isNeighbor = !isSelected && neighborIds.Contains(node.Id);
-        bool isIgnitionSelected = node.IsSelectedIgnition;
+        bool isNeighbor = neighborIds.Contains(node.Id);
+        bool isIgnition = node.IsSelectedIgnition;
 
-        double opacity = 1.0;
-        if (selectedNodeId.HasValue && !isSelected && !isNeighbor)
-            opacity = 0.44;
+        double radius = BaseNodeRadius;
 
-        double radius = GetNodeRadius(node, useMapStyle, isSelected, isNeighbor, isIgnitionSelected);
+        if (isSelected)
+            radius = SelectedNodeRadius;
+        else if (isNeighbor)
+            radius = NeighborNodeRadius;
+        else if (isIgnition)
+            radius = BaseNodeRadius + 1.4;
 
-        if (isIgnitionSelected)
-            DrawIgnitionGlow(point, radius, useMapStyle);
-
-        var shape = new Rectangle
+        var ellipse = new Ellipse
         {
             Width = radius * 2,
             Height = radius * 2,
-            RadiusX = useMapStyle ? 3.0 : radius,
-            RadiusY = useMapStyle ? 3.0 : radius,
-            Fill = new SolidColorBrush(
-                isIgnitionSelected
-                    ? Color.Parse("#9EC5FE")
-                    : (useMapStyle ? GetMapCellColor(node) : GetNodeColor(node))),
-            Stroke = new SolidColorBrush(
-                isIgnitionSelected
-                    ? Color.Parse("#D6402B")
-                    : isSelected
-                        ? Color.Parse("#355CBE")
-                        : isNeighbor
-                            ? Color.Parse("#B45A4A")
-                            : GetNodeBorderColor(node)),
-            StrokeThickness = isIgnitionSelected ? 2.6 : isSelected ? 2.2 : isNeighbor ? 1.8 : GetNodeBorderThickness(node),
-            Opacity = opacity,
+            Fill = new SolidColorBrush(GetNodeColor(node)),
+            Stroke = new SolidColorBrush(GetNodeStrokeColor(node, isSelected, isNeighbor, isIgnition)),
+            StrokeThickness = isSelected ? 3.0 : isIgnition ? 2.6 : isNeighbor ? 2.1 : 1.4,
+            ZIndex = isSelected ? 12 : isIgnition ? 11 : isNeighbor ? 10 : 8,
             Cursor = new Cursor(StandardCursorType.Hand)
         };
 
-        ToolTip.SetTip(shape, BuildTooltip(node, edges));
+        ToolTip.SetTip(ellipse, BuildTooltip(node, edges));
 
-        shape.PointerPressed += (_, e) =>
+        ellipse.PointerPressed += (_, e) =>
         {
-            if (e.GetCurrentPoint(shape).Properties.IsLeftButtonPressed)
+            if (!e.GetCurrentPoint(ellipse).Properties.IsLeftButtonPressed)
+                return;
+
+            NodeClicked?.Invoke(this, node);
+            e.Handled = true;
+        };
+
+        Canvas.SetLeft(ellipse, point.X - radius);
+        Canvas.SetTop(ellipse, point.Y - radius);
+        _graphCanvas.Children.Add(ellipse);
+
+        if (isIgnition)
+        {
+            var ignitionRing = new Ellipse
             {
-                NodeClicked?.Invoke(this, node);
-                e.Handled = true;
+                Width = radius * 2 + 8,
+                Height = radius * 2 + 8,
+                Stroke = new SolidColorBrush(Color.Parse("#D97706")),
+                StrokeThickness = 1.8,
+                StrokeDashArray = new AvaloniaList<double> { 4, 3 },
+                Opacity = 0.95,
+                ZIndex = 9,
+                IsHitTestVisible = false
+            };
+
+            Canvas.SetLeft(ignitionRing, point.X - ignitionRing.Width / 2.0);
+            Canvas.SetTop(ignitionRing, point.Y - ignitionRing.Height / 2.0);
+            _graphCanvas.Children.Add(ignitionRing);
+        }
+
+        if (isSelected || isNeighbor)
+        {
+            var glow = new Ellipse
+            {
+                Width = radius * 2 + (isSelected ? 10 : 6),
+                Height = radius * 2 + (isSelected ? 10 : 6),
+                Stroke = new SolidColorBrush(isSelected ? Color.Parse("#5B3CC4") : Color.Parse("#8E7CC3")),
+                StrokeThickness = isSelected ? 1.8 : 1.2,
+                Opacity = isSelected ? 0.65 : 0.35,
+                ZIndex = 7,
+                IsHitTestVisible = false
+            };
+
+            Canvas.SetLeft(glow, point.X - glow.Width / 2.0);
+            Canvas.SetTop(glow, point.Y - glow.Height / 2.0);
+            _graphCanvas.Children.Add(glow);
+        }
+
+        if (!string.IsNullOrWhiteSpace(node.GroupKey))
+        {
+            var label = new TextBlock
+            {
+                Text = BuildCompactNodeLabel(node),
+                FontSize = 10,
+                FontWeight = isSelected ? FontWeight.Bold : FontWeight.Medium,
+                Foreground = new SolidColorBrush(Color.Parse("#4A4458")),
+                Background = new SolidColorBrush(Color.FromArgb(225, 255, 253, 248))
+            };
+
+            label.Measure(Size.Infinity);
+
+            Canvas.SetLeft(label, point.X + radius + 4);
+            Canvas.SetTop(label, point.Y - label.DesiredSize.Height / 2.0);
+            _graphCanvas.Children.Add(label);
+        }
+    }
+    private string BuildCompactNodeLabel(SimulationGraphNodeDto node)
+    {
+        if (node.IsSelectedIgnition)
+            return $"({node.X},{node.Y}) • ignition";
+
+        if (node.IsBurning)
+            return $"({node.X},{node.Y}) • fire";
+
+        if (node.IsBurned)
+            return $"({node.X},{node.Y}) • burned";
+
+        return $"({node.X},{node.Y})";
+    }
+    private string BuildTooltip(SimulationGraphNodeDto node, List<SimulationGraphEdgeDto> edges)
+    {
+        int degree = edges.Count(e => e.FromCellId == node.Id || e.ToCellId == node.Id);
+        int corridorEdges = edges.Count(e =>
+            (e.FromCellId == node.Id || e.ToCellId == node.Id) &&
+            e.IsCorridor);
+
+        return
+            $"Node: {node.Id}\n" +
+            $"Coords: ({node.X}, {node.Y})\n" +
+            $"Render: ({node.RenderX:F2}, {node.RenderY:F2})\n" +
+            $"Cluster: {GetSafeText(node.GroupKey)}\n" +
+            $"Vegetation: {GetVegetationText(node.Vegetation)}\n" +
+            $"Moisture: {node.Moisture:F2}\n" +
+            $"Elevation: {node.Elevation:F2}\n" +
+            $"State: {GetStateText(node.State)}\n" +
+            $"FireStage: {GetFireStageText(node.FireStage)}\n" +
+            $"BurnProbability: {node.BurnProbability:F3}\n" +
+            $"FireIntensity: {node.FireIntensity:F2}\n" +
+            $"Fuel: {node.CurrentFuelLoad:F2} / {node.FuelLoad:F2}\n" +
+            $"AccumulatedHeat: {node.AccumulatedHeatJ:F2}\n" +
+            $"BurningElapsed: {node.BurningElapsedSeconds:F0} s\n" +
+            $"Degree: {degree}\n" +
+            $"Corridor edges: {corridorEdges}\n" +
+            $"Ignition selected: {(node.IsSelectedIgnition ? "true" : "false")}";
+    }
+    private void DrawHeatHalo(Point point, double radius)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var glowRadius = radius + 5.5;
+
+        var glow = new Ellipse
+        {
+            Width = glowRadius * 2,
+            Height = glowRadius * 2,
+            Fill = new SolidColorBrush(Color.FromArgb(60, 255, 122, 89)),
+            Stroke = new SolidColorBrush(Color.FromArgb(120, 255, 122, 89)),
+            StrokeThickness = 1.5,
+            IsHitTestVisible = false,
+            ZIndex = 12
+        };
+
+        Canvas.SetLeft(glow, point.X - glowRadius);
+        Canvas.SetTop(glow, point.Y - glowRadius);
+        _graphCanvas.Children.Add(glow);
+    }
+
+    private void DrawNodeLabel(SimulationGraphNodeDto node, Point point, double radius)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        string text = !string.IsNullOrWhiteSpace(node.GroupKey)
+            ? $"{node.GroupKey}"
+            : $"({node.X},{node.Y})";
+
+        var label = new Border
+        {
+            Background = new SolidColorBrush(Color.FromArgb(228, 255, 253, 248)),
+            BorderBrush = new SolidColorBrush(Color.Parse("#D8D2E6")),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(6, 2),
+            IsHitTestVisible = false,
+            Child = new TextBlock
+            {
+                Text = text,
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.Parse("#4F4A5E")),
+                FontWeight = FontWeight.SemiBold
             }
         };
 
-        Canvas.SetLeft(shape, point.X - radius);
-        Canvas.SetTop(shape, point.Y - radius);
-        _graphCanvas.Children.Add(shape);
+        label.Measure(Size.Infinity);
 
-        DrawVegetationMarker(node, point, radius, opacity);
+        Canvas.SetLeft(label, point.X - label.DesiredSize.Width / 2.0);
+        Canvas.SetTop(label, point.Y + radius + 6.0);
+        _graphCanvas.Children.Add(label);
+    }
+
+    private bool ShouldDrawNodeLabel(
+        SimulationGraphNodeDto node,
+        bool isSelected,
+        bool isIgnitionSelected)
+    {
+        if (isSelected || isIgnitionSelected)
+            return true;
+
+        var nodeCount = Nodes?.Count() ?? 0;
+        return nodeCount <= 35;
     }
 
     private double GetNodeRadius(
         SimulationGraphNodeDto node,
-        bool useMapStyle,
         bool isSelected,
         bool isNeighbor,
         bool isIgnitionSelected)
     {
-        int nodeCount = Nodes?.Count() ?? 0;
+        double radius = BaseNodeRadius;
 
-        double baseRadius = nodeCount switch
+        if (isSelected)
+            radius = SelectedNodeRadius;
+        else if (isNeighbor)
+            radius = NeighborNodeRadius;
+
+        if (node.Vegetation?.Equals("Water", StringComparison.OrdinalIgnoreCase) == true ||
+            node.Vegetation?.Equals("Bare", StringComparison.OrdinalIgnoreCase) == true)
         {
-            <= 10 => 11.0,
-            <= 20 => 10.0,
-            <= 60 => 8.8,
-            <= 120 => 7.8,
-            <= 200 => 7.0,
-            _ => 6.5
-        };
-
-        if (useMapStyle)
-            baseRadius -= 0.6;
-
-        double radius = isSelected
-            ? Math.Max(baseRadius + 2.2, SelectedNodeRadius)
-            : isNeighbor
-                ? Math.Max(baseRadius + 0.8, NeighborNodeRadius - 0.6)
-                : baseRadius;
+            radius += 0.6;
+        }
 
         if (isIgnitionSelected)
-            radius = Math.Max(radius, useMapStyle ? 10.5 : 11.5);
+            radius = Math.Max(radius, 11.5);
 
         return radius;
     }
 
-    private Color GetNodeBorderColor(SimulationGraphNodeDto node)
+    private Color GetNodeStrokeColor(
+     SimulationGraphNodeDto node,
+     bool isSelected,
+     bool isNeighbor,
+     bool isIgnition)
     {
-        return node.Vegetation?.ToLowerInvariant() switch
-        {
-            "water" => Color.Parse("#2E79B8"),
-            "bare" => Color.Parse("#8C7462"),
-            _ => Color.Parse("#F8F5EE")
-        };
+        if (isSelected)
+            return Color.Parse("#4C1D95");
+
+        if (isIgnition)
+            return Color.Parse("#D97706");
+
+        if (isNeighbor)
+            return Color.Parse("#7C6DB3");
+
+        if (node.IsBurning)
+            return Color.Parse("#C2410C");
+
+        if (node.IsBurned)
+            return Color.Parse("#4B5563");
+
+        return Color.Parse("#6F6A78");
     }
 
-    private double GetNodeBorderThickness(SimulationGraphNodeDto node)
+    private double GetNodeStrokeThickness(
+        bool isSelected,
+        bool isNeighbor,
+        bool isIgnitionSelected)
     {
-        return node.Vegetation?.ToLowerInvariant() switch
-        {
-            "water" => 1.8,
-            "bare" => 1.8,
-            _ => 1.2
-        };
+        if (isSelected)
+            return 2.8;
+
+        if (isIgnitionSelected)
+            return 2.4;
+
+        if (isNeighbor)
+            return 2.0;
+
+        return 1.3;
     }
 
     private void DrawVegetationMarker(
         SimulationGraphNodeDto node,
         Point point,
-        double radius,
-        double opacity)
+        double radius)
     {
         if (_graphCanvas == null)
             return;
@@ -608,8 +804,8 @@ public partial class NodeGraphVisualization : UserControl
                 Width = markerRadius * 2,
                 Height = markerRadius * 2,
                 Fill = new SolidColorBrush(Color.Parse("#1E5F99")),
-                Opacity = opacity,
-                IsHitTestVisible = false
+                IsHitTestVisible = false,
+                ZIndex = 17
             };
 
             Canvas.SetLeft(inner, point.X - markerRadius);
@@ -628,9 +824,9 @@ public partial class NodeGraphVisualization : UserControl
                 StartPoint = new Point(point.X - half, point.Y - half),
                 EndPoint = new Point(point.X + half, point.Y + half),
                 Stroke = new SolidColorBrush(Color.Parse("#6D594B")),
-                StrokeThickness = 1.4,
-                Opacity = opacity,
-                IsHitTestVisible = false
+                StrokeThickness = 1.5,
+                IsHitTestVisible = false,
+                ZIndex = 17
             };
 
             var line2 = new Line
@@ -638,9 +834,9 @@ public partial class NodeGraphVisualization : UserControl
                 StartPoint = new Point(point.X - half, point.Y + half),
                 EndPoint = new Point(point.X + half, point.Y - half),
                 Stroke = new SolidColorBrush(Color.Parse("#6D594B")),
-                StrokeThickness = 1.4,
-                Opacity = opacity,
-                IsHitTestVisible = false
+                StrokeThickness = 1.5,
+                IsHitTestVisible = false,
+                ZIndex = 17
             };
 
             _graphCanvas.Children.Add(line1);
@@ -648,21 +844,22 @@ public partial class NodeGraphVisualization : UserControl
         }
     }
 
-    private void DrawIgnitionGlow(Point point, double radius, bool useMapStyle)
+    private void DrawIgnitionGlow(Point point, double radius)
     {
         if (_graphCanvas == null)
             return;
 
-        var glowRadius = radius + 3.5;
+        var glowRadius = radius + 3.8;
 
         var glow = new Ellipse
         {
             Width = glowRadius * 2,
             Height = glowRadius * 2,
-            Fill = new SolidColorBrush(Color.FromArgb(80, 255, 235, 120)),
+            Fill = new SolidColorBrush(Color.FromArgb(72, 255, 235, 120)),
             Stroke = new SolidColorBrush(Color.Parse("#D6402B")),
-            StrokeThickness = useMapStyle ? 1.8 : 2.0,
-            IsHitTestVisible = false
+            StrokeThickness = 2.0,
+            IsHitTestVisible = false,
+            ZIndex = 13
         };
 
         Canvas.SetLeft(glow, point.X - glowRadius);
@@ -783,26 +980,72 @@ public partial class NodeGraphVisualization : UserControl
         return result;
     }
 
-    private double GetEdgeThickness(SimulationGraphEdgeDto edge)
+    private double GetEffectiveEdgeThickness(
+      SimulationGraphEdgeDto edge,
+      bool isSelected,
+      bool isIncidentToSelection)
     {
         double thickness = BaseEdgeThickness;
 
         if (edge.FireSpreadModifier >= 0.70)
             thickness += 1.0;
         else if (edge.FireSpreadModifier >= 0.35)
-            thickness += 0.3;
+            thickness += 0.35;
 
         if (edge.IsCorridor)
-            thickness += 1.4;
+            thickness += 1.6;
+
+        if (isIncidentToSelection)
+            thickness += 0.6;
+
+        if (isSelected)
+            thickness += 0.8;
 
         return thickness;
     }
 
-    private Color GetEdgeColor(SimulationGraphEdgeDto edge)
+    private double GetEffectiveEdgeOpacity(
+     SimulationGraphEdgeDto edge,
+     bool isSelected,
+     bool isIncidentToSelection)
+    {
+        if (isSelected)
+            return 1.0;
+
+        if (isIncidentToSelection)
+            return 0.92;
+
+        if (edge.IsCorridor)
+            return 0.96;
+
+        return 0.78;
+    }
+
+    private Color GetEffectiveEdgeColor(
+     SimulationGraphEdgeDto edge,
+     bool isCrossCluster,
+     bool isSelected,
+     bool isIncidentToSelection)
     {
         if (edge.IsCorridor)
-            return Color.Parse("#C2410C");
+            return isSelected
+                ? Color.Parse("#C2410C")
+                : Color.Parse("#EA580C");
 
+        if (isSelected)
+            return Color.Parse("#5B3CC4");
+
+        if (isIncidentToSelection)
+            return Color.Parse("#7C6DB3");
+
+        if (isCrossCluster)
+            return GetBridgeColor(edge);
+
+        return GetEdgeColor(edge);
+    }
+
+    private Color GetEdgeColor(SimulationGraphEdgeDto edge)
+    {
         if (edge.FireSpreadModifier >= 0.70)
             return Color.Parse("#9D4EDD");
 
@@ -814,9 +1057,6 @@ public partial class NodeGraphVisualization : UserControl
 
     private Color GetBridgeColor(SimulationGraphEdgeDto edge)
     {
-        if (edge.IsCorridor)
-            return Color.Parse("#EA580C");
-
         if (edge.FireSpreadModifier >= 0.70)
             return Color.Parse("#C05621");
 
@@ -847,27 +1087,128 @@ public partial class NodeGraphVisualization : UserControl
         };
     }
 
-    private Color GetMapCellColor(SimulationGraphNodeDto node)
+    private Color GetClusterTint(int index)
     {
-        return GetNodeColor(node);
+        Color[] palette =
+        {
+        Color.Parse("#7C6DB3"),
+        Color.Parse("#4F9D69"),
+        Color.Parse("#D97706"),
+        Color.Parse("#2E79B8"),
+        Color.Parse("#C05621"),
+        Color.Parse("#8E7CC3")
+    };
+
+        return palette[index % palette.Length];
     }
 
-    private string BuildTooltip(SimulationGraphNodeDto node, List<SimulationGraphEdgeDto> edges)
+    private string BuildNodeTooltip(
+        SimulationGraphNodeDto node,
+        List<SimulationGraphEdgeDto> edges)
     {
         int degree = edges.Count(e => e.FromCellId == node.Id || e.ToCellId == node.Id);
+        int corridorEdges = edges.Count(e =>
+            (e.FromCellId == node.Id || e.ToCellId == node.Id) && e.IsCorridor);
 
-        return $"Вершина ({node.X}, {node.Y})\n" +
-               $"Группа: {node.GroupKey}\n" +
-               $"Растительность: {node.Vegetation}\n" +
-               $"Состояние: {node.State}\n" +
-               $"Влажность: {node.Moisture:F2}\n" +
-               $"Высота: {node.Elevation:F2}\n" +
-               $"Вероятность возгорания: {node.BurnProbability:F3}\n" +
-               $"Степень: {degree}\n" +
-               $"Fire stage: {node.FireStage}\n" +
-               $"Intensity: {node.FireIntensity:F2}\n" +
-               $"Fuel: {node.CurrentFuelLoad:F2}/{node.FuelLoad:F2}\n" +
-               $"Accumulated heat: {node.AccumulatedHeatJ:F2}";
+        return
+            $"ID: {node.Id}\n" +
+            $"Координаты: ({node.X}, {node.Y})\n" +
+            $"Render: ({node.RenderX:F2}, {node.RenderY:F2})\n" +
+            $"Cluster: {GetSafeText(node.GroupKey)}\n" +
+            $"Растительность: {GetVegetationText(node.Vegetation)}\n" +
+            $"Состояние: {GetStateText(node.State)}\n" +
+            $"Влажность: {node.Moisture:F2}\n" +
+            $"Высота: {node.Elevation:F2}\n" +
+            $"Вероятность возгорания: {node.BurnProbability:F3}\n" +
+            $"Fire stage: {GetFireStageText(node.FireStage)}\n" +
+            $"Fire intensity: {node.FireIntensity:F2}\n" +
+            $"Топливо: {node.CurrentFuelLoad:F2} / {node.FuelLoad:F2}\n" +
+            $"Burning elapsed: {node.BurningElapsedSeconds:F1} сек\n" +
+            $"Accumulated heat: {node.AccumulatedHeatJ:F2}\n" +
+            $"Степень: {degree}\n" +
+            $"Corridor-рёбра: {corridorEdges}\n" +
+            $"Ignition selected: {(node.IsSelectedIgnition ? "Да" : "Нет")}";
+    }
+
+    private string BuildEdgeTooltip(
+        SimulationGraphEdgeDto edge,
+        Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
+    {
+        string fromText = BuildEdgeEndpointText(edge.FromCellId, edge.FromX, edge.FromY, nodeMap);
+        string toText = BuildEdgeEndpointText(edge.ToCellId, edge.ToX, edge.ToY, nodeMap);
+
+        return
+            $"Ребро: {edge.Id}\n" +
+            $"From: {fromText}\n" +
+            $"To: {toText}\n" +
+            $"Distance: {edge.Distance:F2}\n" +
+            $"Slope: {edge.Slope:F3}\n" +
+            $"FireSpreadModifier: {edge.FireSpreadModifier:F3}\n" +
+            $"AccumulatedHeat: {edge.AccumulatedHeat:F2}\n" +
+            $"Corridor: {(edge.IsCorridor ? "true" : "false")}";
+    }
+
+    private string BuildEdgeEndpointText(
+     Guid nodeId,
+     int x,
+     int y,
+     Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
+    {
+        if (nodeMap.TryGetValue(nodeId, out var node))
+        {
+            string cluster = string.IsNullOrWhiteSpace(node.GroupKey) ? "—" : node.GroupKey;
+            return $"{nodeId} • ({x}, {y}) • {cluster}";
+        }
+
+        return $"{nodeId} • ({x}, {y})";
+    }
+
+    private string GetSafeText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "—" : value;
+    }
+
+    private string GetStateText(string? state)
+    {
+        return state switch
+        {
+            "Burning" => "Горит",
+            "Burned" => "Сгорела",
+            "Normal" => "Нормальная",
+            null or "" => "—",
+            _ => state
+        };
+    }
+
+    private string GetVegetationText(string? vegetation)
+    {
+        return vegetation switch
+        {
+            "Coniferous" => "Хвойный лес",
+            "Deciduous" => "Лиственный лес",
+            "Mixed" => "Смешанный лес",
+            "Grass" => "Трава",
+            "Shrub" => "Кустарник",
+            "Water" => "Вода",
+            "Bare" => "Пустая поверхность",
+            null or "" => "—",
+            _ => vegetation
+        };
+    }
+
+    private string GetFireStageText(string? fireStage)
+    {
+        return fireStage switch
+        {
+            "Unburned" => "Не горела",
+            "Ignition" => "Воспламенение",
+            "Active" => "Активное горение",
+            "Intense" => "Интенсивное горение",
+            "Smoldering" => "Тление",
+            "BurnedOut" => "Полностью выгорела",
+            null or "" => "—",
+            _ => fireStage
+        };
     }
 
     private void DrawEmptyState()
