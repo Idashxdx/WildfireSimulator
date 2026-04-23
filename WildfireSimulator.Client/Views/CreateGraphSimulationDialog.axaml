@@ -8,7 +8,7 @@
         x:Class="WildfireSimulator.Client.Views.CreateGraphSimulationDialog"
         Title="Создание графовой симуляции"
         Width="620"
-        Height="1080"
+        Height="1000"
         Background="#FAF8F2"
         CanResize="False">
 
@@ -34,54 +34,61 @@
         <ScrollViewer Grid.Row="0">
             <StackPanel Spacing="14">
 
-                <TextBlock Text="Создание graph simulation"
-                           Foreground="#2F2A3A"
-                           FontSize="24"
-                           FontWeight="Bold" />
+               <TextBlock Text="Создание графовой симуляции"
+           Foreground="#2F2A3A"
+           FontSize="24"
+           FontWeight="Bold" />
 
-                <Border Background="#F5FBFF"
-                        BorderBrush="#D7E6F2"
-                        BorderThickness="1"
-                        CornerRadius="12"
-                        Padding="12">
-                    <StackPanel Spacing="8">
-                        <TextBlock Text="Быстрые сценарии"
-                                   FontWeight="Bold"
-                                   Foreground="#2F2A3A" />
+<Border Background="#F5FBFF"
+        BorderBrush="#D7E6F2"
+        BorderThickness="1"
+        CornerRadius="12"
+        Padding="12">
+    <StackPanel Spacing="8">
+        <TextBlock Text="Быстрые сценарии"
+                   FontWeight="Bold"
+                   Foreground="#2F2A3A" />
 
-                        <TextBlock x:Name="PresetHintTextBlock"
-                                   Text="Готовые настройки для демонстрации"
-                                   Foreground="#6E6A78"
-                                   FontSize="12" />
+        <TextBlock x:Name="PresetHintTextBlock"
+                   Text="Готовые настройки для демонстрации"
+                   Foreground="#6E6A78"
+                   FontSize="12"
+                   TextWrapping="Wrap" />
 
-                        <WrapPanel>
-                            <Button x:Name="PresetButton1"
-                                    Content="Preset 1"
-                                    Background="#FFE4E1"
-                                    Margin="0,0,8,8" />
+        <WrapPanel ItemWidth="170"
+                   ItemHeight="44">
+            <Button x:Name="PresetButton1"
+                    Classes="dialogButton"
+                    Content="Сценарий 1"
+                    Background="#FFE4E1"
+                    Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton2"
-                                    Content="Preset 2"
-                                    Background="#E1F0FF"
-                                    Margin="0,0,8,8" />
+            <Button x:Name="PresetButton2"
+                    Classes="dialogButton"
+                    Content="Сценарий 2"
+                    Background="#E1F0FF"
+                    Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton3"
-                                    Content="Preset 3"
-                                    Background="#E6FFE6"
-                                    Margin="0,0,8,8" />
+            <Button x:Name="PresetButton3"
+                    Classes="dialogButton"
+                    Content="Сценарий 3"
+                    Background="#E6FFE6"
+                    Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton4"
-                                    Content="Preset 4"
-                                    Background="#FFF4E1"
-                                    Margin="0,0,8,8" />
+            <Button x:Name="PresetButton4"
+                    Classes="dialogButton"
+                    Content="Сценарий 4"
+                    Background="#FFF4E1"
+                    Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton5"
-                                    Content="Preset 5"
-                                    Background="#F0E6FF"
-                                    Margin="0,0,8,8" />
-                        </WrapPanel>
-                    </StackPanel>
-                </Border>
+            <Button x:Name="PresetButton5"
+                    Classes="dialogButton"
+                    Content="Сценарий 5"
+                    Background="#F0E6FF"
+                    Margin="0,0,8,8" />
+        </WrapPanel>
+    </StackPanel>
+</Border>
 
                 <Border Background="#F3F7FF"
                         BorderBrush="#D7E4FF"
@@ -173,89 +180,89 @@
                     </StackPanel>
                 </Border>
 
-                <Border Background="#FFFDF8"
-                        BorderBrush="#E7E0F2"
-                        BorderThickness="1"
-                        CornerRadius="10"
-                        Padding="12">
-                    <StackPanel Spacing="10">
-                        <TextBlock Text="Режим создания graph"
-                                   Foreground="#2F2A3A"
-                                   FontSize="16"
-                                   FontWeight="Bold" />
+               <Border Background="#FFFDF8"
+        BorderBrush="#E7E0F2"
+        BorderThickness="1"
+        CornerRadius="10"
+        Padding="12">
+    <StackPanel Spacing="10">
+        <TextBlock Text="Режим создания графа"
+                   Foreground="#2F2A3A"
+                   FontSize="16"
+                   FontWeight="Bold" />
 
-                        <TextBlock Text="Режим"
-                                   Foreground="#6E6A78"/>
-                        <ComboBox x:Name="MapCreationModeBox"
-                                  SelectedIndex="0">
-                            <ComboBoxItem Content="Random"/>
-                            <ComboBoxItem Content="Scenario"/>
-                            <ComboBoxItem Content="Semi-manual"/>
-                        </ComboBox>
+        <TextBlock Text="Режим"
+                   Foreground="#6E6A78"/>
+        <ComboBox x:Name="MapCreationModeBox"
+                  SelectedIndex="0">
+            <ComboBoxItem Content="Случайный"/>
+            <ComboBoxItem Content="Сценарий"/>
+            <ComboBoxItem Content="Полуручной"/>
+        </ComboBox>
 
-                        <Border Background="#F8F5FF"
-                                BorderBrush="#E6DFF1"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="10">
-                            <TextBlock x:Name="MapModeDescriptionTextBlock"
-                                       Text="Описание режима"
-                                       Foreground="#5F586B"
-                                       TextWrapping="Wrap"/>
-                        </Border>
+        <Border Background="#F8F5FF"
+                BorderBrush="#E6DFF1"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="10">
+            <TextBlock x:Name="MapModeDescriptionTextBlock"
+                       Text="Описание режима"
+                       Foreground="#5F586B"
+                       TextWrapping="Wrap"/>
+        </Border>
 
-                        <StackPanel x:Name="ScenarioPanel"
-                                    Spacing="8"
-                                    IsVisible="False">
-                            <TextBlock Text="Сценарий"
-                                       Foreground="#6E6A78"/>
-                            <ComboBox x:Name="ScenarioTypeBox"/>
+        <StackPanel x:Name="ScenarioPanel"
+                    Spacing="8"
+                    IsVisible="False">
+            <TextBlock Text="Сценарий"
+                       Foreground="#6E6A78"/>
+            <ComboBox x:Name="ScenarioTypeBox"/>
 
-                            <Border Background="#EEF7FF"
-                                    BorderBrush="#D5E8F7"
-                                    BorderThickness="1"
-                                    CornerRadius="8"
-                                    Padding="10">
-                                <TextBlock x:Name="ScenarioDescriptionTextBlock"
-                                           Text="Описание сценария"
-                                           Foreground="#5F586B"
-                                           TextWrapping="Wrap"/>
-                            </Border>
-                        </StackPanel>
+            <Border Background="#EEF7FF"
+                    BorderBrush="#D5E8F7"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="10">
+                <TextBlock x:Name="ScenarioDescriptionTextBlock"
+                           Text="Описание сценария"
+                           Foreground="#5F586B"
+                           TextWrapping="Wrap"/>
+            </Border>
+        </StackPanel>
 
-                        <StackPanel x:Name="SemiManualPanel"
-                                    Spacing="8"
-                                    IsVisible="False">
-                            <Border Background="#F8FCF5"
-                                    BorderBrush="#D7E8C8"
-                                    BorderThickness="1"
-                                    CornerRadius="8"
-                                    Padding="10">
-                                <TextBlock x:Name="SemiManualDescriptionTextBlock"
-                                           Text="Описание semi-manual режима"
-                                           Foreground="#5F586B"
-                                           TextWrapping="Wrap"/>
-                            </Border>
+        <StackPanel x:Name="SemiManualPanel"
+                    Spacing="8"
+                    IsVisible="False">
+            <Border Background="#F8FCF5"
+                    BorderBrush="#D7E8C8"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="10">
+                <TextBlock x:Name="SemiManualDescriptionTextBlock"
+                           Text="Описание полуручного режима"
+                           Foreground="#5F586B"
+                           TextWrapping="Wrap"/>
+            </Border>
 
-                            <Button x:Name="OpenMapEditorButton"
-                                    Classes="dialogButton"
-                                    Content="Открыть редактор graph blueprint"
-                                    Background="#DDEFD5"
-                                    Foreground="#2F2A3A"/>
+            <Button x:Name="OpenMapEditorButton"
+                    Classes="dialogButton"
+                    Content="Открыть редактор структуры графа"
+                    Background="#DDEFD5"
+                    Foreground="#2F2A3A"/>
 
-                            <Border Background="#FFFDF8"
-                                    BorderBrush="#E7E0F2"
-                                    BorderThickness="1"
-                                    CornerRadius="8"
-                                    Padding="10">
-                                <TextBlock x:Name="MapEditorSummaryTextBlock"
-                                           Text="Blueprint summary"
-                                           Foreground="#5F586B"
-                                           TextWrapping="Wrap"/>
-                            </Border>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
+            <Border Background="#FFFDF8"
+                    BorderBrush="#E7E0F2"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="10">
+                <TextBlock x:Name="MapEditorSummaryTextBlock"
+                           Text="Структура графа не задана"
+                           Foreground="#5F586B"
+                           TextWrapping="Wrap"/>
+            </Border>
+        </StackPanel>
+    </StackPanel>
+</Border>
 
                 <Border Background="#FFFDF8"
                         BorderBrush="#E7E0F2"

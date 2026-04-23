@@ -395,7 +395,7 @@ public partial class MainWindowViewModel : ObservableObject
             null => "Нет данных",
             _ => SelectedGraphNode?.Vegetation ?? "Нет данных"
         };
-    public string SelectedGraphNodeGroupCaption => "Cluster ID";
+    public string SelectedGraphNodeGroupCaption => "Кластер";
 
     public string SelectedGraphNodeDegreeSummaryText =>
         SelectedGraphNode == null
@@ -427,7 +427,9 @@ public partial class MainWindowViewModel : ObservableObject
         SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.BurnProbability:F3}";
 
     public string SelectedGraphNodeGroupText =>
-        string.IsNullOrWhiteSpace(SelectedGraphNode?.GroupKey) ? "—" : SelectedGraphNode!.GroupKey;
+    string.IsNullOrWhiteSpace(SelectedGraphNode?.GroupKey)
+        ? "—"
+        : $"Кластер {SelectedGraphNode!.GroupKey}";
 
     public string SelectedGraphNodeRenderPositionText =>
         SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.RenderX:F2}, {SelectedGraphNode.RenderY:F2}";
@@ -731,11 +733,11 @@ public partial class MainWindowViewModel : ObservableObject
             : SelectedGraphCreationMode switch
             {
                 GraphCreationMode.Small =>
-                    "Выберите или создайте малый граф: topology-first структура с отдельными узлами, рёбрами и мостами.",
+                    "Выберите или создайте малый граф: отдельные вершины, связи и критические мосты.",
                 GraphCreationMode.Medium =>
-                    "Выберите или создайте средний граф: patch/cluster-модель с локальными группами и межкластерными переходами.",
+                    "Выберите или создайте средний граф: кластеры, локальные группы и переходы между ними.",
                 GraphCreationMode.Large =>
-                    "Выберите или создайте большой граф: area-like графовую карту с макрозонами и corridor-связями.",
+                    "Выберите или создайте большой граф: макрозоны и коридоры распространения.",
                 _ =>
                     "Выберите графовую симуляцию."
             };
@@ -756,11 +758,11 @@ public partial class MainWindowViewModel : ObservableObject
             SimulationInfoText = value switch
             {
                 GraphCreationMode.Small =>
-                    "Сейчас выбран режим создания: малый граф. Он подходит для наглядной topology demo и анализа отдельных мостов.",
+                    "Сейчас выбран режим создания: малый граф. Он подходит для мостов, узких мест и отдельных переходов.",
                 GraphCreationMode.Medium =>
-                    "Сейчас выбран режим создания: средний граф. Он подходит для patch/cluster-структур, барьеров и локального распространения.",
+                    "Сейчас выбран режим создания: средний граф. Он подходит для кластеров, барьеров и локального распространения.",
                 GraphCreationMode.Large =>
-                    "Сейчас выбран режим создания: большой граф. Он подходит для макрозон, corridor-связей и area-like поведения.",
+                    "Сейчас выбран режим создания: большой граф. Он подходит для макрозон и длинных коридоров распространения.",
                 _ =>
                     "Выберите графовую симуляцию."
             };
@@ -1022,15 +1024,15 @@ public partial class MainWindowViewModel : ObservableObject
                 AppPage.Graph => SelectedGraphCreationMode switch
                 {
                     GraphCreationMode.Small =>
-                        "Малый граф: выберите симуляцию или создайте topology-first граф.",
+                        "Малый граф: выберите симуляцию или создайте новую структуру.",
                     GraphCreationMode.Medium =>
-                        "Средний граф: выберите симуляцию или создайте patch/cluster-граф.",
+                        "Средний граф: выберите симуляцию или создайте новую структуру.",
                     GraphCreationMode.Large =>
-                        "Большой граф: выберите симуляцию или создайте area-like граф.",
+                        "Большой граф: выберите симуляцию или создайте новую структуру.",
                     _ =>
-                        "Выберите симуляцию"
+                        "Выберите симуляцию."
                 },
-                _ => "Выберите симуляцию"
+                _ => "Выберите симуляцию."
             };
             return;
         }
@@ -1057,73 +1059,15 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        if (IsSimulationRunning && SelectedSimulationStatus == 1)
+        if (SelectedSimulationStatus == 0 && ShowIgnitionControls)
         {
-            WorkflowStatusText = $"Симуляция идёт • {selectedModelText}";
+            WorkflowStatusText = IsManualIgnitionMode
+                ? "Выберите стартовые очаги на визуализации и запускайте симуляцию."
+                : $"Симуляция подготовлена к запуску • {selectedModelText}";
             return;
         }
 
-        if (SelectedSimulationStatus == 2)
-        {
-            WorkflowStatusText = $"Симуляция завершена • {selectedModelText}";
-            return;
-        }
-
-        if (SelectedSimulationStatus == 3)
-        {
-            WorkflowStatusText = $"Симуляция отменена • {selectedModelText}";
-            return;
-        }
-
-        if (SelectedSimulationStatus == 0)
-        {
-            if (!IsPreparedMapLoaded)
-            {
-                WorkflowStatusText = SelectedSimulationGraphType == GraphType.Grid
-                    ? "Сеточная карта загружается или подготавливается..."
-                    : "Графовая структура загружается или подготавливается...";
-                return;
-            }
-
-            if (HasSavedIgnitionPreview)
-            {
-                WorkflowStatusText = SelectedSimulationGraphType == GraphType.Grid
-                    ? "Сохранённые стартовые очаги показаны на карте. Можно запускать или очистить их."
-                    : "Сохранённые стартовые очаги показаны на графе. Можно запускать или очистить их.";
-                return;
-            }
-
-            if (IsManualIgnitionMode)
-            {
-                var selectedCount = SelectedSimulationGraphType == GraphType.Grid
-                    ? SelectedIgnitionCells.Count
-                    : SelectedIgnitionNodes.Count;
-
-                WorkflowStatusText = selectedCount > 0
-                    ? $"Очаги выбраны: {selectedCount}. Можно запускать {selectedModelText}."
-                    : SelectedSimulationGraphType == GraphType.Grid
-                        ? "Карта подготовлена. Выберите стартовые очаги вручную."
-                        : "Граф подготовлен. Выберите стартовые узлы вручную.";
-                return;
-            }
-
-            WorkflowStatusText = SelectedSimulationGraphType == GraphType.Grid
-                ? "Карта подготовлена. Изучите территорию и запускайте пожар."
-                : SelectedSimulation?.GraphScaleType switch
-                {
-                    GraphScaleType.Small =>
-                        "Малый граф подготовлен. Можно запускать пожар и наблюдать переходы по узлам и мостам.",
-                    GraphScaleType.Medium =>
-                        "Средний граф подготовлен. Можно запускать пожар и анализировать patch-to-patch распространение.",
-                    GraphScaleType.Large =>
-                        "Большой граф подготовлен. Можно запускать пожар и анализировать макрозоны и corridor-связи.",
-                    _ =>
-                        "Граф подготовлен. Можно запускать симуляцию."
-                };
-            return;
-        }
-
-        WorkflowStatusText = "Состояние обновляется";
+        WorkflowStatusText = $"Выбрана симуляция: {selectedModelText}";
     }
 
     private void StopAutoSimulationInternal(string? message = null)
@@ -1298,41 +1242,32 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedGraphNodeChanged(SimulationGraphNodeDto? value)
     {
         OnPropertyChanged(nameof(HasSelectedGraphNode));
-        OnPropertyChanged(nameof(HasNoSelectedGraphNode));
-
         OnPropertyChanged(nameof(SelectedGraphNodeTitle));
         OnPropertyChanged(nameof(SelectedGraphNodeStateText));
         OnPropertyChanged(nameof(SelectedGraphNodeVegetationText));
         OnPropertyChanged(nameof(SelectedGraphNodeGroupCaption));
-
+        OnPropertyChanged(nameof(SelectedGraphNodeGroupText));
+        OnPropertyChanged(nameof(SelectedGraphNodeRenderPositionText));
+        OnPropertyChanged(nameof(SelectedGraphNodeDegreeSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFireSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFuelSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeThermalSummaryText));
         OnPropertyChanged(nameof(SelectedGraphNodeMoistureText));
         OnPropertyChanged(nameof(SelectedGraphNodeElevationText));
         OnPropertyChanged(nameof(SelectedGraphNodeProbabilityText));
-        OnPropertyChanged(nameof(SelectedGraphNodeGroupText));
-        OnPropertyChanged(nameof(SelectedGraphNodeRenderPositionText));
-
         OnPropertyChanged(nameof(SelectedGraphNodeNeighborCountText));
         OnPropertyChanged(nameof(SelectedGraphNodeStrongEdgesText));
         OnPropertyChanged(nameof(SelectedGraphNodeMediumEdgesText));
         OnPropertyChanged(nameof(SelectedGraphNodeWeakEdgesText));
-        OnPropertyChanged(nameof(SelectedGraphNodeDegreeSummaryText));
-
         OnPropertyChanged(nameof(SelectedGraphNodeFireStageText));
         OnPropertyChanged(nameof(SelectedGraphNodeFireIntensityText));
-        OnPropertyChanged(nameof(SelectedGraphNodeFireSummaryText));
-
         OnPropertyChanged(nameof(SelectedGraphNodeCurrentFuelLoadText));
         OnPropertyChanged(nameof(SelectedGraphNodeFuelLoadText));
         OnPropertyChanged(nameof(SelectedGraphNodeFuelRatioText));
-        OnPropertyChanged(nameof(SelectedGraphNodeFuelSummaryText));
-
         OnPropertyChanged(nameof(SelectedGraphNodeAccumulatedHeatText));
         OnPropertyChanged(nameof(SelectedGraphNodeBurningElapsedText));
-        OnPropertyChanged(nameof(SelectedGraphNodeThermalSummaryText));
 
-        OnPropertyChanged(nameof(VisualizationMeaningText));
-        OnPropertyChanged(nameof(StructureScaleText));
-        OnPropertyChanged(nameof(SpreadBehaviorText));
+        RefreshWorkflowStatus();
     }
 
     partial void OnIsConnectedChanged(bool value)
@@ -1432,9 +1367,9 @@ public partial class MainWindowViewModel : ObservableObject
                     VegetationStats = BuildVegetationStatsText(stats);
 
                     SimulationInfoText =
-                        burning > 0
-                            ? $"Подготовленная карта обновлена: стартовых очагов {burning}, сгоревших клеток {burned}."
-                            : $"Сохранённые очаги очищены. Карта готова для нового выбора стартовых клеток.";
+      burning > 0
+          ? $"Граф обновлён: стартовых очагов {burning}, сгоревших узлов {burned}. Можно заново выбрать стартовые вершины."
+          : "Сохранённые очаги очищены. Граф готов для нового выбора стартовых вершин.";
                 });
             }
             else
@@ -1523,7 +1458,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         try
         {
-            SetTransientStatus("Создание graph simulation...", false);
+            SetTransientStatus("Создание графовой симуляции...", false);
 
             var dto = new CreateSimulationDto
             {
@@ -1579,8 +1514,8 @@ public partial class MainWindowViewModel : ObservableObject
 
             if (simulationId == null || simulationId == Guid.Empty)
             {
-                SetTransientStatus("Не удалось создать graph simulation", true);
-                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Ошибка: API не вернул id новой graph simulation");
+                SetTransientStatus("Не удалось создать графовую симуляцию", true);
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Ошибка: API не вернул идентификатор новой графовой симуляции");
                 return;
             }
 
@@ -1596,20 +1531,15 @@ public partial class MainWindowViewModel : ObservableObject
                 SelectedSimulation = createdSimulation;
             }
 
-            SetTransientStatus("Graph simulation успешно создана", true);
-
+            SetTransientStatus("Графовая симуляция успешно создана", true);
             EventLog.Insert(
                 0,
-                $"[{DateTime.Now:HH:mm:ss}] Создана graph simulation: {dto.Name} ({creation.GraphScaleType?.ToString() ?? "Graph"})");
+                $"[{DateTime.Now:HH:mm:ss}] Создана графовая симуляция: {dto.Name}");
         }
         catch (Exception ex)
         {
-            SetTransientStatus("Ошибка создания graph simulation", true);
-            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Ошибка создания graph simulation: {ex.Message}");
-        }
-        finally
-        {
-            RefreshWorkflowStatus();
+            SetTransientStatus("Ошибка при создании графовой симуляции", true);
+            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Ошибка создания графовой симуляции: {ex.Message}");
         }
     }
 
@@ -1647,10 +1577,10 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var prefix = scaleType switch
         {
-            GraphScaleType.Small => "SmallGraph",
-            GraphScaleType.Medium => "MediumGraph",
-            GraphScaleType.Large => "LargeGraph",
-            _ => "Graph"
+            GraphScaleType.Small => "ДЕМО: Малый граф",
+            GraphScaleType.Medium => "ДЕМО: Средний граф",
+            GraphScaleType.Large => "ДЕМО: Большой граф",
+            _ => "ДЕМО: Граф"
         };
 
         return $"{prefix} {DateTime.Now:dd.MM HH:mm}";
@@ -1708,16 +1638,6 @@ public partial class MainWindowViewModel : ObservableObject
         CurrentPage = AppPage.Graph;
     }
 
-    private GraphScaleType GetSelectedGraphScaleType()
-    {
-        return SelectedGraphCreationMode switch
-        {
-            GraphCreationMode.Small => GraphScaleType.Small,
-            GraphCreationMode.Medium => GraphScaleType.Medium,
-            GraphCreationMode.Large => GraphScaleType.Large,
-            _ => GraphScaleType.Medium
-        };
-    }
 
     [RelayCommand]
     private async Task TestConnectionAsync()
@@ -2863,6 +2783,19 @@ public partial class MainWindowViewModel : ObservableObject
         if (node == null)
             return;
 
+        SelectedGraphNode = node;
+
+        OnPropertyChanged(nameof(HasSelectedGraphNode));
+        OnPropertyChanged(nameof(SelectedGraphNodeTitle));
+        OnPropertyChanged(nameof(SelectedGraphNodeStateText));
+        OnPropertyChanged(nameof(SelectedGraphNodeVegetationText));
+        OnPropertyChanged(nameof(SelectedGraphNodeGroupText));
+        OnPropertyChanged(nameof(SelectedGraphNodeRenderPositionText));
+        OnPropertyChanged(nameof(SelectedGraphNodeDegreeSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFireSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFuelSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeThermalSummaryText));
+
         if (!IsIgnitionSelectionEnabled ||
             !IsManualIgnitionMode ||
             SelectedSimulation == null ||
@@ -2870,6 +2803,7 @@ public partial class MainWindowViewModel : ObservableObject
             SelectedSimulationStatus != 0 ||
             IsSimulationRunning)
         {
+            RefreshWorkflowStatus();
             return;
         }
 
@@ -2879,10 +2813,9 @@ public partial class MainWindowViewModel : ObservableObject
         if (!IsIgnitableGraphNode(node))
         {
             SetTransientStatus("Нельзя выбрать воду или пустую поверхность как стартовый очаг", true);
+            RefreshWorkflowStatus();
             return;
         }
-
-        SelectedGraphNode = node;
 
         var existing = SelectedIgnitionNodes.FirstOrDefault(n => n.Id == node.Id);
 

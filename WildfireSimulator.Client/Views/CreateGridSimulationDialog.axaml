@@ -6,7 +6,7 @@
     x:Class="WildfireSimulator.Client.Views.CreateGridSimulationDialog"
     Title="Создание сеточной симуляции"
     Width="620"
-    Height="1080"
+    Height="1000"
     Background="#FAF8F2"
     CanResize="False">
 

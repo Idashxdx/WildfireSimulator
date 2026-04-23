@@ -13,244 +13,218 @@
 
     <Grid ColumnDefinitions="390,*" RowDefinitions="*,Auto" Margin="16">
 
-        <Border Grid.Column="0"
-                Grid.Row="0"
-                Background="#FFFDF8"
-                BorderBrush="#E7E0F2"
-                BorderThickness="1"
-                CornerRadius="14"
-                Padding="14"
-                Margin="0,0,12,0">
-            <ScrollViewer>
-                <StackPanel Spacing="12">
+       <Border Grid.Column="0"
+        Grid.Row="0"
+        Background="#FFFDF8"
+        BorderBrush="#E7E0F2"
+        BorderThickness="1"
+        CornerRadius="14"
+        Padding="14"
+        Margin="0,0,12,0">
+    <ScrollViewer>
+        <StackPanel Spacing="12">
 
-                    <TextBlock Text="Редактор кластерного графа"
+            <TextBlock Text="Редактор кластерного графа"
+                       Foreground="#2F2A3A"
+                       FontSize="22"
+                       FontWeight="Bold"/>
+
+            <TextBlock Text="Создавайте вершины, задавайте их свойства, соединяйте рёбрами и настраивайте структуру графа."
+                       Foreground="#6E6A78"
+                       TextWrapping="Wrap"/>
+
+            <Border Background="#F8F5FF"
+                    BorderBrush="#E6DFF1"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Режим редактирования"
                                Foreground="#2F2A3A"
-                               FontSize="22"
+                               FontWeight="Bold"/>
+                    <ComboBox x:Name="ModeBox"
+                              SelectedIndex="0">
+                        <ComboBoxItem Content="Выбор и создание вершин"/>
+                        <ComboBoxItem Content="Создание рёбер"/>
+                        <ComboBoxItem Content="Удаление рёбер"/>
+                    </ComboBox>
+                </StackPanel>
+            </Border>
+
+            <Border Background="#F8FCF5"
+                    BorderBrush="#D7E8C8"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Кандидатные точки"
+                               Foreground="#2F2A3A"
+                               FontWeight="Bold"/>
+                    <TextBlock Text="Количество точек-кандидатов"
+                               Foreground="#6E6A78"/>
+                    <TextBox x:Name="CandidateCountBox"
+                             Text="90"/>
+
+                    <Grid ColumnDefinitions="*,*"
+                          ColumnSpacing="8">
+                        <Button x:Name="RegenerateCandidatesButton"
+                                Grid.Column="0"
+                                Content="Перегенерировать"
+                                Background="#E7E1D8"
+                                Foreground="#2F2A3A"/>
+
+                        <Button x:Name="AutoConnectButton"
+                                Grid.Column="1"
+                                Content="Автосвязи"
+                                Background="#DDEFD5"
+                                Foreground="#2F2A3A"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Background="#FFF7ED"
+                    BorderBrush="#F2D7BE"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Группы и структура"
+                               Foreground="#2F2A3A"
                                FontWeight="Bold"/>
 
-                    <TextBlock Text="Создавайте узлы, задавайте их свойства, соединяйте рёбрами и настраивайте структуру graph blueprint."
+                    <TextBlock Text="Количество групп"
+                               Foreground="#6E6A78"/>
+                    <TextBox x:Name="AutoGroupCountBox"
+                             Text="3"/>
+
+                    <Grid ColumnDefinitions="*,*"
+                          ColumnSpacing="8">
+                        <Button x:Name="AutoGroupButton"
+                                Grid.Column="0"
+                                Content="Автогруппы"
+                                Background="#FDE7D8"
+                                Foreground="#2F2A3A"/>
+
+                        <Button x:Name="NormalizeEdgesButton"
+                                Grid.Column="1"
+                                Content="Нормализовать рёбра"
+                                Background="#F9E4D7"
+                                Foreground="#2F2A3A"/>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="*,*"
+                          ColumnSpacing="8">
+                        <Button x:Name="WeakenBridgesButton"
+                                Grid.Column="0"
+                                Content="Ослабить мосты"
+                                Background="#FCE8E6"
+                                Foreground="#2F2A3A"/>
+
+                        <Button x:Name="BoostLocalEdgesButton"
+                                Grid.Column="1"
+                                Content="Усилить локальные связи"
+                                Background="#E6F4EA"
+                                Foreground="#2F2A3A"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Background="#FFFDF8"
+                    BorderBrush="#E7E0F2"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Выбранная вершина"
+                               Foreground="#2F2A3A"
+                               FontWeight="Bold"/>
+                    <TextBlock x:Name="SelectedNodeSummaryTextBlock"
+                               Text="Вершина не выбрана"
                                Foreground="#6E6A78"
                                TextWrapping="Wrap"/>
 
-                    <Border Background="#F8F5FF"
-                            BorderBrush="#E6DFF1"
-                            BorderThickness="1"
-                            CornerRadius="10"
-                            Padding="10">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Режим редактирования"
-                                       Foreground="#2F2A3A"
-                                       FontWeight="Bold"/>
-                            <ComboBox x:Name="ModeBox"
-                                      SelectedIndex="0">
-                                <ComboBoxItem Content="Выбор и создание узлов"/>
-                                <ComboBoxItem Content="Создание рёбер"/>
-                                <ComboBoxItem Content="Удаление рёбер"/>
-                            </ComboBox>
-                        </StackPanel>
-                    </Border>
+                    <TextBlock Text="Кластер"
+                               Foreground="#6E6A78"/>
+                    <TextBox x:Name="NodeClusterIdBox"/>
 
-                    <Border Background="#F8FCF5"
-                            BorderBrush="#D7E8C8"
-                            BorderThickness="1"
-                            CornerRadius="10"
-                            Padding="10">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Кандидатные точки"
-                                       Foreground="#2F2A3A"
-                                       FontWeight="Bold"/>
-                            <TextBlock Text="Количество точек-кандидатов"
+                    <TextBlock Text="Растительность"
+                               Foreground="#6E6A78"/>
+                    <ComboBox x:Name="NodeVegetationBox"/>
+
+                    <Grid ColumnDefinitions="*,*"
+                          ColumnSpacing="8">
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="Влажность"
                                        Foreground="#6E6A78"/>
-                            <TextBox x:Name="CandidateCountBox"
-                                     Text="90"/>
-
-                            <Grid ColumnDefinitions="*,*"
-                                  ColumnSpacing="8">
-                                <Button x:Name="RegenerateCandidatesButton"
-                                        Grid.Column="0"
-                                        Content="Перегенерировать"
-                                        Background="#E7E1D8"
-                                        Foreground="#2F2A3A"/>
-
-                                <Button x:Name="AutoConnectButton"
-                                        Grid.Column="1"
-                                        Content="Автосвязать"
-                                        Background="#DDEFD5"
-                                        Foreground="#2F2A3A"/>
-                            </Grid>
+                            <TextBox x:Name="NodeMoistureBox"/>
                         </StackPanel>
-                    </Border>
 
-                    <Border Background="#FFF8EE"
-                            BorderBrush="#EFD9B9"
-                            BorderThickness="1"
-                            CornerRadius="10"
-                            Padding="10">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Автогруппировка и нормализация"
-                                       Foreground="#2F2A3A"
-                                       FontWeight="Bold"/>
-
-                            <TextBlock Text="Количество групп"
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Text="Высота"
                                        Foreground="#6E6A78"/>
-                            <TextBox x:Name="AutoGroupCountBox"
-                                     Text="4"/>
-
-                            <Grid ColumnDefinitions="*,*"
-                                  ColumnSpacing="8">
-                                <Button x:Name="AutoGroupButton"
-                                        Grid.Column="0"
-                                        Content="Разбить на группы"
-                                        Background="#E7E1D8"
-                                        Foreground="#2F2A3A"/>
-
-                                <Button x:Name="NormalizeEdgesButton"
-                                        Grid.Column="1"
-                                        Content="Нормализовать рёбра"
-                                        Background="#E7E1D8"
-                                        Foreground="#2F2A3A"/>
-                            </Grid>
-
-                            <Grid ColumnDefinitions="*,*"
-                                  ColumnSpacing="8">
-                                <Button x:Name="WeakenBridgesButton"
-                                        Grid.Column="0"
-                                        Content="Ослабить мосты"
-                                        Background="#F8E6D9"
-                                        Foreground="#2F2A3A"/>
-
-                                <Button x:Name="BoostLocalEdgesButton"
-                                        Grid.Column="1"
-                                        Content="Усилить локальные"
-                                        Background="#E2F0FF"
-                                        Foreground="#2F2A3A"/>
-                            </Grid>
+                            <TextBox x:Name="NodeElevationBox"/>
                         </StackPanel>
-                    </Border>
+                    </Grid>
 
-                    <Border Background="#F6FAFF"
-                            BorderBrush="#D6E6F8"
-                            BorderThickness="1"
-                            CornerRadius="10"
-                            Padding="10">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Свойства узла"
-                                       Foreground="#2F2A3A"
-                                       FontWeight="Bold"/>
-
-                            <TextBlock x:Name="SelectedNodeSummaryTextBlock"
-                                       Text="Узел не выбран"
-                                       Foreground="#5E5A69"
-                                       TextWrapping="Wrap"/>
-
-                            <TextBlock Text="Cluster ID"
-                                       Foreground="#6E6A78"/>
-                            <TextBox x:Name="NodeClusterIdBox"
-                                     Text="patch-manual-1"/>
-
-                            <TextBlock Text="Растительность"
-                                       Foreground="#6E6A78"/>
-                            <ComboBox x:Name="NodeVegetationBox"
-                                      SelectedIndex="4">
-                                <ComboBoxItem Content="Трава"/>
-                                <ComboBoxItem Content="Кустарник"/>
-                                <ComboBoxItem Content="Лиственный лес"/>
-                                <ComboBoxItem Content="Хвойный лес"/>
-                                <ComboBoxItem Content="Смешанный лес"/>
-                                <ComboBoxItem Content="Вода"/>
-                                <ComboBoxItem Content="Пустая поверхность"/>
-                            </ComboBox>
-
-                            <Grid ColumnDefinitions="*,*"
-                                  ColumnSpacing="8">
-                                <StackPanel Grid.Column="0"
-                                            Spacing="4">
-                                    <TextBlock Text="Влажность"
-                                               Foreground="#6E6A78"/>
-                                    <TextBox x:Name="NodeMoistureBox"
-                                             Text="0.45"/>
-                                </StackPanel>
-
-                                <StackPanel Grid.Column="1"
-                                            Spacing="4">
-                                    <TextBlock Text="Высота"
-                                               Foreground="#6E6A78"/>
-                                    <TextBox x:Name="NodeElevationBox"
-                                             Text="0"/>
-                                </StackPanel>
-                            </Grid>
-
-                            <Button x:Name="ApplyNodeButton"
-                                    Content="Применить к узлу"
-                                    Background="#DDEFD5"
-                                    Foreground="#2F2A3A"/>
-                        </StackPanel>
-                    </Border>
-
-                    <Border Background="#FFF9F3"
-                            BorderBrush="#E8D9C8"
-                            BorderThickness="1"
-                            CornerRadius="10"
-                            Padding="10">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Свойства ребра"
-                                       Foreground="#2F2A3A"
-                                       FontWeight="Bold"/>
-
-                            <TextBlock x:Name="SelectedEdgeSummaryTextBlock"
-                                       Text="Ребро не выбрано"
-                                       Foreground="#5E5A69"
-                                       TextWrapping="Wrap"/>
-
-                            <TextBlock Text="Distance override"
-                                       Foreground="#6E6A78"/>
-                            <TextBox x:Name="EdgeDistanceBox"
-                                     Watermark="auto"/>
-
-                            <TextBlock Text="FireSpreadModifier"
-                                       Foreground="#6E6A78"/>
-                            <TextBox x:Name="EdgeModifierBox"
-                                     Text="1.00"/>
-
-                            <Button x:Name="ApplyEdgeButton"
-                                    Content="Применить к ребру"
-                                    Background="#E7E1D8"
-                                    Foreground="#2F2A3A"/>
-                        </StackPanel>
-                    </Border>
-
-                    <Border Background="#F8F6FB"
-                            BorderBrush="#E2DCEC"
-                            BorderThickness="1"
-                            CornerRadius="10"
-                            Padding="10">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Сводка"
-                                       Foreground="#2F2A3A"
-                                       FontWeight="Bold"/>
-
-                            <TextBlock x:Name="SummaryTextBlock"
-                                       Text="Узлов: 0 • рёбер: 0 • групп: 0 • мостов: 0 • изолированных: 0"
-                                       Foreground="#564F64"
-                                       TextWrapping="Wrap"/>
-
-                            <Border Background="#FFFDF8"
-                                    BorderBrush="#E9E2F0"
-                                    BorderThickness="1"
-                                    CornerRadius="8"
-                                    Padding="8">
-                                <TextBlock x:Name="HintTextBlock"
-                                           Text="Подсказки редактора будут отображаться здесь."
-                                           Foreground="#6B6476"
-                                           TextWrapping="Wrap"/>
-                            </Border>
-                        </StackPanel>
-                    </Border>
-
+                    <Button x:Name="ApplyNodeButton"
+                            Content="Применить к вершине"
+                            Background="#E7E1D8"
+                            Foreground="#2F2A3A"/>
                 </StackPanel>
-            </ScrollViewer>
-        </Border>
+            </Border>
+
+            <Border Background="#FFFDF8"
+                    BorderBrush="#E7E0F2"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Выбранное ребро"
+                               Foreground="#2F2A3A"
+                               FontWeight="Bold"/>
+                    <TextBlock x:Name="SelectedEdgeSummaryTextBlock"
+                               Text="Ребро не выбрано"
+                               Foreground="#6E6A78"
+                               TextWrapping="Wrap"/>
+
+                    <TextBlock Text="Переопределение расстояния"
+                               Foreground="#6E6A78"/>
+                    <TextBox x:Name="EdgeDistanceBox"/>
+
+                    <TextBlock Text="Модификатор распространения"
+                               Foreground="#6E6A78"/>
+                    <TextBox x:Name="EdgeModifierBox"/>
+
+                    <Button x:Name="ApplyEdgeButton"
+                            Content="Применить к ребру"
+                            Background="#E7E1D8"
+                            Foreground="#2F2A3A"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="#F8F5FF"
+                    BorderBrush="#E6DFF1"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Сводка"
+                               Foreground="#2F2A3A"
+                               FontWeight="Bold"/>
+                    <TextBlock x:Name="SummaryTextBlock"
+                               Text="Сводка"
+                               Foreground="#554E63"
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:Name="HintTextBlock"
+                               Text="Подсказка"
+                               Foreground="#6E6A78"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</Border>
 
         <Border Grid.Column="1"
                 Grid.Row="0"

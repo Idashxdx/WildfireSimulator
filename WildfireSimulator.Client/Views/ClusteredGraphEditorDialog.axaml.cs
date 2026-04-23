@@ -155,9 +155,7 @@ public partial class ClusteredGraphEditorDialog : Window
     private void AttachEvents()
     {
         if (_graphCanvas != null)
-        {
             _graphCanvas.PointerPressed += OnCanvasPointerPressed;
-        }
 
         if (_modeBox != null)
         {
@@ -171,11 +169,11 @@ public partial class ClusteredGraphEditorDialog : Window
                     _hintTextBlock.Text = GetMode() switch
                     {
                         EditorMode.SelectNodes =>
-                            "ЛКМ по canvas — создать узел. ЛКМ по узлу — выбрать. ПКМ по узлу — удалить узел вместе со связями.",
+                            "ЛКМ по холсту — создать вершину. ЛКМ по вершине — выбрать. ПКМ по вершине — удалить вместе со связями.",
                         EditorMode.CreateEdges =>
-                            "ЛКМ по первому узлу — начало ребра. ЛКМ по второму — создать ребро. Повторный клик по тому же узлу отменяет выбор.",
+                            "ЛКМ по первой вершине — начало ребра. ЛКМ по второй — создать ребро. Повторный клик по той же вершине отменяет выбор.",
                         EditorMode.DeleteEdges =>
-                            "ЛКМ по ребру — удалить связь. ЛКМ по узлу — только выбрать его для просмотра свойств.",
+                            "ЛКМ по ребру — удалить связь. ЛКМ по вершине — выбрать её для просмотра свойств.",
                         _ =>
                             "Выберите режим редактирования."
                     };
@@ -196,8 +194,9 @@ public partial class ClusteredGraphEditorDialog : Window
                 RegenerateCandidates(Math.Clamp(count, 20, 300));
 
                 if (_hintTextBlock != null)
-                    _hintTextBlock.Text = $"Кандидатные точки обновлены: {_candidates.Count}. Уже созданные узлы и рёбра сохранены.";
+                    _hintTextBlock.Text = $"Кандидатные точки обновлены: {_candidates.Count}. Уже созданные вершины сохранены.";
 
+                RefreshSummary();
                 ScheduleDraw();
             };
         }
@@ -209,8 +208,10 @@ public partial class ClusteredGraphEditorDialog : Window
                 AutoConnectSelectedNodes();
 
                 if (_hintTextBlock != null)
-                    _hintTextBlock.Text = "Автосвязь выполнена: ближайшие узлы соединены рёбрами.";
+                    _hintTextBlock.Text = "Автосвязи построены.";
 
+                RefreshSummary();
+                RefreshEdgeEditor();
                 ScheduleDraw();
             };
         }
@@ -222,8 +223,13 @@ public partial class ClusteredGraphEditorDialog : Window
                 AutoAssignClusters();
 
                 if (_hintTextBlock != null)
-                    _hintTextBlock.Text = "Узлы автоматически распределены по cluster ID.";
+                {
+                    int groupCount = Math.Clamp(ParseInt(_autoGroupCountBox?.Text, 4), 2, 12);
+                    _hintTextBlock.Text = $"Группы назначены автоматически: {groupCount}.";
+                }
 
+                RefreshNodeEditor();
+                RefreshSummary();
                 ScheduleDraw();
             };
         }
@@ -235,8 +241,10 @@ public partial class ClusteredGraphEditorDialog : Window
                 NormalizeEdges();
 
                 if (_hintTextBlock != null)
-                    _hintTextBlock.Text = "Все modifiers рёбер нормализованы к 1.0.";
+                    _hintTextBlock.Text = "Рёбра нормализованы.";
 
+                RefreshEdgeEditor();
+                RefreshSummary();
                 ScheduleDraw();
             };
         }
@@ -245,11 +253,30 @@ public partial class ClusteredGraphEditorDialog : Window
         {
             _weakenBridgesButton.Click += (_, _) =>
             {
-                WeakenBridges();
+                foreach (var edge in _edges)
+                {
+                    var fromNode = _nodes.FirstOrDefault(n => n.Id == edge.FromNodeId);
+                    var toNode = _nodes.FirstOrDefault(n => n.Id == edge.ToNodeId);
+
+                    if (fromNode == null || toNode == null)
+                        continue;
+
+                    bool isBridge =
+                        !string.IsNullOrWhiteSpace(fromNode.ClusterId) &&
+                        !string.IsNullOrWhiteSpace(toNode.ClusterId) &&
+                        !string.Equals(fromNode.ClusterId, toNode.ClusterId, StringComparison.Ordinal);
+
+                    if (!isBridge)
+                        continue;
+
+                    edge.FireSpreadModifier = Math.Clamp(edge.FireSpreadModifier * 0.82, 0.02, 1.10);
+                }
 
                 if (_hintTextBlock != null)
-                    _hintTextBlock.Text = "Межкластерные bridge-рёбра ослаблены.";
+                    _hintTextBlock.Text = "Мостовые связи ослаблены.";
 
+                RefreshEdgeEditor();
+                RefreshSummary();
                 ScheduleDraw();
             };
         }
@@ -258,11 +285,30 @@ public partial class ClusteredGraphEditorDialog : Window
         {
             _boostLocalEdgesButton.Click += (_, _) =>
             {
-                BoostLocalEdges();
+                foreach (var edge in _edges)
+                {
+                    var fromNode = _nodes.FirstOrDefault(n => n.Id == edge.FromNodeId);
+                    var toNode = _nodes.FirstOrDefault(n => n.Id == edge.ToNodeId);
+
+                    if (fromNode == null || toNode == null)
+                        continue;
+
+                    bool isLocal =
+                        !string.IsNullOrWhiteSpace(fromNode.ClusterId) &&
+                        !string.IsNullOrWhiteSpace(toNode.ClusterId) &&
+                        string.Equals(fromNode.ClusterId, toNode.ClusterId, StringComparison.Ordinal);
+
+                    if (!isLocal)
+                        continue;
+
+                    edge.FireSpreadModifier = Math.Clamp(edge.FireSpreadModifier * 1.12, 0.02, 2.50);
+                }
 
                 if (_hintTextBlock != null)
-                    _hintTextBlock.Text = "Локальные внутрикластерные рёбра усилены.";
+                    _hintTextBlock.Text = "Локальные связи усилены.";
 
+                RefreshEdgeEditor();
+                RefreshSummary();
                 ScheduleDraw();
             };
         }
@@ -272,10 +318,8 @@ public partial class ClusteredGraphEditorDialog : Window
             _applyNodeButton.Click += (_, _) =>
             {
                 ApplyNodeChanges();
-
-                if (_hintTextBlock != null && _selectedNodeId != null)
-                    _hintTextBlock.Text = "Свойства узла обновлены.";
-
+                RefreshNodeEditor();
+                RefreshSummary();
                 ScheduleDraw();
             };
         }
@@ -285,10 +329,8 @@ public partial class ClusteredGraphEditorDialog : Window
             _applyEdgeButton.Click += (_, _) =>
             {
                 ApplyEdgeChanges();
-
-                if (_hintTextBlock != null && _selectedEdgeId != null)
-                    _hintTextBlock.Text = "Свойства ребра обновлены.";
-
+                RefreshEdgeEditor();
+                RefreshSummary();
                 ScheduleDraw();
             };
         }
@@ -300,19 +342,14 @@ public partial class ClusteredGraphEditorDialog : Window
         {
             _applyButton.Click += (_, _) =>
             {
-                if (!TryValidateBeforeApply(out var validationMessage))
+                if (!TryValidateBeforeApply(out var message))
                 {
                     if (_hintTextBlock != null)
-                        _hintTextBlock.Text = validationMessage;
-
+                        _hintTextBlock.Text = message;
                     return;
                 }
 
                 EditedBlueprint = BuildBlueprint();
-
-                if (_hintTextBlock != null)
-                    _hintTextBlock.Text = "Blueprint успешно подготовлен и сохранён.";
-
                 Close(true);
             };
         }
@@ -442,32 +479,32 @@ public partial class ClusteredGraphEditorDialog : Window
 
         if (_nodes.Count == 0)
         {
-            message = "Нельзя сохранить пустой graph blueprint: добавьте хотя бы один узел.";
+            message = "Нельзя сохранить пустую структуру графа: добавьте хотя бы одну вершину.";
             return false;
         }
 
         if (_nodes.Count < 2)
         {
-            message = "Для semi-manual graph нужно минимум 2 узла.";
+            message = "Для полуручного графа нужно минимум 2 вершины.";
             return false;
         }
 
         if (_edges.Count == 0)
         {
-            message = "Для semi-manual graph нужно хотя бы одно ребро между узлами.";
+            message = "Для полуручного графа нужно хотя бы одно ребро между вершинами.";
             return false;
         }
 
         if (_nodes.Any(n => string.IsNullOrWhiteSpace(n.ClusterId)))
         {
-            message = "У некоторых узлов пустой Cluster ID. Заполните cluster для всех узлов.";
+            message = "У некоторых вершин не заполнен кластер. Заполните кластер для всех вершин.";
             return false;
         }
 
         bool hasInvalidMoisture = _nodes.Any(n => n.Moisture < 0.02 || n.Moisture > 0.98);
         if (hasInvalidMoisture)
         {
-            message = "Влажность узлов должна быть в диапазоне 0.02 .. 0.98.";
+            message = "Влажность вершин должна быть в диапазоне 0.02 .. 0.98.";
             return false;
         }
 
@@ -480,46 +517,11 @@ public partial class ClusteredGraphEditorDialog : Window
 
         if (hasInvalidEdge)
         {
-            message = "В графе есть некорректные рёбра. Проверьте связи между узлами.";
+            message = "В графе есть некорректные рёбра. Проверьте связи между вершинами.";
             return false;
         }
 
-        bool hasInvalidModifier = _edges.Any(e => e.FireSpreadModifier < 0.02 || e.FireSpreadModifier > 1.85);
-        if (hasInvalidModifier)
-        {
-            message = "У одного или нескольких рёбер fireSpreadModifier вне допустимого диапазона 0.02 .. 1.85.";
-            return false;
-        }
-
-        bool hasInvalidDistance = _edges.Any(e => e.DistanceOverride.HasValue && e.DistanceOverride.Value <= 0.0);
-        if (hasInvalidDistance)
-        {
-            message = "Distance override у рёбер должен быть больше 0.";
-            return false;
-        }
-
-        bool hasIsolatedNodes = _nodes.Any(node =>
-            !_edges.Any(e => e.FromNodeId == node.Id || e.ToNodeId == node.Id));
-
-        if (hasIsolatedNodes)
-        {
-            message = "Есть изолированные узлы без рёбер. Соедините их или удалите.";
-            return false;
-        }
-
-        int clusterCount = _nodes
-            .Select(n => n.ClusterId?.Trim())
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.Ordinal)
-            .Count();
-
-        if (clusterCount == 0)
-        {
-            message = "Не удалось определить ни одного cluster ID.";
-            return false;
-        }
-
-        message = $"Blueprint валиден: узлов {_nodes.Count}, рёбер {_edges.Count}, clusters {clusterCount}.";
+        message = string.Empty;
         return true;
     }
 
@@ -1070,49 +1072,34 @@ public partial class ClusteredGraphEditorDialog : Window
                 _selectedEdgeId = null;
 
                 if (_hintTextBlock != null)
-                    _hintTextBlock.Text = $"Начало ребра выбрано: ({node.X}, {node.Y}). Теперь выберите второй узел.";
+                    _hintTextBlock.Text = $"Выбрана первая вершина ({node.X}, {node.Y}). Теперь выберите вторую вершину.";
             }
             else if (_pendingEdgeStartNodeId == node.Id)
             {
                 _pendingEdgeStartNodeId = null;
-                _selectedNodeId = node.Id;
-                _selectedEdgeId = null;
 
                 if (_hintTextBlock != null)
-                    _hintTextBlock.Text = "Создание ребра отменено: стартовый узел выбран повторно.";
+                    _hintTextBlock.Text = "Выбор первой вершины отменён.";
             }
             else
             {
-                var fromId = _pendingEdgeStartNodeId.Value;
-                var toId = node.Id;
+                var firstId = _pendingEdgeStartNodeId.Value;
+                _pendingEdgeStartNodeId = null;
 
-                if (TryAddEdge(fromId, toId))
+                if (TryAddEdge(firstId, node.Id))
                 {
-                    _selectedEdgeId = FindEdgeId(fromId, toId);
+                    _selectedNodeId = null;
+                    _selectedEdgeId = null;
 
                     if (_hintTextBlock != null)
-                        _hintTextBlock.Text = $"Новое ребро создано между узлами ({_nodes.First(n => n.Id == fromId).X}, {_nodes.First(n => n.Id == fromId).Y}) и ({node.X}, {node.Y}).";
+                        _hintTextBlock.Text = $"Создано ребро между вершинами ({node.X}, {node.Y}) и выбранной ранее вершиной.";
                 }
                 else
                 {
-                    _selectedEdgeId = FindEdgeId(fromId, toId);
-
                     if (_hintTextBlock != null)
-                        _hintTextBlock.Text = "Такое ребро уже существует. Выбрано существующее ребро.";
+                        _hintTextBlock.Text = "Такое ребро уже существует или создать его нельзя.";
                 }
-
-                _pendingEdgeStartNodeId = null;
-                _selectedNodeId = node.Id;
             }
-        }
-        else if (mode == EditorMode.DeleteEdges)
-        {
-            _selectedNodeId = node.Id;
-            _selectedEdgeId = null;
-            _pendingEdgeStartNodeId = null;
-
-            if (_hintTextBlock != null)
-                _hintTextBlock.Text = $"Выбран узел ({node.X}, {node.Y}). В режиме удаления связи удаляются кликом по ребру.";
         }
         else
         {
@@ -1121,7 +1108,7 @@ public partial class ClusteredGraphEditorDialog : Window
             _pendingEdgeStartNodeId = null;
 
             if (_hintTextBlock != null)
-                _hintTextBlock.Text = $"Выбран узел ({node.X}, {node.Y}). Можно редактировать cluster, vegetation, moisture и elevation.";
+                _hintTextBlock.Text = $"Выбрана вершина ({node.X}, {node.Y}). Можно менять кластер, растительность, влажность и высоту.";
         }
 
         RefreshNodeEditor();
@@ -1152,7 +1139,7 @@ public partial class ClusteredGraphEditorDialog : Window
             _selectedNodeId = null;
 
             if (_hintTextBlock != null)
-                _hintTextBlock.Text = "Выбрано ребро. Можно изменить distance override и fireSpreadModifier.";
+                _hintTextBlock.Text = "Выбрано ребро. Можно изменить расстояние и модификатор распространения.";
         }
 
         RefreshNodeEditor();
@@ -1182,7 +1169,7 @@ public partial class ClusteredGraphEditorDialog : Window
             _selectedEdgeId = null;
 
         if (_hintTextBlock != null)
-            _hintTextBlock.Text = $"Удалён узел ({removedNode.X}, {removedNode.Y}) и связанных рёбер: {removedEdgesCount}.";
+            _hintTextBlock.Text = $"Удалена вершина ({removedNode.X}, {removedNode.Y}) и связанных рёбер: {removedEdgesCount}.";
     }
     private bool TryAddNodeAt(int x, int y, bool selectAfterCreate)
     {
@@ -1213,7 +1200,7 @@ public partial class ClusteredGraphEditorDialog : Window
             Id = Guid.NewGuid(),
             X = x,
             Y = y,
-            ClusterId = $"patch-manual-{GetSuggestedClusterIndex(x, y)}",
+            ClusterId = $"кластер-{GetSuggestedClusterIndex(x, y)}",
             Vegetation = VegetationType.Mixed,
             Moisture = 0.45,
             Elevation = 0.0
@@ -1424,143 +1411,97 @@ public partial class ClusteredGraphEditorDialog : Window
 
     private void RefreshNodeEditor()
     {
-        var node = _nodes.FirstOrDefault(n => n.Id == _selectedNodeId);
-
-        if (node == null)
+        if (_selectedNodeSummaryTextBlock == null ||
+            _nodeClusterIdBox == null ||
+            _nodeVegetationBox == null ||
+            _nodeMoistureBox == null ||
+            _nodeElevationBox == null)
         {
-            if (_selectedNodeSummaryTextBlock != null)
-                _selectedNodeSummaryTextBlock.Text = "Узел не выбран";
-
-            if (_nodeClusterIdBox != null)
-                _nodeClusterIdBox.Text = "patch-manual-1";
-
-            if (_nodeMoistureBox != null)
-                _nodeMoistureBox.Text = "0.45";
-
-            if (_nodeElevationBox != null)
-                _nodeElevationBox.Text = "0";
-
-            if (_nodeVegetationBox != null)
-                _nodeVegetationBox.SelectedIndex = 4;
-
             return;
         }
 
-        int degree = _edges.Count(e => e.FromNodeId == node.Id || e.ToNodeId == node.Id);
-
-        if (_selectedNodeSummaryTextBlock != null)
+        var node = _nodes.FirstOrDefault(n => n.Id == _selectedNodeId);
+        if (node == null)
         {
-            _selectedNodeSummaryTextBlock.Text =
-                $"Узел ({node.X}, {node.Y}) • {node.ClusterId}\n" +
-                $"Степень: {degree} • {GetVegetationText(node.Vegetation)}";
+            _selectedNodeSummaryTextBlock.Text = "Вершина не выбрана";
+            _nodeClusterIdBox.Text = string.Empty;
+            _nodeMoistureBox.Text = string.Empty;
+            _nodeElevationBox.Text = string.Empty;
+            return;
         }
 
-        if (_nodeClusterIdBox != null)
-            _nodeClusterIdBox.Text = node.ClusterId;
+        _selectedNodeSummaryTextBlock.Text =
+            $"Вершина ({node.X}, {node.Y})\n" +
+            $"Кластер: {node.ClusterId}\n" +
+            $"Растительность: {GetVegetationDisplayName(node.Vegetation)}";
 
-        if (_nodeMoistureBox != null)
-            _nodeMoistureBox.Text = node.Moisture.ToString("0.00", CultureInfo.InvariantCulture);
+        _nodeClusterIdBox.Text = node.ClusterId;
+        _nodeMoistureBox.Text = node.Moisture.ToString("0.00", CultureInfo.InvariantCulture);
+        _nodeElevationBox.Text = node.Elevation.ToString("0.0", CultureInfo.InvariantCulture);
 
-        if (_nodeElevationBox != null)
-            _nodeElevationBox.Text = node.Elevation.ToString("0.0", CultureInfo.InvariantCulture);
-
-        if (_nodeVegetationBox != null)
+        _nodeVegetationBox.SelectedIndex = (int)node.Vegetation;
+    }
+    private string GetVegetationDisplayName(VegetationType vegetation)
+    {
+        return vegetation switch
         {
-            _nodeVegetationBox.SelectedIndex = node.Vegetation switch
-            {
-                VegetationType.Grass => 0,
-                VegetationType.Shrub => 1,
-                VegetationType.Deciduous => 2,
-                VegetationType.Coniferous => 3,
-                VegetationType.Mixed => 4,
-                VegetationType.Water => 5,
-                VegetationType.Bare => 6,
-                _ => 4
-            };
-        }
+            VegetationType.Grass => "Трава",
+            VegetationType.Shrub => "Кустарник",
+            VegetationType.Deciduous => "Лиственный лес",
+            VegetationType.Coniferous => "Хвойный лес",
+            VegetationType.Mixed => "Смешанный лес",
+            VegetationType.Water => "Вода",
+            VegetationType.Bare => "Пустая поверхность",
+            _ => "Неизвестно"
+        };
     }
 
     private void RefreshEdgeEditor()
     {
-        var edge = _edges.FirstOrDefault(e => e.Id == _selectedEdgeId);
+        if (_selectedEdgeSummaryTextBlock == null ||
+            _edgeDistanceBox == null ||
+            _edgeModifierBox == null)
+        {
+            return;
+        }
 
+        var edge = _edges.FirstOrDefault(e => e.Id == _selectedEdgeId);
         if (edge == null)
         {
-            if (_selectedEdgeSummaryTextBlock != null)
-                _selectedEdgeSummaryTextBlock.Text = "Ребро не выбрано";
-
-            if (_edgeDistanceBox != null)
-                _edgeDistanceBox.Text = string.Empty;
-
-            if (_edgeModifierBox != null)
-                _edgeModifierBox.Text = "1.00";
-
+            _selectedEdgeSummaryTextBlock.Text = "Ребро не выбрано";
+            _edgeDistanceBox.Text = string.Empty;
+            _edgeModifierBox.Text = string.Empty;
             return;
         }
 
         var fromNode = _nodes.FirstOrDefault(n => n.Id == edge.FromNodeId);
         var toNode = _nodes.FirstOrDefault(n => n.Id == edge.ToNodeId);
 
-        bool isBridge = fromNode != null &&
-                        toNode != null &&
-                        !string.Equals(fromNode.ClusterId, toNode.ClusterId, StringComparison.Ordinal);
+        string fromText = fromNode == null ? "?" : $"({fromNode.X}, {fromNode.Y})";
+        string toText = toNode == null ? "?" : $"({toNode.X}, {toNode.Y})";
 
-        if (_selectedEdgeSummaryTextBlock != null)
-        {
-            _selectedEdgeSummaryTextBlock.Text = fromNode != null && toNode != null
-                ? $"Ребро ({fromNode.X}, {fromNode.Y}) ↔ ({toNode.X}, {toNode.Y})\n" +
-                  $"Тип: {(isBridge ? "межкластерное" : "локальное")}"
-                : "Ребро выбрано";
-        }
+        _selectedEdgeSummaryTextBlock.Text = $"Ребро {fromText} ↔ {toText}";
 
-        if (_edgeDistanceBox != null)
-            _edgeDistanceBox.Text = edge.DistanceOverride?.ToString("0.00", CultureInfo.InvariantCulture) ?? string.Empty;
-
-        if (_edgeModifierBox != null)
-            _edgeModifierBox.Text = edge.FireSpreadModifier.ToString("0.00", CultureInfo.InvariantCulture);
+        _edgeDistanceBox.Text = edge.DistanceOverride?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty;
+        _edgeModifierBox.Text = edge.FireSpreadModifier.ToString("0.00", CultureInfo.InvariantCulture);
     }
 
     private void RefreshSummary()
     {
+        if (_summaryTextBlock == null)
+            return;
+
         int clusterCount = _nodes
             .Select(n => n.ClusterId?.Trim())
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.Ordinal)
             .Count();
 
-        int bridgeCount = _edges.Count(e =>
-        {
-            var fromNode = _nodes.FirstOrDefault(n => n.Id == e.FromNodeId);
-            var toNode = _nodes.FirstOrDefault(n => n.Id == e.ToNodeId);
-
-            if (fromNode == null || toNode == null)
-                return false;
-
-            return !string.Equals(fromNode.ClusterId, toNode.ClusterId, StringComparison.Ordinal);
-        });
-
-        int isolatedCount = _nodes.Count(node =>
-            !_edges.Any(e => e.FromNodeId == node.Id || e.ToNodeId == node.Id));
-
-        if (_summaryTextBlock != null)
-        {
-            _summaryTextBlock.Text =
-                $"Узлов: {_nodes.Count} • рёбер: {_edges.Count} • групп: {clusterCount} • мостов: {bridgeCount} • изолированных: {isolatedCount}";
-        }
-
-        if (_hintTextBlock != null)
-        {
-            _hintTextBlock.Text = GetMode() switch
-            {
-                EditorMode.SelectNodes =>
-                    "ЛКМ по canvas — создать узел. ЛКМ по серой точке — добавить/снять узел. ПКМ по узлу — удалить узел вместе с рёбрами.",
-                EditorMode.CreateEdges =>
-                    "ЛКМ по первому узлу, затем по второму — создать ребро. Повторный клик по тому же узлу снимает выбор старта.",
-                EditorMode.DeleteEdges =>
-                    "ЛКМ по ребру удаляет его. Используйте этот режим для очистки лишних связей.",
-                _ => "Редактирование clustered graph."
-            };
-        }
+        _summaryTextBlock.Text =
+            $"Вершин: {_nodes.Count}\n" +
+            $"Рёбер: {_edges.Count}\n" +
+            $"Кандидатных точек: {_candidates.Count}\n" +
+            $"Кластеров: {clusterCount}";
     }
 
     private EditorMode GetMode()
