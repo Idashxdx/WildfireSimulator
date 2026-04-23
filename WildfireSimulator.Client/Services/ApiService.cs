@@ -230,7 +230,7 @@ public class ApiService
     }
 
     public async Task<(bool Success, string Message, List<GraphCellDto>? Cells, StepResultDto? StepResult, bool IsRunning, int Status)> ExecuteStepAsync(
-        Guid simulationId)
+     Guid simulationId)
     {
         try
         {
@@ -267,14 +267,12 @@ public class ApiService
             bool isRunning = false;
             int status = -1;
 
-            if (doc.RootElement.TryGetProperty("activeSimulation", out var activeSimElement))
-            {
-                if (activeSimElement.TryGetProperty("isRunning", out var runningElement))
-                    isRunning = runningElement.GetBoolean();
+            if (doc.RootElement.TryGetProperty("isRunning", out var runningElement))
+                isRunning = runningElement.GetBoolean();
 
-                if (activeSimElement.TryGetProperty("status", out var statusElement))
-                    status = statusElement.GetInt32();
-            }
+            if (doc.RootElement.TryGetProperty("status", out var statusElement) &&
+                statusElement.ValueKind != JsonValueKind.Null)
+                status = statusElement.GetInt32();
 
             return (
                 true,

@@ -53,43 +53,55 @@
                                    Foreground="#6E6A78"
                                    FontSize="12" />
 
-                        <WrapPanel>
-                            <Button x:Name="RandomMapButton"
-                                    Content="Случайная карта"
-                                    Tag="random"
-                                    Background="#F1F0EC"
-                                    Margin="0,0,8,8" />
+                       <WrapPanel>
+    <Button x:Name="RandomMapButton"
+            Content="Случайная карта"
+            Tag="random"
+            Background="#F1F0EC"
+            Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton1"
-                                    Content="Сухой хвойный + ветер"
-                                    Tag="dry-coniferous"
-                                    Background="#FFE4E1"
-                                    Margin="0,0,8,8" />
+    <Button x:Name="PresetButton7"
+            Content="Смешанный лес"
+            Tag="mixed"
+            Background="#EEF6E6"
+            Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton2"
-                                    Content="Река как барьер"
-                                    Tag="river"
-                                    Background="#E1F0FF"
-                                    Margin="0,0,8,8" />
+    <Button x:Name="PresetButton1"
+            Content="Сухой хвойный + ветер"
+            Tag="dry-coniferous"
+            Background="#FFE4E1"
+            Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton3"
-                                    Content="Влажный лес"
-                                    Tag="wet"
-                                    Background="#E6FFE6"
-                                    Margin="0,0,8,8" />
+    <Button x:Name="PresetButton2"
+            Content="Река как барьер"
+            Tag="river"
+            Background="#E1F0FF"
+            Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton4"
-                                    Content="Просека"
-                                    Tag="firebreak"
-                                    Background="#FFF4E1"
-                                    Margin="0,0,8,8" />
+    <Button x:Name="PresetButton6"
+            Content="Озеро и берег"
+            Tag="lake"
+            Background="#E8F4FF"
+            Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton5"
-                                    Content="Холмы"
-                                    Tag="hills"
-                                    Background="#F0E6FF"
-                                    Margin="0,0,8,8" />
-                        </WrapPanel>
+    <Button x:Name="PresetButton3"
+            Content="Влажный лес"
+            Tag="wet"
+            Background="#E6FFE6"
+            Margin="0,0,8,8" />
+
+    <Button x:Name="PresetButton4"
+            Content="Просека"
+            Tag="firebreak"
+            Background="#FFF4E1"
+            Margin="0,0,8,8" />
+
+    <Button x:Name="PresetButton5"
+            Content="Холмы"
+            Tag="hills"
+            Background="#F0E6FF"
+            Margin="0,0,8,8" />
+</WrapPanel>
                     </StackPanel>
                 </Border>
 

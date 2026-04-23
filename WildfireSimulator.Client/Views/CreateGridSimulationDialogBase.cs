@@ -97,6 +97,9 @@ public partial class CreateGridSimulationDialogBase : Window
     private Button? _randomMapButton;
     private Button? _cancelButton;
     private Button? _createButton;
+    private Button? _presetButton6;
+    private Button? _presetButton7;
+
 
     protected void InitializeComponent()
     {
@@ -172,6 +175,8 @@ public partial class CreateGridSimulationDialogBase : Window
         _presetButton3 = this.FindControl<Button>("PresetButton3");
         _presetButton4 = this.FindControl<Button>("PresetButton4");
         _presetButton5 = this.FindControl<Button>("PresetButton5");
+        _presetButton6 = this.FindControl<Button>("PresetButton6");
+        _presetButton7 = this.FindControl<Button>("PresetButton7");
         _randomMapButton = this.FindControl<Button>("RandomMapButton");
         _cancelButton = this.FindControl<Button>("CancelButton");
         _createButton = this.FindControl<Button>("CreateButton");
@@ -183,7 +188,6 @@ public partial class CreateGridSimulationDialogBase : Window
         SelectedMapCreationMode = MapCreationMode.Random;
         SelectedScenarioType = null;
     }
-
     private void AttachEvents()
     {
         if (_presetButton1 != null) _presetButton1.Click += OnPresetClicked;
@@ -191,6 +195,8 @@ public partial class CreateGridSimulationDialogBase : Window
         if (_presetButton3 != null) _presetButton3.Click += OnPresetClicked;
         if (_presetButton4 != null) _presetButton4.Click += OnPresetClicked;
         if (_presetButton5 != null) _presetButton5.Click += OnPresetClicked;
+        if (_presetButton6 != null) _presetButton6.Click += OnPresetClicked;
+        if (_presetButton7 != null) _presetButton7.Click += OnPresetClicked;
         if (_randomMapButton != null) _randomMapButton.Click += OnPresetClicked;
 
         if (_openMapEditorButton != null)
@@ -291,64 +297,88 @@ public partial class CreateGridSimulationDialogBase : Window
 
         switch (preset)
         {
+            case "mixed":
+                SelectedDemoPreset = "mixed";
+                if (_nameBox != null) _nameBox.Text = "Смешанный лес";
+                if (_tempBox != null) _tempBox.Text = "24";
+                if (_humidityBox != null) _humidityBox.Text = "45";
+                if (_windSpeedBox != null) _windSpeedBox.Text = "4";
+                if (_precipitationBox != null) _precipitationBox.Text = "0";
+                if (_moistureMinBox != null) _moistureMinBox.Text = "0.28";
+                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.55";
+                if (_elevationBox != null) _elevationBox.Text = "55";
+                break;
+
             case "dry-coniferous":
                 SelectedDemoPreset = "dry-coniferous";
                 if (_nameBox != null) _nameBox.Text = "Сухой хвойный + ветер";
+                if (_tempBox != null) _tempBox.Text = "30";
+                if (_humidityBox != null) _humidityBox.Text = "24";
                 if (_windSpeedBox != null) _windSpeedBox.Text = "8";
-                if (_tempBox != null) _tempBox.Text = "31";
-                if (_humidityBox != null) _humidityBox.Text = "22";
                 if (_precipitationBox != null) _precipitationBox.Text = "0";
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.08";
+                if (_moistureMinBox != null) _moistureMinBox.Text = "0.10";
                 if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.22";
-                if (_elevationBox != null) _elevationBox.Text = "50";
+                if (_elevationBox != null) _elevationBox.Text = "70";
                 break;
 
             case "river":
                 SelectedDemoPreset = "river";
                 if (_nameBox != null) _nameBox.Text = "Река как барьер";
-                if (_tempBox != null) _tempBox.Text = "25";
-                if (_humidityBox != null) _humidityBox.Text = "45";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "5";
+                if (_tempBox != null) _tempBox.Text = "24";
+                if (_humidityBox != null) _humidityBox.Text = "48";
+                if (_windSpeedBox != null) _windSpeedBox.Text = "4";
                 if (_precipitationBox != null) _precipitationBox.Text = "0";
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.30";
-                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.60";
-                if (_elevationBox != null) _elevationBox.Text = "45";
+                if (_moistureMinBox != null) _moistureMinBox.Text = "0.32";
+                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.58";
+                if (_elevationBox != null) _elevationBox.Text = "35";
+                break;
+
+            case "lake":
+                SelectedDemoPreset = "lake";
+                if (_nameBox != null) _nameBox.Text = "Озеро и берег";
+                if (_tempBox != null) _tempBox.Text = "23";
+                if (_humidityBox != null) _humidityBox.Text = "52";
+                if (_windSpeedBox != null) _windSpeedBox.Text = "3";
+                if (_precipitationBox != null) _precipitationBox.Text = "0";
+                if (_moistureMinBox != null) _moistureMinBox.Text = "0.38";
+                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.68";
+                if (_elevationBox != null) _elevationBox.Text = "30";
                 break;
 
             case "wet":
                 SelectedDemoPreset = "wet";
                 if (_nameBox != null) _nameBox.Text = "Влажный лес";
-                if (_tempBox != null) _tempBox.Text = "19";
-                if (_humidityBox != null) _humidityBox.Text = "75";
-                if (_windSpeedBox != null) _windSpeedBox.Text = "3";
-                if (_precipitationBox != null) _precipitationBox.Text = "2.5";
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.70";
-                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.92";
-                if (_elevationBox != null) _elevationBox.Text = "35";
+                if (_tempBox != null) _tempBox.Text = "17";
+                if (_humidityBox != null) _humidityBox.Text = "82";
+                if (_windSpeedBox != null) _windSpeedBox.Text = "2.5";
+                if (_precipitationBox != null) _precipitationBox.Text = "2.0";
+                if (_moistureMinBox != null) _moistureMinBox.Text = "0.72";
+                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.95";
+                if (_elevationBox != null) _elevationBox.Text = "30";
                 break;
 
             case "firebreak":
                 SelectedDemoPreset = "firebreak";
                 if (_nameBox != null) _nameBox.Text = "Просека";
-                if (_tempBox != null) _tempBox.Text = "27";
-                if (_humidityBox != null) _humidityBox.Text = "35";
+                if (_tempBox != null) _tempBox.Text = "28";
+                if (_humidityBox != null) _humidityBox.Text = "33";
                 if (_windSpeedBox != null) _windSpeedBox.Text = "6";
                 if (_precipitationBox != null) _precipitationBox.Text = "0";
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.18";
-                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.35";
-                if (_elevationBox != null) _elevationBox.Text = "40";
+                if (_moistureMinBox != null) _moistureMinBox.Text = "0.16";
+                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.30";
+                if (_elevationBox != null) _elevationBox.Text = "25";
                 break;
 
             case "hills":
                 SelectedDemoPreset = "hills";
                 if (_nameBox != null) _nameBox.Text = "Холмы";
-                if (_tempBox != null) _tempBox.Text = "24";
-                if (_humidityBox != null) _humidityBox.Text = "40";
+                if (_tempBox != null) _tempBox.Text = "23";
+                if (_humidityBox != null) _humidityBox.Text = "42";
                 if (_windSpeedBox != null) _windSpeedBox.Text = "5";
                 if (_precipitationBox != null) _precipitationBox.Text = "0";
                 if (_moistureMinBox != null) _moistureMinBox.Text = "0.20";
                 if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.40";
-                if (_elevationBox != null) _elevationBox.Text = "120";
+                if (_elevationBox != null) _elevationBox.Text = "170";
                 break;
 
             case "random":
@@ -411,20 +441,26 @@ public partial class CreateGridSimulationDialogBase : Window
         {
             _scenarioDescriptionTextBlock.Text = SelectedDemoPreset switch
             {
+                "mixed" =>
+                    "Базовый реалистичный смешанный лес без выраженного искусственного барьера. Подходит как нейтральное демо для сравнения с остальными сценариями.",
+
                 "dry-coniferous" =>
-                    "Сухой хвойный массив с повышенной температурой, низкой влажностью и сильным ветром. Подходит для изучения быстрого распространения огня.",
+                    "Сухой хвойный массив с жаркой и ветреной погодой. Подходит для демонстрации быстрого распространения пожара в высокогорючей среде.",
 
                 "river" =>
-                    "Карта с рекой как естественным барьером распространения. Подходит для анализа того, как водные преграды разрывают фронт пожара.",
+                    "Лесной массив с узкой извилистой рекой и влажной прибрежной зоной. Подходит для анализа естественного водного барьера и разрыва фронта пожара.",
+
+                "lake" =>
+                    "Лесная карта с озером и более влажной береговой полосой. Подходит для демонстрации локального естественного барьера и берегового микроклимата.",
 
                 "wet" =>
-                    "Влажный лес после осадков. Подходит для исследования замедления распространения пожара при высокой влажности.",
+                    "Влажный лес после осадков с высокой влажностью топлива и слабым ветром. Подходит для исследования замедленного распространения пожара.",
 
                 "firebreak" =>
-                    "Карта с просекой или полосой слабогорючей поверхности. Подходит для анализа искусственных барьеров.",
+                    "Карта с просекой: узкая минеральная полоса и более слабогорючие полосы по краям. Подходит для анализа искусственного противопожарного барьера.",
 
                 "hills" =>
-                    "Холмистая территория с выраженным перепадом высот. Подходит для анализа влияния рельефа.",
+                    "Холмистая территория с несколькими возвышенностями и ложбинами. Подходит для анализа влияния рельефа на распространение огня.",
 
                 _ =>
                     "Случайная карта. Можно сразу создать симуляцию или открыть редактор и подготовить итоговую карту вручную."
@@ -611,8 +647,10 @@ public partial class CreateGridSimulationDialogBase : Window
 
         return preset.Trim().ToLowerInvariant() switch
         {
+            "mixed" => MapScenarioType.MixedForest,
             "dry-coniferous" => MapScenarioType.DryConiferousMassif,
             "river" => MapScenarioType.ForestWithRiver,
+            "lake" => MapScenarioType.ForestWithLake,
             "wet" => MapScenarioType.WetForestAfterRain,
             "firebreak" => MapScenarioType.ForestWithFirebreak,
             "hills" => MapScenarioType.HillyTerrain,
@@ -677,6 +715,8 @@ public partial class CreateGridSimulationDialogBase : Window
         UpdatePresetButtonStyle(_presetButton3, SelectedDemoPreset == "wet");
         UpdatePresetButtonStyle(_presetButton4, SelectedDemoPreset == "firebreak");
         UpdatePresetButtonStyle(_presetButton5, SelectedDemoPreset == "hills");
+        UpdatePresetButtonStyle(_presetButton6, SelectedDemoPreset == "lake");
+        UpdatePresetButtonStyle(_presetButton7, SelectedDemoPreset == "mixed");
 
         if (_presetHintTextBlock != null)
         {
@@ -711,8 +751,10 @@ public partial class CreateGridSimulationDialogBase : Window
     {
         return preset switch
         {
+            "mixed" => "Смешанный лес",
             "dry-coniferous" => "Сухой хвойный + ветер",
             "river" => "Река как барьер",
+            "lake" => "Озеро и берег",
             "wet" => "Влажный лес",
             "firebreak" => "Просека",
             "hills" => "Холмы",

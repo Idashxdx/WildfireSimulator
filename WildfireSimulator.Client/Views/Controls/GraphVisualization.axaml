@@ -6,13 +6,43 @@
             BorderThickness="1"
             CornerRadius="12"
             Padding="8">
-        <ScrollViewer x:Name="ScrollHost"
-                      HorizontalScrollBarVisibility="Auto"
-                      VerticalScrollBarVisibility="Auto"
-                      Background="Transparent">
-            <Canvas x:Name="GraphCanvas"
-                    Background="#FBF9F4"
-                    ClipToBounds="True"/>
-        </ScrollViewer>
+        <Grid RowDefinitions="Auto,*">
+            <Border Grid.Row="0"
+                    Background="#F5F1FA"
+                    BorderBrush="#E4DAF0"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="10,8"
+                    Margin="0,0,0,8">
+                <Grid ColumnDefinitions="*,Auto"
+                      ColumnSpacing="12">
+                    <TextBlock Text="Дополнительный слой карты"
+                               VerticalAlignment="Center"
+                               Foreground="#554E63"
+                               FontWeight="SemiBold" />
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="Показать высоту"
+                                   VerticalAlignment="Center"
+                                   Foreground="#6E6A78" />
+                        <ToggleSwitch x:Name="ElevationToggle"
+                                      VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <ScrollViewer Grid.Row="1"
+                          x:Name="ScrollHost"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto"
+                          Background="Transparent">
+                <Canvas x:Name="GraphCanvas"
+                        Background="#FBF9F4"
+                        ClipToBounds="True"/>
+            </ScrollViewer>
+        </Grid>
     </Border>
 </UserControl>

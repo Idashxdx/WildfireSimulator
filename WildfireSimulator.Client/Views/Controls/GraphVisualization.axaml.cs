@@ -16,6 +16,7 @@ public partial class GraphVisualization : UserControl
 {
     private Canvas? _graphCanvas;
     private ScrollViewer? _scrollHost;
+    private ToggleSwitch? _elevationToggle;
     private INotifyCollectionChanged? _currentCollection;
     private bool _drawScheduled;
     private Dictionary<(int X, int Y), GraphCellDto> _cellLookup = new();
@@ -34,6 +35,9 @@ public partial class GraphVisualization : UserControl
 
     public static readonly StyledProperty<bool> IsIgnitionSelectionEnabledProperty =
         AvaloniaProperty.Register<GraphVisualization, bool>(nameof(IsIgnitionSelectionEnabled), false);
+
+    public static readonly StyledProperty<bool> ShowElevationLabelsProperty =
+        AvaloniaProperty.Register<GraphVisualization, bool>(nameof(ShowElevationLabels), false);
 
     public IEnumerable<GraphCellDto>? Cells
     {
@@ -59,6 +63,12 @@ public partial class GraphVisualization : UserControl
         set => SetValue(IsIgnitionSelectionEnabledProperty, value);
     }
 
+    public bool ShowElevationLabels
+    {
+        get => GetValue(ShowElevationLabelsProperty);
+        set => SetValue(ShowElevationLabelsProperty, value);
+    }
+
     public event EventHandler<GraphCellDto>? CellClicked;
 
     public GraphVisualization()
@@ -67,12 +77,28 @@ public partial class GraphVisualization : UserControl
 
         _graphCanvas = this.FindControl<Canvas>("GraphCanvas");
         _scrollHost = this.FindControl<ScrollViewer>("ScrollHost");
+        _elevationToggle = this.FindControl<ToggleSwitch>("ElevationToggle");
 
         this.PropertyChanged += OnGraphPropertyChanged;
         this.AttachedToVisualTree += (_, _) => ScheduleDraw();
 
         if (_scrollHost != null)
             _scrollHost.SizeChanged += (_, _) => ScheduleDraw();
+
+        if (_elevationToggle != null)
+        {
+            _elevationToggle.IsChecked = ShowElevationLabels;
+            _elevationToggle.Checked += (_, _) =>
+            {
+                ShowElevationLabels = true;
+                ScheduleDraw();
+            };
+            _elevationToggle.Unchecked += (_, _) =>
+            {
+                ShowElevationLabels = false;
+                ScheduleDraw();
+            };
+        }
     }
 
     private void InitializeComponent()
@@ -91,8 +117,16 @@ public partial class GraphVisualization : UserControl
 
         if (e.Property == GridWidthProperty ||
             e.Property == GridHeightProperty ||
-            e.Property == IsIgnitionSelectionEnabledProperty)
+            e.Property == IsIgnitionSelectionEnabledProperty ||
+            e.Property == ShowElevationLabelsProperty)
         {
+            if (e.Property == ShowElevationLabelsProperty && _elevationToggle != null)
+            {
+                bool newValue = e.NewValue is bool b && b;
+                if (_elevationToggle.IsChecked != newValue)
+                    _elevationToggle.IsChecked = newValue;
+            }
+
             ScheduleDraw();
         }
     }
@@ -177,6 +211,9 @@ public partial class GraphVisualization : UserControl
 
         foreach (var cell in cells.OrderBy(c => c.Y).ThenBy(c => c.X))
             DrawCell(cell, originX, originY, cellSize);
+
+        if (ShowElevationLabels)
+            DrawElevationLabelsForWholeMap(originX, originY, cellSize);
     }
 
     private void DrawCell(GraphCellDto cell, double originX, double originY, int cellSize)
@@ -231,9 +268,158 @@ public partial class GraphVisualization : UserControl
         }
     }
 
-    private void DrawWaterCell(GraphCellDto cell, double originX, double originY, int cellSize)
+    private void DrawElevationLabelsForWholeMap(double originX, double originY, int cellSize)
     {
-        DrawCell(cell, originX, originY, cellSize);
+        if (_graphCanvas == null || _cellLookup.Count == 0)
+            return;
+
+        if (!TryGetElevationRange(out var minElevation, out var maxElevation))
+            return;
+
+        double span = maxElevation - minElevation;
+        if (span < 1.0)
+            return;
+
+        bool compactMode = cellSize <= 14;
+        bool ultraCompactMode = cellSize <= 11;
+
+        foreach (var cell in _cellLookup.Values.OrderBy(c => c.Y).ThenBy(c => c.X))
+        {
+            if (cell.IsBurning || cell.IsBurned)
+                continue;
+
+            DrawElevationLabel(
+                cell,
+                originX,
+                originY,
+                cellSize,
+                minElevation,
+                maxElevation,
+                compactMode,
+                ultraCompactMode);
+        }
+    }
+
+    private void DrawElevationLabel(
+        GraphCellDto cell,
+        double originX,
+        double originY,
+        int cellSize,
+        double minElevation,
+        double maxElevation,
+        bool compactMode,
+        bool ultraCompactMode)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        double normalized = NormalizeElevation(cell.Elevation, minElevation, maxElevation);
+
+        string textValue = ultraCompactMode
+            ? Math.Round(cell.Elevation).ToString("0")
+            : Math.Round(cell.Elevation).ToString("0");
+
+        var textBlock = new TextBlock
+        {
+            Text = textValue,
+            FontSize = ultraCompactMode ? 7 : compactMode ? 8 : 9,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(GetElevationTextColor(normalized)),
+            IsHitTestVisible = false
+        };
+
+        textBlock.Measure(Size.Infinity);
+
+        double x = originX + cell.X * cellSize;
+        double y = originY + cell.Y * cellSize;
+
+        double boxWidth = Math.Max(textBlock.DesiredSize.Width + 4, ultraCompactMode ? 12 : 16);
+        double boxHeight = Math.Max(textBlock.DesiredSize.Height + 2, ultraCompactMode ? 9 : 11);
+
+        var background = new Border
+        {
+            Background = new SolidColorBrush(GetElevationBoxBackground(normalized)),
+            BorderBrush = new SolidColorBrush(GetElevationBoxBorder(normalized)),
+            BorderThickness = new Thickness(0.7),
+            CornerRadius = new CornerRadius(2),
+            Width = boxWidth,
+            Height = boxHeight,
+            IsHitTestVisible = false,
+            Child = new Grid
+            {
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = textValue,
+                        FontSize = ultraCompactMode ? 7 : compactMode ? 8 : 9,
+                        FontWeight = FontWeight.SemiBold,
+                        Foreground = new SolidColorBrush(GetElevationTextColor(normalized)),
+                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                        IsHitTestVisible = false
+                    }
+                }
+            }
+        };
+
+        double left = x + (cellSize - boxWidth) / 2.0;
+        double top = y + (cellSize - boxHeight) / 2.0;
+
+        Canvas.SetLeft(background, left);
+        Canvas.SetTop(background, top);
+        _graphCanvas.Children.Add(background);
+    }
+
+    private double NormalizeElevation(double elevation, double minElevation, double maxElevation)
+    {
+        double span = Math.Max(1.0, maxElevation - minElevation);
+        return Math.Clamp((elevation - minElevation) / span, 0.0, 1.0);
+    }
+
+    private Color GetElevationBoxBackground(double normalizedElevation)
+    {
+        if (normalizedElevation >= 0.80)
+            return Color.FromArgb(210, 255, 244, 225);
+
+        if (normalizedElevation >= 0.60)
+            return Color.FromArgb(210, 250, 240, 220);
+
+        if (normalizedElevation >= 0.40)
+            return Color.FromArgb(210, 243, 245, 239);
+
+        if (normalizedElevation >= 0.20)
+            return Color.FromArgb(210, 231, 240, 246);
+
+        return Color.FromArgb(210, 224, 236, 247);
+    }
+
+    private Color GetElevationBoxBorder(double normalizedElevation)
+    {
+        if (normalizedElevation >= 0.80)
+            return Color.Parse("#C9A36F");
+
+        if (normalizedElevation >= 0.60)
+            return Color.Parse("#BCAA76");
+
+        if (normalizedElevation >= 0.40)
+            return Color.Parse("#B2B0A8");
+
+        if (normalizedElevation >= 0.20)
+            return Color.Parse("#95AABD");
+
+        return Color.Parse("#7F98B1");
+    }
+
+    private Color GetElevationTextColor(double normalizedElevation)
+    {
+        if (normalizedElevation >= 0.75)
+            return Color.Parse("#6C4922");
+
+        if (normalizedElevation <= 0.25)
+            return Color.Parse("#3F5C79");
+
+        return Color.Parse("#4E4A45");
     }
 
     private Color GetCellColor(GraphCellDto cell)
@@ -343,41 +529,21 @@ public partial class GraphVisualization : UserControl
         _graphCanvas.Children.Add(background);
     }
 
-
-
-    private bool IsWaterCell(GraphCellDto cell)
+    private bool TryGetElevationRange(out double minElevation, out double maxElevation)
     {
-        return string.Equals(cell.Vegetation?.Trim(), "Water", StringComparison.OrdinalIgnoreCase);
-    }
+        minElevation = 0.0;
+        maxElevation = 0.0;
 
-    private bool HasDirectNeighborOfType(int x, int y, string vegetation)
-    {
-        return TryGetCell(x - 1, y, out var left) && string.Equals(left.Vegetation, vegetation, StringComparison.OrdinalIgnoreCase)
-            || TryGetCell(x + 1, y, out var right) && string.Equals(right.Vegetation, vegetation, StringComparison.OrdinalIgnoreCase)
-            || TryGetCell(x, y - 1, out var top) && string.Equals(top.Vegetation, vegetation, StringComparison.OrdinalIgnoreCase)
-            || TryGetCell(x, y + 1, out var bottom) && string.Equals(bottom.Vegetation, vegetation, StringComparison.OrdinalIgnoreCase);
-    }
+        if (_cellLookup.Count == 0)
+            return false;
 
-    private bool HasDirectNeighborNotOfType(int x, int y, string vegetation)
-    {
-        var neighbors = new (int X, int Y)[]
-        {
-            (x - 1, y),
-            (x + 1, y),
-            (x, y - 1),
-            (x, y + 1)
-        };
+        var values = _cellLookup.Values.Select(c => c.Elevation).ToList();
+        if (values.Count == 0)
+            return false;
 
-        foreach (var (nx, ny) in neighbors)
-        {
-            if (!TryGetCell(nx, ny, out var neighbor))
-                return true;
-
-            if (!string.Equals(neighbor.Vegetation?.Trim(), vegetation, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-
-        return false;
+        minElevation = values.Min();
+        maxElevation = values.Max();
+        return true;
     }
 
     private bool TryGetCell(int x, int y, out GraphCellDto cell)
@@ -444,8 +610,6 @@ public partial class GraphVisualization : UserControl
         Canvas.SetTop(glow, y + 1);
         _graphCanvas.Children.Add(glow);
     }
-
-
 
     private string GetCellTooltip(GraphCellDto cell)
     {
