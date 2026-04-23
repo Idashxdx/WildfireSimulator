@@ -409,8 +409,7 @@ public enum MapObjectType
 
 public enum MapObjectShape
 {
-    Rectangle = 0,
-    Ellipse = 1
+    Rectangle = 0
 }
 
 public class MapRegionObject

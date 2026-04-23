@@ -76,6 +76,7 @@ public class ApiService
             {
                 name = dto.Name,
                 description = dto.Description,
+
                 gridWidth = dto.GridWidth,
                 gridHeight = dto.GridHeight,
                 graphType = dto.GraphType,
@@ -88,10 +89,10 @@ public class ApiService
                 simulationSteps = dto.SimulationSteps,
                 stepDurationSeconds = dto.StepDurationSeconds,
                 randomSeed = dto.RandomSeed,
+
                 vegetationDistributions = dto.VegetationDistributions,
 
                 mapCreationMode = dto.MapCreationMode,
-
                 scenarioType = dto.ScenarioType,
                 clusteredScenarioType = dto.ClusteredScenarioType,
 
@@ -102,8 +103,10 @@ public class ApiService
 
                 mapRegionObjects = dto.MapRegionObjects,
                 clusteredBlueprint = dto.ClusteredBlueprint,
-
                 initialFirePositions = dto.InitialFirePositions,
+
+                selectedDemoPreset = dto.SelectedDemoPreset,
+                preparedMap = dto.PreparedMap,
 
                 temperature = temperature,
                 humidity = humidity,
@@ -226,14 +229,15 @@ public class ApiService
         }
     }
 
-    public async Task<(bool Success, string Message, List<GraphCellDto>? Cells, StepResultDto? StepResult, bool IsRunning, int Status)> ExecuteStepAsync(Guid simulationId)
+    public async Task<(bool Success, string Message, List<GraphCellDto>? Cells, StepResultDto? StepResult, bool IsRunning, int Status)> ExecuteStepAsync(
+        Guid simulationId)
     {
         try
         {
             var response = await _httpClient.PostAsync($"{_baseUrl}/api/SimulationManager/{simulationId}/step", null);
             var responseText = await response.Content.ReadAsStringAsync();
 
-            Console.WriteLine($"Step response: {responseText}");
+            Console.WriteLine($"ExecuteStep response: {responseText}");
 
             using JsonDocument doc = JsonDocument.Parse(responseText);
 
@@ -241,17 +245,11 @@ public class ApiService
             {
                 return (
                     false,
-                    ReadMessage(doc, "Ошибка шага"),
+                    ReadMessage(doc, "Ошибка выполнения шага"),
                     null,
                     null,
                     false,
                     -1);
-            }
-
-            List<GraphCellDto>? cells = null;
-            if (doc.RootElement.TryGetProperty("cells", out var cellsElement))
-            {
-                cells = JsonSerializer.Deserialize<List<GraphCellDto>>(cellsElement.GetRawText(), _jsonOptions);
             }
 
             StepResultDto? stepResult = null;
@@ -260,16 +258,22 @@ public class ApiService
                 stepResult = JsonSerializer.Deserialize<StepResultDto>(stepElement.GetRawText(), _jsonOptions);
             }
 
-            bool isRunning = false;
-            if (doc.RootElement.TryGetProperty("isRunning", out var runningElement))
+            List<GraphCellDto>? cells = null;
+            if (doc.RootElement.TryGetProperty("cells", out var cellsElement))
             {
-                isRunning = runningElement.GetBoolean();
+                cells = JsonSerializer.Deserialize<List<GraphCellDto>>(cellsElement.GetRawText(), _jsonOptions);
             }
 
+            bool isRunning = false;
             int status = -1;
-            if (doc.RootElement.TryGetProperty("status", out var statusElement))
+
+            if (doc.RootElement.TryGetProperty("activeSimulation", out var activeSimElement))
             {
-                status = statusElement.GetInt32();
+                if (activeSimElement.TryGetProperty("isRunning", out var runningElement))
+                    isRunning = runningElement.GetBoolean();
+
+                if (activeSimElement.TryGetProperty("status", out var statusElement))
+                    status = statusElement.GetInt32();
             }
 
             return (
@@ -287,92 +291,28 @@ public class ApiService
         }
     }
 
-    public async Task<SimulationStatusDto?> GetSimulationStatusAsync(Guid simulationId)
+    public async Task<List<GraphCellDto>> GetSimulationCellsAsync(Guid simulationId)
     {
         try
         {
-            var response = await _httpClient.GetAsync($"{_baseUrl}/api/SimulationManager/{simulationId}/status");
-
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/SimulationManager/{simulationId}/cells");
             if (!response.IsSuccessStatusCode)
-                return null;
+                return new List<GraphCellDto>();
 
             var json = await response.Content.ReadAsStringAsync();
-            using JsonDocument doc = JsonDocument.Parse(json);
+            using var document = JsonDocument.Parse(json);
 
-            if (!doc.RootElement.TryGetProperty("success", out var successElement) || !successElement.GetBoolean())
-                return null;
+            if (!document.RootElement.TryGetProperty("cells", out var cellsElement))
+                return new List<GraphCellDto>();
 
-            var status = new SimulationStatusDto();
-
-            if (doc.RootElement.TryGetProperty("simulation", out var simElement))
-            {
-                if (simElement.TryGetProperty("id", out var idElement))
-                    status.Id = idElement.GetGuid();
-
-                if (simElement.TryGetProperty("name", out var nameElement))
-                    status.Name = nameElement.GetString() ?? string.Empty;
-
-                if (simElement.TryGetProperty("status", out var statusElement))
-                    status.Status = statusElement.GetInt32();
-
-                if (simElement.TryGetProperty("currentStep", out var stepElement))
-                    status.CurrentStep = stepElement.GetInt32();
-
-                if (simElement.TryGetProperty("isRunning", out var runningElement))
-                    status.IsRunning = runningElement.GetBoolean();
-
-                if (simElement.TryGetProperty("fireArea", out var areaElement))
-                    status.FireArea = areaElement.GetDouble();
-
-                if (simElement.TryGetProperty("totalBurnedCells", out var burnedElement))
-                    status.TotalBurnedCells = burnedElement.GetInt32();
-
-                if (simElement.TryGetProperty("totalBurningCells", out var burningElement))
-                    status.TotalBurningCells = burningElement.GetInt32();
-
-                if (simElement.TryGetProperty("graphType", out var graphTypeElement))
-                    status.GraphType = (GraphType)graphTypeElement.GetInt32();
-
-                if (simElement.TryGetProperty("precipitation", out var precipitationElement))
-                    status.Precipitation = precipitationElement.GetDouble();
-            }
-
-            if (doc.RootElement.TryGetProperty("weather", out var weatherElement) &&
-                weatherElement.ValueKind == JsonValueKind.Object)
-            {
-                if (weatherElement.TryGetProperty("temperature", out var temperatureElement))
-                    status.Temperature = temperatureElement.GetDouble();
-
-                if (weatherElement.TryGetProperty("humidity", out var humidityElement))
-                    status.Humidity = humidityElement.GetDouble();
-
-                if (weatherElement.TryGetProperty("windSpeed", out var windSpeedElement))
-                    status.WindSpeed = windSpeedElement.GetDouble();
-
-                if (weatherElement.TryGetProperty("windDirection", out var windDirectionElement))
-                    status.WindDirection = windDirectionElement.GetString() ?? "—";
-
-                if (weatherElement.TryGetProperty("windDirectionDegrees", out var windDirectionDegreesElement))
-                    status.WindDirectionDegrees = windDirectionDegreesElement.GetDouble();
-
-                if (weatherElement.TryGetProperty("precipitation", out var weatherPrecipitationElement))
-                    status.Precipitation = weatherPrecipitationElement.GetDouble();
-            }
-
-            if (doc.RootElement.TryGetProperty("warning", out var warningElement) &&
-                warningElement.ValueKind != JsonValueKind.Null)
-            {
-                status.Warning = warningElement.GetString();
-            }
-
-            return status;
+            return JsonSerializer.Deserialize<List<GraphCellDto>>(cellsElement.GetRawText(), _jsonOptions)
+                   ?? new List<GraphCellDto>();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error getting status: {ex.Message}");
+            Console.WriteLine($"Error getting simulation cells: {ex.Message}");
+            return new List<GraphCellDto>();
         }
-
-        return null;
     }
 
     public async Task<SimulationGraphDto?> GetSimulationGraphAsync(Guid simulationId)
@@ -384,59 +324,142 @@ public class ApiService
                 return null;
 
             var json = await response.Content.ReadAsStringAsync();
-            var graphResponse = JsonSerializer.Deserialize<SimulationGraphResponseDto>(json, _jsonOptions);
+            using var document = JsonDocument.Parse(json);
 
-            if (graphResponse?.Success == true)
-                return graphResponse.Graph;
+            if (!document.RootElement.TryGetProperty("graph", out var graphElement))
+                return null;
+
+            return JsonSerializer.Deserialize<SimulationGraphDto>(graphElement.GetRawText(), _jsonOptions);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error getting simulation graph: {ex.Message}");
+            return null;
         }
-
-        return null;
     }
 
-    public async Task<bool> DeleteSimulationAsync(Guid simulationId)
+    public async Task<SimulationStatusDto?> GetSimulationStatusAsync(Guid simulationId)
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"{_baseUrl}/api/SimulationManager/{simulationId}");
+            var response = await _httpClient.GetAsync($"{_baseUrl}/api/SimulationManager/{simulationId}/status");
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var document = JsonDocument.Parse(json);
+
+            var root = document.RootElement;
+
+            if (!root.TryGetProperty("simulation", out var simulationElement))
+                return null;
+
+            root.TryGetProperty("weather", out var weatherElement);
+            root.TryGetProperty("warning", out var warningElement);
+            root.TryGetProperty("graph", out var graphElement);
+
+            var result = new SimulationStatusDto
+            {
+                Id = simulationElement.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.String
+                    ? idEl.GetGuid()
+                    : Guid.Empty,
+
+                Name = simulationElement.TryGetProperty("name", out var nameEl)
+                    ? nameEl.GetString() ?? string.Empty
+                    : string.Empty,
+
+                Status = simulationElement.TryGetProperty("status", out var statusEl) && statusEl.ValueKind == JsonValueKind.Number
+                    ? statusEl.GetInt32()
+                    : 0,
+
+                CurrentStep = simulationElement.TryGetProperty("currentStep", out var stepEl) && stepEl.ValueKind == JsonValueKind.Number
+                    ? stepEl.GetInt32()
+                    : 0,
+
+                IsRunning = simulationElement.TryGetProperty("isRunning", out var runningEl) && runningEl.ValueKind == JsonValueKind.True
+                    || (simulationElement.TryGetProperty("isRunning", out runningEl) && runningEl.ValueKind == JsonValueKind.False
+                        ? runningEl.GetBoolean()
+                        : false),
+
+                FireArea = simulationElement.TryGetProperty("fireArea", out var fireAreaEl) && fireAreaEl.ValueKind == JsonValueKind.Number
+                    ? fireAreaEl.GetDouble()
+                    : 0.0,
+
+                TotalBurnedCells = simulationElement.TryGetProperty("totalBurnedCells", out var burnedEl) && burnedEl.ValueKind == JsonValueKind.Number
+                    ? burnedEl.GetInt32()
+                    : 0,
+
+                TotalBurningCells = simulationElement.TryGetProperty("totalBurningCells", out var burningEl) && burningEl.ValueKind == JsonValueKind.Number
+                    ? burningEl.GetInt32()
+                    : 0,
+
+                GraphType = simulationElement.TryGetProperty("graphType", out var graphTypeEl) && graphTypeEl.ValueKind == JsonValueKind.Number
+                    ? (GraphType)graphTypeEl.GetInt32()
+                    : GraphType.Grid,
+
+                Precipitation = simulationElement.TryGetProperty("precipitation", out var precipitationEl) && precipitationEl.ValueKind == JsonValueKind.Number
+                    ? precipitationEl.GetDouble()
+                    : 0.0,
+
+                Temperature = weatherElement.ValueKind == JsonValueKind.Object &&
+                              weatherElement.TryGetProperty("temperature", out var tempEl) &&
+                              tempEl.ValueKind == JsonValueKind.Number
+                    ? tempEl.GetDouble()
+                    : 0.0,
+
+                Humidity = weatherElement.ValueKind == JsonValueKind.Object &&
+                           weatherElement.TryGetProperty("humidity", out var humidityEl) &&
+                           humidityEl.ValueKind == JsonValueKind.Number
+                    ? humidityEl.GetDouble()
+                    : 0.0,
+
+                WindSpeed = weatherElement.ValueKind == JsonValueKind.Object &&
+                            weatherElement.TryGetProperty("windSpeed", out var windSpeedEl) &&
+                            windSpeedEl.ValueKind == JsonValueKind.Number
+                    ? windSpeedEl.GetDouble()
+                    : 0.0,
+
+                WindDirection = weatherElement.ValueKind == JsonValueKind.Object &&
+                                weatherElement.TryGetProperty("windDirection", out var windDirectionEl)
+                    ? windDirectionEl.GetString() ?? "—"
+                    : "—",
+
+                WindDirectionDegrees = weatherElement.ValueKind == JsonValueKind.Object &&
+                                       weatherElement.TryGetProperty("windDirectionDegrees", out var windDirectionDegreesEl) &&
+                                       windDirectionDegreesEl.ValueKind == JsonValueKind.Number
+                    ? windDirectionDegreesEl.GetDouble()
+                    : 0.0,
+
+                Warning = warningElement.ValueKind == JsonValueKind.String
+                    ? warningElement.GetString()
+                    : null
+            };
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting simulation status: {ex.Message}");
+            return null;
+        }
+    }
+
+    public async Task<bool> StopSimulationAsync(Guid simulationId)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync($"{_baseUrl}/api/SimulationManager/{simulationId}/stop", null);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error deleting simulation: {ex.Message}");
+            Console.WriteLine($"Error stopping simulation: {ex.Message}");
             return false;
         }
     }
 
-    public async Task<List<GraphCellDto>> GetSimulationCellsAsync(Guid simulationId)
-    {
-        try
-        {
-            var response = await _httpClient.GetAsync($"{_baseUrl}/api/SimulationManager/{simulationId}/cells");
-            if (!response.IsSuccessStatusCode)
-                return new List<GraphCellDto>();
-
-            var json = await response.Content.ReadAsStringAsync();
-
-            using JsonDocument doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("cells", out var cellsElement))
-            {
-                return JsonSerializer.Deserialize<List<GraphCellDto>>(cellsElement.GetRawText(), _jsonOptions)
-                       ?? new List<GraphCellDto>();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error getting cells: {ex.Message}");
-        }
-
-        return new List<GraphCellDto>();
-    }
-
-    public async Task<(bool Success, string Message, List<GraphCellDto>? Cells, bool IsRunning, double FireArea, int CurrentStep, int Status)> ResetSimulationAsync(Guid simulationId)
+    public async Task<(bool Success, string Message, List<GraphCellDto>? Cells, bool IsRunning, double FireArea, int CurrentStep, int Status)> ResetSimulationAsync(
+        Guid simulationId)
     {
         try
         {
@@ -501,7 +524,8 @@ public class ApiService
         }
     }
 
-    public async Task<(bool Success, string Message, List<GraphCellDto>? Cells, SimulationGraphDto? Graph)> RefreshIgnitionSetupAsync(Guid simulationId)
+    public async Task<(bool Success, string Message, List<GraphCellDto>? Cells, SimulationGraphDto? Graph)> RefreshIgnitionSetupAsync(
+        Guid simulationId)
     {
         try
         {
@@ -543,6 +567,20 @@ public class ApiService
         {
             Console.WriteLine($"Error refreshing ignition setup: {ex.Message}");
             return (false, ex.Message, null, null);
+        }
+    }
+
+    public async Task<bool> DeleteSimulationAsync(Guid simulationId)
+    {
+        try
+        {
+            var response = await _httpClient.DeleteAsync($"{_baseUrl}/api/simulations/{simulationId}");
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting simulation: {ex.Message}");
+            return false;
         }
     }
 

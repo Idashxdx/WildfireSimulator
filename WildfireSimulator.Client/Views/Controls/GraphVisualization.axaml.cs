@@ -175,65 +175,8 @@ public partial class GraphVisualization : UserControl
             return;
         }
 
-        foreach (var cell in cells.Where(c => !IsWaterCell(c)).OrderBy(c => c.Y).ThenBy(c => c.X))
+        foreach (var cell in cells.OrderBy(c => c.Y).ThenBy(c => c.X))
             DrawCell(cell, originX, originY, cellSize);
-
-        foreach (var cell in cells.Where(IsWaterCell).OrderBy(c => c.Y).ThenBy(c => c.X))
-            DrawWaterCell(cell, originX, originY, cellSize);
-    }
-
-    private int GetCellSize(int gridWidth, int gridHeight)
-    {
-        var maxDimension = Math.Max(gridWidth, gridHeight);
-
-        if (maxDimension <= 20) return 26;
-        if (maxDimension <= 30) return 22;
-        if (maxDimension <= 40) return 18;
-        if (maxDimension <= 60) return 14;
-        if (maxDimension <= 80) return 11;
-
-        return MinCellSize;
-    }
-
-    private void DrawEmptyState(double canvasWidth, double canvasHeight)
-    {
-        if (_graphCanvas == null)
-            return;
-
-        var text = new TextBlock
-        {
-            Text = "Выберите симуляцию или создайте новую",
-            Foreground = new SolidColorBrush(Color.Parse("#6E6A78")),
-            FontSize = 18,
-            FontWeight = FontWeight.SemiBold
-        };
-
-        text.Measure(Size.Infinity);
-
-        Canvas.SetLeft(text, Math.Max(20, (canvasWidth - text.DesiredSize.Width) / 2));
-        Canvas.SetTop(text, Math.Max(20, (canvasHeight - text.DesiredSize.Height) / 2));
-
-        _graphCanvas.Children.Add(text);
-    }
-
-    private void DrawGridBackground(double originX, double originY, int contentWidth, int contentHeight)
-    {
-        if (_graphCanvas == null)
-            return;
-
-        var background = new Rectangle
-        {
-            Width = contentWidth,
-            Height = contentHeight,
-            Fill = new SolidColorBrush(Color.Parse("#F5F2EA")),
-            RadiusX = 10,
-            RadiusY = 10,
-            IsHitTestVisible = false
-        };
-
-        Canvas.SetLeft(background, originX);
-        Canvas.SetTop(background, originY);
-        _graphCanvas.Children.Add(background);
     }
 
     private void DrawCell(GraphCellDto cell, double originX, double originY, int cellSize)
@@ -290,66 +233,117 @@ public partial class GraphVisualization : UserControl
 
     private void DrawWaterCell(GraphCellDto cell, double originX, double originY, int cellSize)
     {
+        DrawCell(cell, originX, originY, cellSize);
+    }
+
+    private Color GetCellColor(GraphCellDto cell)
+    {
+        if (cell.IsSelectedIgnition)
+            return Color.Parse("#9EC5FE");
+
+        if (cell.IsBurned)
+            return Color.Parse("#777777");
+
+        if (cell.IsBurning)
+            return Color.Parse("#FF7A59");
+
+        return (cell.Vegetation ?? "").Trim() switch
+        {
+            "Coniferous" => Color.Parse("#5E9B5E"),
+            "Deciduous" => Color.Parse("#8ACB88"),
+            "Mixed" => Color.Parse("#A8C97F"),
+            "Grass" => Color.Parse("#E7D36F"),
+            "Shrub" => Color.Parse("#CFA46A"),
+            "Water" => Color.Parse("#7CC6F2"),
+            "Bare" => Color.Parse("#C9B7A7"),
+
+            "Хвойный лес" => Color.Parse("#5E9B5E"),
+            "Лиственный лес" => Color.Parse("#8ACB88"),
+            "Смешанный лес" => Color.Parse("#A8C97F"),
+            "Трава" => Color.Parse("#E7D36F"),
+            "Кустарник" => Color.Parse("#CFA46A"),
+            "Вода" => Color.Parse("#7CC6F2"),
+            "Пустая поверхность" => Color.Parse("#C9B7A7"),
+
+            _ => Color.Parse("#A8C97F")
+        };
+    }
+
+    private Color GetStrokeColor(GraphCellDto cell)
+    {
+        if (cell.IsSelectedIgnition)
+            return Color.Parse("#D6402B");
+
+        if (cell.IsBurned)
+            return Color.Parse("#5F5F5F");
+
+        if (cell.IsBurning)
+            return Color.Parse("#B5473E");
+
+        if (IsIgnitionSelectionEnabled && !cell.IsIgnitable)
+            return Color.Parse("#8E8A94");
+
+        if (IsIgnitionSelectionEnabled && cell.IsIgnitable)
+            return Color.Parse("#F4EFE6");
+
+        return Color.Parse("#FFFFFF");
+    }
+
+    private int GetCellSize(int gridWidth, int gridHeight)
+    {
+        var maxDimension = Math.Max(gridWidth, gridHeight);
+
+        if (maxDimension <= 20) return 26;
+        if (maxDimension <= 30) return 22;
+        if (maxDimension <= 40) return 18;
+        if (maxDimension <= 60) return 14;
+        if (maxDimension <= 80) return 11;
+
+        return MinCellSize;
+    }
+
+    private void DrawEmptyState(double canvasWidth, double canvasHeight)
+    {
         if (_graphCanvas == null)
             return;
 
-        var x = originX + cell.X * cellSize;
-        var y = originY + cell.Y * cellSize;
-
-        bool hasWaterNeighbor = HasDirectNeighborOfType(cell.X, cell.Y, "water");
-        bool touchesLand = HasDirectNeighborNotOfType(cell.X, cell.Y, "water");
-        bool isClickable = IsIgnitionSelectionEnabled && cell.IsIgnitable;
-
-        double glowInset = hasWaterNeighbor ? -1.0 : 1.0;
-        double waterInset = hasWaterNeighbor ? 0.5 : 2.0;
-
-        if (touchesLand)
+        var text = new TextBlock
         {
-            var shoreGlow = new Ellipse
-            {
-                Width = cellSize - glowInset * 2,
-                Height = cellSize - glowInset * 2,
-                Fill = new SolidColorBrush(Color.FromArgb(90, 173, 223, 247)),
-                IsHitTestVisible = false
-            };
-
-            Canvas.SetLeft(shoreGlow, x + glowInset);
-            Canvas.SetTop(shoreGlow, y + glowInset);
-            _graphCanvas.Children.Add(shoreGlow);
-        }
-
-        var waterShape = new Ellipse
-        {
-            Width = cellSize - waterInset * 2,
-            Height = cellSize - waterInset * 2,
-            Fill = new SolidColorBrush(GetCellColor(cell)),
-            Stroke = new SolidColorBrush(Color.Parse("#D8F1FB")),
-            StrokeThickness = hasWaterNeighbor ? 0.8 : 1.3,
-            Cursor = isClickable
-                ? new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
-                : new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Arrow)
+            Text = "Выберите симуляцию или создайте новую",
+            Foreground = new SolidColorBrush(Color.Parse("#6E6A78")),
+            FontSize = 18,
+            FontWeight = FontWeight.SemiBold
         };
 
-        ToolTip.SetTip(waterShape, GetCellTooltip(cell));
+        text.Measure(Size.Infinity);
 
-        if (isClickable)
-        {
-            waterShape.PointerPressed += (_, _) =>
-            {
-                CellClicked?.Invoke(this, cell);
-            };
-        }
+        Canvas.SetLeft(text, Math.Max(20, (canvasWidth - text.DesiredSize.Width) / 2));
+        Canvas.SetTop(text, Math.Max(20, (canvasHeight - text.DesiredSize.Height) / 2));
 
-        Canvas.SetLeft(waterShape, x + waterInset);
-        Canvas.SetTop(waterShape, y + waterInset);
-        _graphCanvas.Children.Add(waterShape);
-
-        if (cell.IsSelectedIgnition)
-        {
-            DrawIgnitionSelectionGlow(x, y, cellSize);
-            DrawIgnitionMarker(x, y, cellSize);
-        }
+        _graphCanvas.Children.Add(text);
     }
+
+    private void DrawGridBackground(double originX, double originY, int contentWidth, int contentHeight)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var background = new Rectangle
+        {
+            Width = contentWidth,
+            Height = contentHeight,
+            Fill = new SolidColorBrush(Color.Parse("#F5F2EA")),
+            RadiusX = 10,
+            RadiusY = 10,
+            IsHitTestVisible = false
+        };
+
+        Canvas.SetLeft(background, originX);
+        Canvas.SetTop(background, originY);
+        _graphCanvas.Children.Add(background);
+    }
+
+
 
     private bool IsWaterCell(GraphCellDto cell)
     {
@@ -451,49 +445,7 @@ public partial class GraphVisualization : UserControl
         _graphCanvas.Children.Add(glow);
     }
 
-    private Color GetCellColor(GraphCellDto cell)
-    {
-        if (cell.IsSelectedIgnition)
-            return Color.Parse("#9EC5FE");
 
-        if (cell.IsBurned)
-            return Color.Parse("#777777");
-
-        if (cell.IsBurning)
-            return Color.Parse("#FF7A59");
-
-        return cell.Vegetation?.ToLower() switch
-        {
-            "coniferous" => Color.Parse("#5E9B5E"),
-            "deciduous" => Color.Parse("#8ACB88"),
-            "mixed" => Color.Parse("#A8C97F"),
-            "grass" => Color.Parse("#E7D36F"),
-            "shrub" => Color.Parse("#CFA46A"),
-            "water" => Color.Parse("#7CC6F2"),
-            "bare" => Color.Parse("#C9B7A7"),
-            _ => Color.Parse("#A8C97F")
-        };
-    }
-
-    private Color GetStrokeColor(GraphCellDto cell)
-    {
-        if (cell.IsSelectedIgnition)
-            return Color.Parse("#D6402B");
-
-        if (cell.IsBurned)
-            return Color.Parse("#5F5F5F");
-
-        if (cell.IsBurning)
-            return Color.Parse("#B5473E");
-
-        if (IsIgnitionSelectionEnabled && !cell.IsIgnitable)
-            return Color.Parse("#8E8A94");
-
-        if (IsIgnitionSelectionEnabled && cell.IsIgnitable)
-            return Color.Parse("#F4EFE6");
-
-        return Color.Parse("#FFFFFF");
-    }
 
     private string GetCellTooltip(GraphCellDto cell)
     {

@@ -29,6 +29,13 @@ public class SimulationCreationResult
 
     public int? RandomSeed { get; set; }
 
+    public string? SelectedDemoPreset { get; set; }
+
+    public PreparedGridMapDto? PreparedMap { get; set; }
+
+    public bool UsePreparedMap => PreparedMap != null;
+
+    // Временно оставляем старые поля, чтобы не ломать остальной клиент (связанный с графом),
     public MapCreationMode SelectedMapCreationMode { get; set; } = MapCreationMode.Random;
     public MapScenarioType? SelectedScenarioType { get; set; }
     public ClusteredScenarioType? SelectedClusteredScenarioType { get; set; }
@@ -40,5 +47,6 @@ public class SimulationCreationResult
 
     public List<MapRegionObjectDto> MapRegionObjects { get; set; } = new();
     public List<(int VegetationType, double Probability)> VegetationDistributions { get; set; } = new();
+
     public ClusteredGraphBlueprintDto? ClusteredBlueprint { get; set; }
 }

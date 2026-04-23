@@ -109,10 +109,18 @@ public class SimulationsController : ControllerBase
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            var effectiveScenarioType = request.GraphType == GraphType.Grid
+                ? ResolveGridScenarioType(request.SelectedDemoPreset, request.ScenarioType)
+                : null;
+
+            var effectiveMapCreationMode = request.GraphType == GraphType.Grid && request.PreparedMap != null
+                ? MapCreationMode.Random
+                : request.MapCreationMode;
+
             var parameters = new SimulationParameters
             {
-                GridWidth = request.GridWidth,
-                GridHeight = request.GridHeight,
+                GridWidth = request.PreparedMap?.Width > 0 ? request.PreparedMap.Width : request.GridWidth,
+                GridHeight = request.PreparedMap?.Height > 0 ? request.PreparedMap.Height : request.GridHeight,
                 GraphType = request.GraphType,
                 GraphScaleType = request.GraphType == GraphType.Grid
                     ? null
@@ -125,12 +133,9 @@ public class SimulationsController : ControllerBase
                 SimulationSteps = request.SimulationSteps,
                 StepDurationSeconds = request.StepDurationSeconds,
                 RandomSeed = request.RandomSeed,
-                MapCreationMode = request.MapCreationMode,
+                MapCreationMode = effectiveMapCreationMode,
 
-                ScenarioType = request.GraphType == GraphType.Grid
-                    ? request.ScenarioType
-                    : null,
-
+                ScenarioType = effectiveScenarioType,
                 ClusteredScenarioType = request.GraphType == GraphType.ClusteredGraph
                     ? request.ClusteredScenarioType
                     : null,
@@ -157,19 +162,19 @@ public class SimulationsController : ControllerBase
                 request.MapRegionObjects.Any())
             {
                 parameters.MapRegionObjects = request.MapRegionObjects
-                    .Select(x => new MapRegionObject
-                    {
-                        Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
-                        ObjectType = x.ObjectType,
-                        Shape = x.Shape,
-                        StartX = x.StartX,
-                        StartY = x.StartY,
-                        Width = x.Width,
-                        Height = x.Height,
-                        Strength = x.Strength,
-                        Priority = x.Priority
-                    })
-                    .ToList();
+     .Select(x => new MapRegionObject
+     {
+         Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
+         ObjectType = x.ObjectType,
+         Shape = MapObjectShape.Rectangle,
+         StartX = x.StartX,
+         StartY = x.StartY,
+         Width = x.Width,
+         Height = x.Height,
+         Strength = x.Strength,
+         Priority = x.Priority
+     })
+     .ToList();
             }
 
             if (request.GraphType == GraphType.ClusteredGraph &&
@@ -213,7 +218,10 @@ public class SimulationsController : ControllerBase
                 };
             }
 
-            var simulation = new Simulation(request.Name, request.Description, parameters);
+            var simulation = new Simulation(
+                request.Name,
+                request.Description,
+                parameters);
 
             if (request.InitialFirePositions != null && request.InitialFirePositions.Any())
             {
@@ -230,16 +238,21 @@ public class SimulationsController : ControllerBase
                 request.Humidity,
                 request.WindSpeed,
                 request.WindDirection,
-                request.Precipitation
-            );
+                request.Precipitation);
 
             await _context.WeatherConditions.AddAsync(weather, cancellationToken);
             simulation.SetWeatherCondition(weather);
 
+            if (request.GraphType == GraphType.Grid && request.PreparedMap != null)
+            {
+                var preparedGraph = BuildGridGraphFromPreparedMap(request.PreparedMap, parameters);
+                simulation.SaveGraph(preparedGraph);
+            }
+
             await _simulationRepository.AddAsync(simulation, cancellationToken);
 
             _logger.LogInformation(
-                "Создана симуляция {Id}. GraphType={GraphType}, GraphScaleType={GraphScaleType}, Mode={Mode}, GridScenario={GridScenario}, GraphScenario={GraphScenario}, GridObjects={ObjectsCount}, GraphNodes={GraphNodesCount}",
+                "Создана симуляция {Id}. GraphType={GraphType}, GraphScaleType={GraphScaleType}, Mode={Mode}, GridScenario={GridScenario}, GraphScenario={GraphScenario}, GridObjects={ObjectsCount}, GraphNodes={GraphNodesCount}, HasPreparedMap={HasPreparedMap}",
                 simulation.Id,
                 simulation.Parameters.GraphType,
                 simulation.Parameters.GraphScaleType,
@@ -247,7 +260,8 @@ public class SimulationsController : ControllerBase
                 simulation.Parameters.ScenarioType,
                 simulation.Parameters.ClusteredScenarioType,
                 simulation.Parameters.MapRegionObjects.Count,
-                simulation.Parameters.ClusteredBlueprint?.Nodes.Count ?? 0);
+                simulation.Parameters.ClusteredBlueprint?.Nodes.Count ?? 0,
+                request.PreparedMap != null);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -257,8 +271,217 @@ public class SimulationsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Ошибка при создании симуляции");
-            return StatusCode(500, "Внутренняя ошибка сервера");
+            return StatusCode(500, new
+            {
+                success = false,
+                message = "Внутренняя ошибка сервера",
+                error = ex.Message
+            });
         }
+    }
+    private static MapScenarioType? ResolveGridScenarioType(string? selectedDemoPreset, MapScenarioType? fallback)
+    {
+        if (string.IsNullOrWhiteSpace(selectedDemoPreset))
+            return fallback;
+
+        return selectedDemoPreset.Trim().ToLowerInvariant() switch
+        {
+            "dry-coniferous" => MapScenarioType.DryConiferousMassif,
+            "river" => MapScenarioType.ForestWithRiver,
+            "lake" => MapScenarioType.ForestWithLake,
+            "firebreak" => MapScenarioType.ForestWithFirebreak,
+            "hills" => MapScenarioType.HillyTerrain,
+            "wet" => MapScenarioType.WetForestAfterRain,
+            "mixed" => MapScenarioType.MixedForest,
+
+            "dryconiferousmassif" => MapScenarioType.DryConiferousMassif,
+            "forestwithriver" => MapScenarioType.ForestWithRiver,
+            "forestwithlake" => MapScenarioType.ForestWithLake,
+            "forestwithfirebreak" => MapScenarioType.ForestWithFirebreak,
+            "hillyterrain" => MapScenarioType.HillyTerrain,
+            "wetforestafterrain" => MapScenarioType.WetForestAfterRain,
+            "mixedforest" => MapScenarioType.MixedForest,
+
+            _ => fallback
+        };
+    }
+    private ForestGraph BuildGridGraphFromPreparedMap(
+        PreparedGridMapRequest preparedMap,
+        SimulationParameters parameters)
+    {
+        var width = Math.Max(1, preparedMap.Width);
+        var height = Math.Max(1, preparedMap.Height);
+
+        var graph = new ForestGraph
+        {
+            Width = width,
+            Height = height,
+            StepDurationSeconds = parameters.StepDurationSeconds > 0
+                ? parameters.StepDurationSeconds
+                : 60
+        };
+
+        var groupedCells = (preparedMap.Cells ?? new List<PreparedGridCellRequest>())
+            .Where(c => c != null)
+            .GroupBy(c => (c.X, c.Y))
+            .Select(g => g.Last())
+            .Where(c => c.X >= 0 && c.Y >= 0 && c.X < width && c.Y < height)
+            .ToDictionary(c => (c.X, c.Y), c => c);
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (!groupedCells.TryGetValue((x, y), out var preparedCell))
+                {
+                    preparedCell = new PreparedGridCellRequest
+                    {
+                        X = x,
+                        Y = y,
+                        Vegetation = VegetationType.Mixed.ToString(),
+                        Moisture = Math.Clamp(
+                            (parameters.InitialMoistureMin + parameters.InitialMoistureMax) / 2.0,
+                            0.0,
+                            1.0),
+                        Elevation = 0.0
+                    };
+                }
+
+                var vegetation = ParsePreparedVegetation(preparedCell.Vegetation);
+                var moisture = Math.Clamp(preparedCell.Moisture, 0.0, 1.0);
+                var elevation = preparedCell.Elevation;
+
+                var cell = new ForestCell(
+                    x,
+                    y,
+                    vegetation,
+                    moisture,
+                    elevation);
+
+                graph.Cells.Add(cell);
+            }
+        }
+
+        CreatePreparedGridEdges(graph, width, height);
+        ApplyPreparedSurfaceBarrierEdgeModifiers(graph);
+
+        return graph;
+    }
+    private static VegetationType ParsePreparedVegetation(string? vegetation)
+    {
+        if (string.IsNullOrWhiteSpace(vegetation))
+            return VegetationType.Mixed;
+
+        return vegetation.Trim().ToLowerInvariant() switch
+        {
+            "grass" => VegetationType.Grass,
+            "shrub" => VegetationType.Shrub,
+            "deciduous" => VegetationType.Deciduous,
+            "coniferous" => VegetationType.Coniferous,
+            "mixed" => VegetationType.Mixed,
+            "water" => VegetationType.Water,
+            "bare" => VegetationType.Bare,
+
+            "трава" => VegetationType.Grass,
+            "кустарник" => VegetationType.Shrub,
+            "лиственный" => VegetationType.Deciduous,
+            "лиственный лес" => VegetationType.Deciduous,
+            "хвойный" => VegetationType.Coniferous,
+            "хвойный лес" => VegetationType.Coniferous,
+            "смешанный" => VegetationType.Mixed,
+            "смешанный лес" => VegetationType.Mixed,
+            "вода" => VegetationType.Water,
+            "пустая поверхность" => VegetationType.Bare,
+            "голая поверхность" => VegetationType.Bare,
+
+            _ => Enum.TryParse<VegetationType>(vegetation, true, out var parsed)
+                ? parsed
+                : VegetationType.Mixed
+        };
+    }
+    private static void CreatePreparedGridEdges(ForestGraph graph, int width, int height)
+    {
+        var cellMap = graph.Cells.ToDictionary(c => (c.X, c.Y), c => c);
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (!cellMap.TryGetValue((x, y), out var from))
+                    continue;
+
+                foreach (var (nx, ny) in GetPreparedGridNeighbors8(x, y, width, height))
+                {
+                    if (nx < x || (nx == x && ny <= y))
+                        continue;
+
+                    if (!cellMap.TryGetValue((nx, ny), out var to))
+                        continue;
+
+                    var distance = CalculatePreparedDistance(from.X, from.Y, to.X, to.Y);
+                    var slope = distance <= 0.0001 ? 0.0 : (to.Elevation - from.Elevation) / distance;
+
+                    graph.Edges.Add(new ForestEdge(from, to, distance, slope));
+                }
+            }
+        }
+    }
+    private static IEnumerable<(int X, int Y)> GetPreparedGridNeighbors8(int x, int y, int width, int height)
+    {
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                if (dx == 0 && dy == 0)
+                    continue;
+
+                int nx = x + dx;
+                int ny = y + dy;
+
+                if (nx < 0 || ny < 0 || nx >= width || ny >= height)
+                    continue;
+
+                yield return (nx, ny);
+            }
+        }
+    }
+    private static double CalculatePreparedDistance(int x1, int y1, int x2, int y2)
+    {
+        var dx = x2 - x1;
+        var dy = y2 - y1;
+        return Math.Sqrt(dx * dx + dy * dy);
+    }
+    private static void ApplyPreparedSurfaceBarrierEdgeModifiers(ForestGraph graph)
+    {
+        foreach (var edge in graph.Edges)
+        {
+            var from = edge.FromCell;
+            var to = edge.ToCell;
+
+            if (from == null || to == null)
+                continue;
+
+            double factor = 1.0;
+
+            bool fromBarrier = from.Vegetation == VegetationType.Water || from.Vegetation == VegetationType.Bare;
+            bool toBarrier = to.Vegetation == VegetationType.Water || to.Vegetation == VegetationType.Bare;
+
+            if (fromBarrier || toBarrier)
+                factor *= 0.25;
+
+            if (from.Vegetation == VegetationType.Water || to.Vegetation == VegetationType.Water)
+                factor *= 0.35;
+
+            if (from.Vegetation == VegetationType.Bare || to.Vegetation == VegetationType.Bare)
+                factor *= 0.55;
+
+            SetPreparedEdgeFireSpreadModifier(edge, Math.Clamp(edge.FireSpreadModifier * factor, 0.02, 1.15));
+        }
+    }
+    private static void SetPreparedEdgeFireSpreadModifier(ForestEdge edge, double value)
+    {
+        var property = typeof(ForestEdge).GetProperty(nameof(ForestEdge.FireSpreadModifier));
+        property?.SetValue(edge, value);
     }
 
     [HttpGet("status/{status}")]
@@ -333,6 +556,82 @@ public class SimulationsController : ControllerBase
             return StatusCode(500, "Внутренняя ошибка сервера");
         }
     }
+    [HttpDelete("{id}")]
+public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+{
+    try
+    {
+        var simulation = await _context.Simulations
+            .Include(s => s.Metrics)
+            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+
+        if (simulation == null)
+        {
+            return NotFound(new
+            {
+                success = false,
+                message = $"Симуляция с ID {id} не найдена"
+            });
+        }
+
+        var activeRecord = await _context.ActiveSimulationRecords
+            .FirstOrDefaultAsync(x => x.SimulationId == id, cancellationToken);
+
+        if (activeRecord != null)
+            _context.ActiveSimulationRecords.Remove(activeRecord);
+
+        var metrics = await _context.FireMetrics
+            .Where(x => x.SimulationId == id)
+            .ToListAsync(cancellationToken);
+
+        if (metrics.Count > 0)
+            _context.FireMetrics.RemoveRange(metrics);
+
+        if (simulation.WeatherConditionId.HasValue)
+        {
+            var weather = await _context.WeatherConditions
+                .FirstOrDefaultAsync(w => w.Id == simulation.WeatherConditionId.Value, cancellationToken);
+
+            _context.Simulations.Remove(simulation);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            if (weather != null)
+            {
+                var weatherStillUsed = await _context.Simulations
+                    .AnyAsync(s => s.WeatherConditionId == weather.Id, cancellationToken);
+
+                if (!weatherStillUsed)
+                {
+                    _context.WeatherConditions.Remove(weather);
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+            }
+        }
+        else
+        {
+            _context.Simulations.Remove(simulation);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        _logger.LogInformation("Симуляция {Id} удалена", id);
+
+        return Ok(new
+        {
+            success = true,
+            message = $"Симуляция {id} удалена"
+        });
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Ошибка при удалении симуляции с ID {Id}", id);
+        return StatusCode(500, new
+        {
+            success = false,
+            message = "Внутренняя ошибка сервера",
+            error = ex.Message
+        });
+    }
+}
 }
 public class CreateSimulationWithWeatherRequest
 {
@@ -361,33 +660,49 @@ public class CreateSimulationWithWeatherRequest
     public ClusteredBlueprintRequest? ClusteredBlueprint { get; set; }
 
     public double MapNoiseStrength { get; set; } = 0.08;
-
     public double MapDrynessFactor { get; set; } = 1.0;
     public double ReliefStrengthFactor { get; set; } = 1.0;
     public double FuelDensityFactor { get; set; } = 1.0;
 
     public List<MapRegionObjectRequest> MapRegionObjects { get; set; } = new();
 
+    public List<VegetationDistributionRequest> VegetationDistributions { get; set; } = new();
+
     public List<InitialFirePositionDto> InitialFirePositions { get; set; } = new();
+
+    public string? SelectedDemoPreset { get; set; }
+
+    public PreparedGridMapRequest? PreparedMap { get; set; }
 
     public double Temperature { get; set; } = 25.0;
     public double Humidity { get; set; } = 40.0;
     public double WindSpeed { get; set; } = 5.0;
     public double WindDirection { get; set; } = 45.0;
     public double Precipitation { get; set; } = 0.0;
-
-    public List<VegetationDistributionRequest> VegetationDistributions { get; set; } = new();
+}
+public class PreparedGridMapRequest
+{
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public List<PreparedGridCellRequest> Cells { get; set; } = new();
+}
+public class VegetationDistributionRequest
+{
+    public VegetationType VegetationType { get; set; }
+    public double Probability { get; set; }
+}
+public class PreparedGridCellRequest
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+    public string Vegetation { get; set; } = string.Empty;
+    public double Moisture { get; set; }
+    public double Elevation { get; set; }
 }
 public class InitialFirePositionDto
 {
     public int X { get; set; }
     public int Y { get; set; }
-}
-
-public class VegetationDistributionRequest
-{
-    public VegetationType VegetationType { get; set; }
-    public double Probability { get; set; }
 }
 
 public class MapRegionObjectRequest

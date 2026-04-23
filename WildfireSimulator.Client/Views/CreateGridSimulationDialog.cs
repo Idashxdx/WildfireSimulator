@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using WildfireSimulator.Client.Models;
 
 namespace WildfireSimulator.Client.Views;
@@ -40,8 +39,17 @@ public partial class CreateGridSimulationDialog : CreateGridSimulationDialogBase
 
             RandomSeed = RandomSeed,
 
-            SelectedMapCreationMode = SelectedMapCreationMode,
-            SelectedScenarioType = SelectedScenarioType,
+            SelectedDemoPreset = SelectedDemoPreset,
+            PreparedMap = PreparedMap,
+
+            // legacy-совместимость для существующего API и остального клиента
+            SelectedMapCreationMode = PreparedMap != null
+                ? MapCreationMode.Random
+                : string.IsNullOrWhiteSpace(SelectedDemoPreset)
+                    ? MapCreationMode.Random
+                    : MapCreationMode.Scenario,
+
+            SelectedScenarioType = ParseDemoPresetToScenarioType(SelectedDemoPreset),
             SelectedClusteredScenarioType = null,
 
             MapNoiseStrength = MapNoiseStrength,
@@ -49,8 +57,8 @@ public partial class CreateGridSimulationDialog : CreateGridSimulationDialogBase
             ReliefStrengthFactor = ReliefStrengthFactor,
             FuelDensityFactor = FuelDensityFactor,
 
-            MapRegionObjects = new List<MapRegionObjectDto>(MapRegionObjects),
-            VegetationDistributions = new List<(int VegetationType, double Probability)>(VegetationDistributions),
+            MapRegionObjects = new(),
+            VegetationDistributions = new(VegetationDistributions),
             ClusteredBlueprint = null
         };
     }

@@ -4,14 +4,30 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         x:Class="WildfireSimulator.Client.Views.MapEditorDialog"
-        Title="Полуручное создание карты"
-        Width="1180"
-        Height="780"
-        MinWidth="1020"
-        MinHeight="700"
+        Title="Редактор итоговой карты"
+        Width="1320"
+        Height="860"
+        MinWidth="1120"
+        MinHeight="760"
         Background="#FAF8F2">
 
-    <Grid ColumnDefinitions="340,*" RowDefinitions="*,Auto" Margin="16">
+    <Window.Styles>
+        <Style Selector="Button.editorButton">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style Selector="Button.editorButton:pointerover">
+            <Setter Property="Opacity" Value="0.88" />
+        </Style>
+    </Window.Styles>
+
+    <Grid ColumnDefinitions="350,*" RowDefinitions="*,Auto" Margin="16">
         <Border Grid.Column="0"
                 Grid.Row="0"
                 Background="#FFFDF8"
@@ -27,7 +43,7 @@
                                FontSize="22"
                                FontWeight="Bold"/>
 
-                    <TextBlock Text="Выберите инструмент, форму области и выделите участок мышкой на сетке."
+                    <TextBlock Text="Выберите клетку на карте, измените её параметры и примените изменения."
                                Foreground="#6E6A78"
                                TextWrapping="Wrap"/>
 
@@ -37,38 +53,13 @@
                             CornerRadius="10"
                             Padding="10">
                         <StackPanel Spacing="8">
-                            <TextBlock Text="Инструмент"
+                            <TextBlock Text="Информация о выборе"
                                        Foreground="#2F2A3A"
                                        FontWeight="Bold"/>
-                            <ComboBox x:Name="ToolBox" SelectedIndex="0">
-                                <ComboBoxItem Content="Область хвойного леса"/>
-                                <ComboBoxItem Content="Область лиственного леса"/>
-                                <ComboBoxItem Content="Область смешанного леса"/>
-                                <ComboBoxItem Content="Область травы"/>
-                                <ComboBoxItem Content="Область кустарника"/>
-                                <ComboBoxItem Content="Водоём"/>
-                                <ComboBoxItem Content="Просека"/>
-                                <ComboBoxItem Content="Влажная зона"/>
-                                <ComboBoxItem Content="Сухая зона"/>
-                                <ComboBoxItem Content="Холм"/>
-                                <ComboBoxItem Content="Низина"/>
-                            </ComboBox>
-                        </StackPanel>
-                    </Border>
-
-                    <Border Background="#F8FCF5"
-                            BorderBrush="#D7E8C8"
-                            BorderThickness="1"
-                            CornerRadius="10"
-                            Padding="10">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="Форма области"
-                                       Foreground="#2F2A3A"
-                                       FontWeight="Bold"/>
-                            <ComboBox x:Name="ShapeBox" SelectedIndex="0">
-                                <ComboBoxItem Content="Прямоугольник"/>
-                                <ComboBoxItem Content="Эллипс"/>
-                            </ComboBox>
+                            <TextBlock x:Name="SelectionInfoTextBlock"
+                                       Text="Клетка не выбрана."
+                                       Foreground="#6A5A44"
+                                       TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
 
@@ -78,15 +69,49 @@
                             CornerRadius="10"
                             Padding="10">
                         <StackPanel Spacing="8">
-                            <TextBlock Text="Сила воздействия"
+                            <TextBlock Text="Изменение клетки"
                                        Foreground="#2F2A3A"
                                        FontWeight="Bold"/>
-                            <TextBox x:Name="StrengthBox"
-                                     Text="1.0"/>
-                            <TextBlock Text="Для влажных/сухих зон и рельефа обычно подходит 0.5–1.5."
-                                       Foreground="#8A8793"
-                                       FontSize="11"
-                                       TextWrapping="Wrap"/>
+
+                            <TextBlock Text="Тип поверхности"
+                                       Foreground="#6E6A78"/>
+                            <ComboBox x:Name="VegetationBox"
+                                      SelectedIndex="4">
+                                <ComboBoxItem Content="Трава" Tag="Grass"/>
+                                <ComboBoxItem Content="Кустарник" Tag="Shrub"/>
+                                <ComboBoxItem Content="Лиственный лес" Tag="Deciduous"/>
+                                <ComboBoxItem Content="Хвойный лес" Tag="Coniferous"/>
+                                <ComboBoxItem Content="Смешанный лес" Tag="Mixed"/>
+                                <ComboBoxItem Content="Вода" Tag="Water"/>
+                                <ComboBoxItem Content="Пустая поверхность" Tag="Bare"/>
+                            </ComboBox>
+
+                            <TextBlock Text="Влажность"
+                                       Foreground="#6E6A78"/>
+                            <TextBox x:Name="MoistureBox"
+                                     Text="0.50"/>
+
+                            <TextBlock Text="Высота"
+                                       Foreground="#6E6A78"/>
+                            <TextBox x:Name="ElevationBox"
+                                     Text="0"/>
+
+                            <Grid ColumnDefinitions="*,*"
+                                  ColumnSpacing="8">
+                                <Button x:Name="ApplyToSelectedButton"
+                                        Grid.Column="0"
+                                        Classes="editorButton"
+                                        Content="Применить"
+                                        Background="#DDEFD5"
+                                        Foreground="#2F2A3A"/>
+
+                                <Button x:Name="ApplyToBrushButton"
+                                        Grid.Column="1"
+                                        Classes="editorButton"
+                                        Content="Кистью"
+                                        Background="#ECE6FA"
+                                        Foreground="#2F2A3A"/>
+                            </Grid>
                         </StackPanel>
                     </Border>
 
@@ -96,16 +121,22 @@
                             CornerRadius="10"
                             Padding="10">
                         <StackPanel Spacing="8">
-                            <TextBlock Text="Текущее выделение"
+                            <TextBlock Text="Кисть"
                                        Foreground="#2F2A3A"
                                        FontWeight="Bold"/>
-                            <TextBlock x:Name="SelectionInfoTextBlock"
-                                       Text="Выделение ещё не создано."
-                                       Foreground="#6A5A44"
-                                       TextWrapping="Wrap"/>
-                            <TextBlock x:Name="ObjectsSummaryTextBlock"
-                                       Text="Добавленных объектов: 0"
-                                       Foreground="#6A5A44"
+
+                            <TextBlock Text="Радиус кисти"
+                                       Foreground="#6E6A78"/>
+                            <ComboBox x:Name="BrushRadiusBox"
+                                      SelectedIndex="0">
+                                <ComboBoxItem Content="1 клетка" Tag="0"/>
+                                <ComboBoxItem Content="3×3" Tag="1"/>
+                                <ComboBoxItem Content="5×5" Tag="2"/>
+                            </ComboBox>
+
+                            <TextBlock Text="Кисть применяет выбранные параметры вокруг текущей клетки."
+                                       Foreground="#8A8793"
+                                       FontSize="11"
                                        TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
@@ -116,76 +147,27 @@
                             CornerRadius="10"
                             Padding="10">
                         <StackPanel Spacing="8">
-                            <TextBlock Text="Добавленные объекты"
+                            <TextBlock Text="Статистика карты"
                                        Foreground="#2F2A3A"
                                        FontWeight="Bold"/>
-                            <ListBox x:Name="ObjectsListBox"
-                                     MinHeight="180"
-                                     MaxHeight="240"
-                                     Background="#FBF9F4"
-                                     BorderBrush="#E6DFEE"
-                                     BorderThickness="1">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Margin="4"
-                                                Padding="8"
-                                                Background="#FFFDF8"
-                                                BorderBrush="#EEE7F6"
-                                                BorderThickness="1"
-                                                CornerRadius="8">
-                                            <TextBlock Text="{Binding}"
-                                                       Foreground="#2F2A3A"
-                                                       TextWrapping="Wrap"/>
-                                        </Border>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
+                            <TextBlock x:Name="MapSummaryTextBlock"
+                                       Text="Сводка карты"
+                                       Foreground="#6E6A78"
+                                       TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
 
-                    <Grid ColumnDefinitions="*,*"
-                          ColumnSpacing="8">
-                        <Button Grid.Column="0"
-                                x:Name="UndoButton"
-                                Content="Отменить последнее"
-                                Background="#ECE6FA"
-                                Foreground="#2F2A3A"/>
-
-                        <Button Grid.Column="1"
-                                x:Name="RemoveSelectedButton"
-                                Content="Удалить выбранное"
-                                Background="#F7DDD7"
-                                Foreground="#7A4037"/>
-                    </Grid>
-
-                    <Button x:Name="ClearButton"
-                            Content="Очистить всё"
-                            Background="#F5E2DE"
-                            Foreground="#7A4037"/>
-
-                    <Border Background="#FFFDF8"
-                            BorderBrush="#E7E0F2"
+                    <Border Background="#FFF4F1"
+                            BorderBrush="#F1C4BA"
                             BorderThickness="1"
                             CornerRadius="10"
                             Padding="10">
-                        <StackPanel Spacing="6">
-                            <TextBlock Text="Легенда"
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Подсказка"
                                        Foreground="#2F2A3A"
                                        FontWeight="Bold"/>
-                            <TextBlock Text="Тёмно-зелёный — хвойный лес"
-                                       Foreground="#4F6B3C"/>
-                            <TextBlock Text="Зелёный — лиственный/смешанный лес"
-                                       Foreground="#567A48"/>
-                            <TextBlock Text="Жёлто-зелёный — трава / кустарник"
-                                       Foreground="#88974D"/>
-                            <TextBlock Text="Голубой — вода / влажная зона"
-                                       Foreground="#3D6F97"/>
-                            <TextBlock Text="Бежевый / серый — сухая зона / просека"
-                                       Foreground="#8A6E4D"/>
-                            <TextBlock Text="Тёплый коричневый — холм, холодный зелёно-синий — низина"
-                                       Foreground="#7A5B46"/>
-                            <TextBlock Text="Фиолетовая рамка — текущее выделение, тёмная рамка — выбранный объект"
-                                       Foreground="#6E6A78"
+                            <TextBlock Text="Один клик выбирает клетку. После изменения параметров нажмите «Применить» или «Кистью»."
+                                       Foreground="#6A5A44"
                                        TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
@@ -199,49 +181,39 @@
                 BorderBrush="#E7E0F2"
                 BorderThickness="1"
                 CornerRadius="14"
-                Padding="12">
-            <ScrollViewer x:Name="ScrollHost"
-                          HorizontalScrollBarVisibility="Auto"
+                Padding="10">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto"
                           VerticalScrollBarVisibility="Auto">
                 <Canvas x:Name="MapCanvas"
-                        Background="#FBF9F4"
-                        MinWidth="520"
-                        MinHeight="520"/>
+                        Background="#FBF9F4"/>
             </ScrollViewer>
         </Border>
 
-        <Border Grid.Column="0"
-                Grid.ColumnSpan="2"
-                Grid.Row="1"
-                Background="#FFFDF8"
-                BorderBrush="#E7E0F2"
-                BorderThickness="1"
-                CornerRadius="12"
-                Padding="12"
-                Margin="0,12,0,0">
-            <Grid ColumnDefinitions="*,*,*"
-                  ColumnSpacing="10">
-                <Button Grid.Column="0"
-                        x:Name="ApplyButton"
-                        Content="Применить"
-                        Background="#CDECBF"
-                        Foreground="#2F2A3A"
-                        FontWeight="SemiBold"/>
+        <Grid Grid.ColumnSpan="2"
+              Grid.Row="1"
+              ColumnDefinitions="*,*,*"
+              ColumnSpacing="12"
+              Margin="0,14,0,0">
+            <Button x:Name="ResetButton"
+                    Grid.Column="0"
+                    Classes="editorButton"
+                    Content="Сбросить изменения"
+                    Background="#F3ECE6"
+                    Foreground="#2F2A3A"/>
 
-                <Button Grid.Column="1"
-                        x:Name="CancelButton"
-                        Content="Отмена"
-                        Background="#ECE6FA"
-                        Foreground="#2F2A3A"
-                        FontWeight="SemiBold"/>
+            <Button x:Name="CancelButton"
+                    Grid.Column="1"
+                    Classes="editorButton"
+                    Content="Отмена"
+                    Background="#ECE6FA"
+                    Foreground="#2F2A3A"/>
 
-                <Button Grid.Column="2"
-                        x:Name="CloseOnlyButton"
-                        Content="Закрыть без изменений"
-                        Background="#F5E2DE"
-                        Foreground="#7A4037"
-                        FontWeight="SemiBold"/>
-            </Grid>
-        </Border>
+            <Button x:Name="SaveButton"
+                    Grid.Column="2"
+                    Classes="editorButton"
+                    Content="Сохранить карту"
+                    Background="#CDECBF"
+                    Foreground="#2F2A3A"/>
+        </Grid>
     </Grid>
 </Window>

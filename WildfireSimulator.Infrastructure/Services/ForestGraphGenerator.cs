@@ -3324,24 +3324,12 @@ public class ForestGraphGenerator : IForestGraphGenerator
             {
                 double influence;
 
-                if (mapObject.Shape == MapObjectShape.Ellipse)
-                {
-                    double nx = (x - centerX) / halfWidth;
-                    double ny = (y - centerY) / halfHeight;
-                    double d = nx * nx + ny * ny;
 
-                    if (d > 1.0)
-                        continue;
+                double dx = Math.Abs(x - centerX) / halfWidth;
+                double dy = Math.Abs(y - centerY) / halfHeight;
+                double edge = Math.Max(dx, dy);
+                influence = Math.Clamp(1.0 - edge * 0.75, 0.20, 1.0);
 
-                    influence = Math.Clamp(1.0 - d, 0.15, 1.0);
-                }
-                else
-                {
-                    double dx = Math.Abs(x - centerX) / halfWidth;
-                    double dy = Math.Abs(y - centerY) / halfHeight;
-                    double edge = Math.Max(dx, dy);
-                    influence = Math.Clamp(1.0 - edge * 0.75, 0.20, 1.0);
-                }
 
                 action(x, y, influence);
             }

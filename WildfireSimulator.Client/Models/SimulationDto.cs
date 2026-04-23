@@ -73,8 +73,7 @@ public enum MapObjectType
 
 public enum MapObjectShape
 {
-    Rectangle = 0,
-    Ellipse = 1
+    Rectangle = 0
 }
 
 public class SimulationDto
@@ -202,6 +201,12 @@ public class CreateSimulationDto
 
     [JsonPropertyName("initialFirePositions")]
     public List<InitialFirePositionDto> InitialFirePositions { get; set; } = new();
+
+    [JsonPropertyName("selectedDemoPreset")]
+    public string? SelectedDemoPreset { get; set; }
+
+    [JsonPropertyName("preparedMap")]
+    public PreparedGridMapDto? PreparedMap { get; set; }
 }
 
 public class VegetationDistributionDto

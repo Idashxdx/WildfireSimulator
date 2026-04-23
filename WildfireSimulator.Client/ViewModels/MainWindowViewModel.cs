@@ -605,7 +605,7 @@ public partial class MainWindowViewModel : ObservableObject
     public string CurrentPageHintText => CurrentPage switch
     {
         AppPage.Grid =>
-            "Grid — клеточная карта леса с территориальными сценариями и полуручным редактором областей.",
+            "Grid — клеточная карта леса: случайная карта, demo presets и редактор итоговой карты.",
         AppPage.Graph => SelectedGraphCreationMode switch
         {
             GraphCreationMode.Small =>
@@ -729,7 +729,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         SimulationInfoText = value == AppPage.Grid
-            ? "Выберите сеточную симуляцию: карта клеток, сценарии территории и полуручное редактирование областей."
+            ? "Выберите сеточную симуляцию: случайная карта, demo presets или подготовленная итоговая карта из редактора."
             : SelectedGraphCreationMode switch
             {
                 GraphCreationMode.Small =>
@@ -1020,7 +1020,7 @@ public partial class MainWindowViewModel : ObservableObject
             WorkflowStatusText = CurrentPage switch
             {
                 AppPage.Grid =>
-                    "Сетка: выберите симуляцию или создайте новую клеточную карту.",
+                    "Сетка: выберите симуляцию или создайте новую карту — случайную, demo или отредактированную вручную.",
                 AppPage.Graph => SelectedGraphCreationMode switch
                 {
                     GraphCreationMode.Small =>
@@ -1366,10 +1366,9 @@ public partial class MainWindowViewModel : ObservableObject
 
                     VegetationStats = BuildVegetationStatsText(stats);
 
-                    SimulationInfoText =
-      burning > 0
-          ? $"Граф обновлён: стартовых очагов {burning}, сгоревших узлов {burned}. Можно заново выбрать стартовые вершины."
-          : "Сохранённые очаги очищены. Граф готов для нового выбора стартовых вершин.";
+                    SimulationInfoText = burning > 0
+                        ? $"Карта обновлена: стартовых очагов {burning}, сгоревших клеток {burned}. Можно заново выбрать стартовые очаги."
+                        : "Сохранённые очаги очищены. Карта готова для нового выбора стартовых клеток.";
                 });
             }
             else
@@ -1399,10 +1398,9 @@ public partial class MainWindowViewModel : ObservableObject
 
                     VegetationStats = BuildVegetationStatsText(stats);
 
-                    SimulationInfoText =
-                        burning > 0
-                            ? $"Graph обновлён: стартовых очагов {burning}, сгоревших узлов {burned}. Можно переопределить ignition."
-                            : $"Сохранённые очаги очищены. Граф готов для нового выбора стартовых узлов.";
+                    SimulationInfoText = burning > 0
+                        ? $"Граф обновлён: стартовых очагов {burning}, сгоревших узлов {burned}. Можно заново выбрать стартовые вершины."
+                        : "Сохранённые очаги очищены. Граф готов для нового выбора стартовых узлов.";
                 });
             }
             else
@@ -1848,45 +1846,25 @@ public partial class MainWindowViewModel : ObservableObject
             InitialFireCells = creation.InitialFireCells;
         });
 
-        var mapModeText = creation.SelectedMapCreationMode switch
-        {
-            MapCreationMode.Random => "Случайная генерация",
-            MapCreationMode.Scenario => "Сценарий",
-            MapCreationMode.SemiManual => "Полуручное создание",
-            _ => "Случайная генерация"
-        };
-
-        var scenarioText = creation.SelectedScenarioType switch
-        {
-            MapScenarioType.MixedForest => "Смешанный лес",
-            MapScenarioType.DryConiferousMassif => "Сухой хвойный массив",
-            MapScenarioType.ForestWithRiver => "Лес с рекой",
-            MapScenarioType.ForestWithLake => "Лес с озером",
-            MapScenarioType.ForestWithFirebreak => "Лес с просекой",
-            MapScenarioType.HillyTerrain => "Холмистая местность",
-            MapScenarioType.WetForestAfterRain => "Влажный лес после дождя",
-            _ => string.Empty
-        };
-
-        var summaryParts = new List<string>
-        {
-            $"Сетка {creation.GridWidth}x{creation.GridHeight}",
-            mapModeText
-        };
-
-        if (!string.IsNullOrWhiteSpace(scenarioText))
-            summaryParts.Add(scenarioText);
+        var sourceText = creation.UsePreparedMap
+            ? "подготовленная карта из редактора"
+            : !string.IsNullOrWhiteSpace(creation.SelectedDemoPreset)
+                ? $"demo preset: {creation.SelectedDemoPreset}"
+                : "случайная карта";
 
         var createDto = new CreateSimulationDto
         {
             Name = string.IsNullOrWhiteSpace(creation.SimulationName)
-                ? $"Симуляция {DateTime.Now:HH:mm:ss}"
+                ? $"Сетка {DateTime.Now:dd.MM HH:mm}"
                 : creation.SimulationName,
-            Description = string.Join(" • ", summaryParts),
+
+            Description = $"Сеточная симуляция, источник карты: {sourceText}",
+
             GridWidth = creation.GridWidth,
             GridHeight = creation.GridHeight,
             GraphType = (int)GraphType.Grid,
             GraphScaleType = null,
+
             InitialMoistureMin = creation.MoistureMin,
             InitialMoistureMax = creation.MoistureMax,
             ElevationVariation = creation.ElevationVariation,
@@ -1894,24 +1872,36 @@ public partial class MainWindowViewModel : ObservableObject
             SimulationSteps = creation.SimulationSteps,
             StepDurationSeconds = creation.StepDurationSeconds,
             RandomSeed = creation.RandomSeed,
-            MapCreationMode = creation.SelectedMapCreationMode,
+
+            MapCreationMode = creation.UsePreparedMap
+                ? MapCreationMode.Random
+                : string.IsNullOrWhiteSpace(creation.SelectedDemoPreset)
+                    ? MapCreationMode.Random
+                    : MapCreationMode.Scenario,
+
             ScenarioType = creation.SelectedScenarioType,
             ClusteredScenarioType = null,
+
             MapNoiseStrength = creation.MapNoiseStrength,
             MapDrynessFactor = creation.MapDrynessFactor,
             ReliefStrengthFactor = creation.ReliefStrengthFactor,
             FuelDensityFactor = creation.FuelDensityFactor,
             Precipitation = creation.Precipitation,
-            MapRegionObjects = creation.MapRegionObjects,
+
+            MapRegionObjects = new List<MapRegionObjectDto>(),
             ClusteredBlueprint = null,
             InitialFirePositions = new List<InitialFirePositionDto>(),
+
             VegetationDistributions = creation.VegetationDistributions
                 .Select(x => new VegetationDistributionDto
                 {
                     VegetationType = (VegetationType)x.VegetationType,
                     Probability = x.Probability
                 })
-                .ToList()
+                .ToList(),
+
+            SelectedDemoPreset = creation.SelectedDemoPreset,
+            PreparedMap = creation.PreparedMap
         };
 
         var simulationId = await _apiService.CreateSimulationAsync(
@@ -1935,6 +1925,7 @@ public partial class MainWindowViewModel : ObservableObject
             SelectedSimulation = created;
             SelectedSimulationStatus = created.Status;
             SelectedSimulationGraphType = created.GraphType;
+            CurrentPage = created.GraphType == GraphType.Grid ? AppPage.Grid : AppPage.Graph;
         }
 
         SetTransientStatus("Создана сеточная симуляция", true);
@@ -1962,14 +1953,14 @@ public partial class MainWindowViewModel : ObservableObject
 
         StopAutoSimulationInternal();
 
-        IsSimulationRunning = false;
+        IsSimulationRunning = isRunning;
         FireArea = fireArea;
-        CurrentStep = 0;
-        SelectedSimulationStatus = 0;
+        CurrentStep = currentStep;
+        SelectedSimulationStatus = status >= 0 ? status : 0;
         SelectedGraphNode = null;
 
-        if (SelectedSimulation != null)
-            SelectedSimulation.Status = 0;
+        if (SelectedSimulation != null && status >= 0)
+            SelectedSimulation.Status = status;
 
         ClearSelectedIgnitionCells();
         ClearSelectedIgnitionNodes();
@@ -1977,7 +1968,6 @@ public partial class MainWindowViewModel : ObservableObject
         HasSavedIgnitionPreview = false;
         IsPreparedMapLoaded = false;
         IsIgnitionSelectionEnabled = false;
-
         SelectedIgnitionMode = IgnitionMode.Random;
 
         await LoadSimulationStatusAsync(SelectedSimulation.Id);
@@ -2114,25 +2104,83 @@ public partial class MainWindowViewModel : ObservableObject
         if (SelectedSimulation == null || !IsConnected)
             return;
 
-        var result = await _apiService.DeleteSimulationAsync(SelectedSimulation.Id);
+        var simulationName = SelectedSimulation.Name;
+        var simulationId = SelectedSimulation.Id;
 
-        if (result)
+        SetTransientStatus("Удаление симуляции...", false);
+
+        var success = await _apiService.DeleteSimulationAsync(simulationId);
+
+        if (success)
         {
             SetTransientStatus("Симуляция удалена", true);
             SimulationInfoText = "Симуляция удалена";
-            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Удалена симуляция");
+            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Удалена симуляция: {simulationName}");
 
             SelectedSimulation = null;
             SelectedGraphNode = null;
-            Cells.Clear();
-            GraphNodes.Clear();
-            GraphEdges.Clear();
+
+            Cells = new ObservableCollection<GraphCellDto>();
+            GraphNodes = new ObservableCollection<SimulationGraphNodeDto>();
+            GraphEdges = new ObservableCollection<SimulationGraphEdgeDto>();
+
+            MetricsHistory = new ObservableCollection<FireMetricsHistoryDto>();
+            MetricsHistorySummary = "История метрик не загружена";
+
+            GridWidth = 20;
+            GridHeight = 20;
+            CurrentStep = 0;
+            FireArea = 0;
+            IsSimulationRunning = false;
+            SelectedSimulationStatus = 0;
+            SelectedSimulationGraphType = GraphType.Grid;
+
+            WindInfo = "—";
+            TemperatureInfo = "—";
+            HumidityInfo = "—";
+            PrecipitationInfo = "—";
+            VegetationStats = "—";
+
+            HasSavedIgnitionPreview = false;
+            IsPreparedMapLoaded = false;
+            IsIgnitionSelectionEnabled = false;
+            SelectedIgnitionMode = IgnitionMode.Random;
+
+            ClearSelectedIgnitionCells();
+            ClearSelectedIgnitionNodes();
+
+            ResetStreamAnalysisState();
+
+            OnPropertyChanged(nameof(HasMetricsHistory));
+            OnPropertyChanged(nameof(CompactMetricsSummaryText));
+            OnPropertyChanged(nameof(MetricsLastFireAreaText));
+            OnPropertyChanged(nameof(MetricsMaxFireAreaText));
+            OnPropertyChanged(nameof(MetricsAverageSpreadSpeedText));
+            OnPropertyChanged(nameof(MetricsLastWeatherText));
+
+            OnPropertyChanged(nameof(CanStartSelectedSimulation));
+            OnPropertyChanged(nameof(CanExecuteStepSimulation));
+            OnPropertyChanged(nameof(CanResetSimulation));
+            OnPropertyChanged(nameof(SimulationStatusText));
+            OnPropertyChanged(nameof(IsRandomIgnitionMode));
+            OnPropertyChanged(nameof(IsManualIgnitionMode));
+            OnPropertyChanged(nameof(IgnitionModeText));
+            OnPropertyChanged(nameof(IgnitionSelectionSummary));
+            OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
+            OnPropertyChanged(nameof(CanEditIgnitionSetup));
+            OnPropertyChanged(nameof(ShowIgnitionControls));
+            OnPropertyChanged(nameof(IsGridSelected));
+            OnPropertyChanged(nameof(IsClusteredGraphSelected));
+            OnPropertyChanged(nameof(VisualizationMeaningText));
+            OnPropertyChanged(nameof(StructureScaleText));
+            OnPropertyChanged(nameof(SpreadBehaviorText));
 
             await LoadSimulationsAsync();
         }
         else
         {
             SetTransientStatus("Ошибка удаления", true);
+            EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Ошибка удаления симуляции: {simulationName}");
         }
 
         RefreshWorkflowStatus();
@@ -2177,7 +2225,10 @@ public partial class MainWindowViewModel : ObservableObject
         var ignitionMode = IsManualIgnitionMode ? "manual" : "saved-or-random";
 
         var (success, message, cells, isRunning, fireArea, currentStep, status) =
-            await _apiService.StartSimulationAsync(SelectedSimulation.Id, ignitionMode, manualPositions);
+            await _apiService.StartSimulationAsync(
+                SelectedSimulation.Id,
+                ignitionMode,
+                manualPositions);
 
         if (!success)
         {
@@ -2191,61 +2242,78 @@ public partial class MainWindowViewModel : ObservableObject
         FireArea = fireArea;
         CurrentStep = currentStep;
         SelectedSimulationStatus = status >= 0 ? status : 1;
+
+        if (SelectedSimulation != null && status >= 0)
+            SelectedSimulation.Status = status;
+
         SelectedGraphNode = null;
 
-        if (SelectedSimulation != null)
-            SelectedSimulation.Status = SelectedSimulationStatus;
-
+        HasSavedIgnitionPreview = false;
         IsPreparedMapLoaded = false;
         IsIgnitionSelectionEnabled = false;
-        HasSavedIgnitionPreview = false;
 
-        ClearSelectedIgnitionCells();
-        ClearSelectedIgnitionNodes();
-
-        if (SelectedSimulationGraphType == GraphType.Grid && cells != null)
+        if (SelectedSimulationGraphType == GraphType.Grid)
         {
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            if (cells != null)
             {
-                Cells = new ObservableCollection<GraphCellDto>(cells);
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    Cells = new ObservableCollection<GraphCellDto>(cells);
 
-                var burning = cells.Count(c => c.IsBurning);
-                var burned = cells.Count(c => c.IsBurned);
+                    var burning = cells.Count(c => c.IsBurning);
+                    var burned = cells.Count(c => c.IsBurned);
 
-                SimulationInfoText =
-                    $"Симуляция запущена: клеток {Cells.Count}, горят {burning}, сгорело {burned}, шаг {CurrentStep}";
-            });
+                    IsPreparedMapLoaded = Cells.Count > 0;
+                    IsIgnitionSelectionEnabled = false;
+
+                    SimulationInfoText =
+                        $"Симуляция запущена: клеток {Cells.Count}, горят {burning}, сгорело {burned}, шаг {CurrentStep}, площадь {FireArea:F0} га";
+
+                    var stats = cells
+                        .GroupBy(c => GetVegetationDisplayName(c.Vegetation))
+                        .Select(g => (Name: g.Key, Count: g.Count()))
+                        .ToList();
+
+                    VegetationStats = BuildVegetationStatsText(stats);
+                });
+            }
+            else
+            {
+                await LoadSimulationCellsAsync(SelectedSimulation.Id);
+            }
         }
         else
         {
-            await LoadSimulationGraphAsync(SelectedSimulation!.Id);
-
-            var burning = GraphNodes.Count(n => n.IsBurning);
-            var burned = GraphNodes.Count(n => n.IsBurned);
-
-            SimulationInfoText =
-                $"Graph simulation запущена: узлов {GraphNodes.Count}, горят {burning}, сгорело {burned}, шаг {CurrentStep}";
+            await LoadSimulationGraphAsync(SelectedSimulation.Id);
+            IsIgnitionSelectionEnabled = false;
+            SimulationInfoText = $"Графовая симуляция запущена: шаг {CurrentStep}, площадь {FireArea:F0} га";
         }
 
-        await LoadSimulationStatusAsync(SelectedSimulation!.Id);
+        await LoadSimulationStatusAsync(SelectedSimulation.Id);
         await LoadSimulationMetricsHistoryAsync(SelectedSimulation.Id);
 
-        EventLog.Insert(
-            0,
-            $"[{DateTime.Now:HH:mm:ss}] Симуляция запущена ({(SelectedSimulationGraphType == GraphType.Grid ? "grid" : "graph")}, ignition={ignitionMode})");
+        ClearSelectedIgnitionCells();
+        ClearSelectedIgnitionNodes();
+        SelectedIgnitionMode = IgnitionMode.Random;
 
         OnPropertyChanged(nameof(CanStartSelectedSimulation));
         OnPropertyChanged(nameof(CanExecuteStepSimulation));
-        OnPropertyChanged(nameof(CanStartAutoSimulation));
-        OnPropertyChanged(nameof(CanPauseAutoSimulation));
-        OnPropertyChanged(nameof(CanResumeAutoSimulation));
-        OnPropertyChanged(nameof(CanStopAutoSimulation));
+        OnPropertyChanged(nameof(CanResetSimulation));
+        OnPropertyChanged(nameof(SimulationStatusText));
+        OnPropertyChanged(nameof(IsRandomIgnitionMode));
+        OnPropertyChanged(nameof(IsManualIgnitionMode));
+        OnPropertyChanged(nameof(IgnitionModeText));
+        OnPropertyChanged(nameof(IgnitionSelectionSummary));
         OnPropertyChanged(nameof(CanRefreshIgnitionSetup));
         OnPropertyChanged(nameof(CanEditIgnitionSetup));
         OnPropertyChanged(nameof(ShowIgnitionControls));
-        OnPropertyChanged(nameof(IgnitionSelectionSummary));
-        OnPropertyChanged(nameof(SimulationStatusText));
+        OnPropertyChanged(nameof(IsGridSelected));
+        OnPropertyChanged(nameof(IsClusteredGraphSelected));
+        OnPropertyChanged(nameof(VisualizationMeaningText));
+        OnPropertyChanged(nameof(StructureScaleText));
+        OnPropertyChanged(nameof(SpreadBehaviorText));
 
+        EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Симуляция запущена");
         SetTransientStatus("Симуляция запущена", true);
         RefreshWorkflowStatus();
     }
@@ -2843,61 +2911,59 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task LoadSimulationMetricsHistoryAsync(Guid simulationId)
     {
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+        IsMetricsHistoryLoading = true;
+        MetricsHistorySummary = "Загрузка истории метрик...";
+
+        try
         {
-            IsMetricsHistoryLoading = true;
-            MetricsHistorySummary = "Загрузка истории метрик...";
-            OnPropertyChanged(nameof(HasMetricsHistory));
-            OnPropertyChanged(nameof(MetricsLastFireAreaText));
-            OnPropertyChanged(nameof(MetricsMaxFireAreaText));
-            OnPropertyChanged(nameof(MetricsAverageSpreadSpeedText));
-            OnPropertyChanged(nameof(MetricsLastWeatherText));
-            OnPropertyChanged(nameof(CompactMetricsSummaryText));
-        });
+            var history = await _apiService.GetSimulationMetricsHistoryAsync(simulationId);
 
-        var history = await _apiService.GetSimulationMetricsHistoryAsync(simulationId);
-
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            MetricsHistory = new ObservableCollection<FireMetricsHistoryDto>(
-                history.OrderByDescending(m => m.Step));
-
-            if (MetricsHistory.Count == 0)
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
-                MetricsHistorySummary = "История метрик пока пуста";
-            }
-            else
-            {
-                MetricsHistorySummary = CompactMetricsSummaryText;
-            }
+                MetricsHistory = new ObservableCollection<FireMetricsHistoryDto>(
+                    history.OrderBy(x => x.Step));
 
-            IsMetricsHistoryLoading = false;
+                if (MetricsHistory.Count == 0)
+                {
+                    MetricsHistorySummary = "История метрик пока пуста";
+                }
+                else
+                {
+                    var ordered = MetricsHistory.OrderBy(x => x.Step).ToList();
+                    var last = ordered.Last();
 
-            OnPropertyChanged(nameof(HasMetricsHistory));
-            OnPropertyChanged(nameof(MetricsLastFireAreaText));
-            OnPropertyChanged(nameof(MetricsMaxFireAreaText));
-            OnPropertyChanged(nameof(MetricsAverageSpreadSpeedText));
-            OnPropertyChanged(nameof(MetricsLastWeatherText));
-            OnPropertyChanged(nameof(CompactMetricsSummaryText));
-        });
-    }
-    private async Task ClearSimulationMetricsHistoryAsync()
-    {
-        await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    MetricsHistorySummary =
+                        $"Загружено записей: {ordered.Count} • последний шаг: {last.Step} • площадь: {last.FireArea:F0} га • скорость: {last.FireSpreadSpeed:F2}";
+                }
+
+                OnPropertyChanged(nameof(HasMetricsHistory));
+                OnPropertyChanged(nameof(CompactMetricsSummaryText));
+                OnPropertyChanged(nameof(MetricsLastFireAreaText));
+                OnPropertyChanged(nameof(MetricsMaxFireAreaText));
+                OnPropertyChanged(nameof(MetricsAverageSpreadSpeedText));
+                OnPropertyChanged(nameof(MetricsLastWeatherText));
+            });
+        }
+        catch (Exception ex)
         {
-            MetricsHistory.Clear();
-            MetricsHistorySummary = "История метрик не загружена";
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                MetricsHistory = new ObservableCollection<FireMetricsHistoryDto>();
+                MetricsHistorySummary = $"Ошибка загрузки истории метрик: {ex.Message}";
+
+                OnPropertyChanged(nameof(HasMetricsHistory));
+                OnPropertyChanged(nameof(CompactMetricsSummaryText));
+                OnPropertyChanged(nameof(MetricsLastFireAreaText));
+                OnPropertyChanged(nameof(MetricsMaxFireAreaText));
+                OnPropertyChanged(nameof(MetricsAverageSpreadSpeedText));
+                OnPropertyChanged(nameof(MetricsLastWeatherText));
+            });
+        }
+        finally
+        {
             IsMetricsHistoryLoading = false;
-
-            OnPropertyChanged(nameof(HasMetricsHistory));
-            OnPropertyChanged(nameof(CompactMetricsSummaryText));
-            OnPropertyChanged(nameof(MetricsLastFireAreaText));
-            OnPropertyChanged(nameof(MetricsMaxFireAreaText));
-            OnPropertyChanged(nameof(MetricsAverageSpreadSpeedText));
-            OnPropertyChanged(nameof(MetricsLastWeatherText));
-        });
+        }
     }
-
     private Window? GetMainWindow()
     {
         return Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
