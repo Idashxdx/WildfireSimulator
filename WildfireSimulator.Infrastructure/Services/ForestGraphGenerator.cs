@@ -739,7 +739,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
             graph.Cells.Add(cell);
         }
 
-        ConnectGraphLocally(graph, graph.Cells, profile.SupportRadius, profile.MaxDegree, profile.LocalTargetDegree);
+        ConnectGraphLocally(graph, graph.Cells, profile.SupportRadius, profile.MaxDegree, profile.LocalTargetDegree, random);
         EnsureGraphConnectedInsideGroup(graph, graph.Cells, profile.MaxDegree);
         EnsureNoIsolatedNodes(graph, profile.MaxDegree);
         ApplyRandomGraphEdgeModifiers(graph);
@@ -838,13 +838,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
 
         foreach (var group in groups.Values)
         {
-            ConnectGraphLocally(
-                graph,
-                group,
-                profile.SupportRadius,
-                profile.MaxDegree,
-                profile.LocalTargetDegree);
-
+            ConnectGraphLocally(graph, group, profile.SupportRadius, profile.MaxDegree, profile.LocalTargetDegree, random);
             EnsureGraphConnectedInsideGroup(graph, group, profile.MaxDegree);
         }
 
@@ -1343,7 +1337,8 @@ public class ForestGraphGenerator : IForestGraphGenerator
       List<ForestCell> group,
       double radius,
       int maxDegree,
-      int targetDegree)
+      int targetDegree,
+      Random random)
     {
         if (group.Count <= 1)
             return;
@@ -1359,6 +1354,8 @@ public class ForestGraphGenerator : IForestGraphGenerator
                 })
                 .Where(x => x.Distance <= radius)
                 .OrderBy(x => x.Distance)
+                .ThenBy(x => x.Cell.X)
+                .ThenBy(x => x.Cell.Y)
                 .Take(targetDegree + 2)
                 .ToList();
 
@@ -1380,7 +1377,7 @@ public class ForestGraphGenerator : IForestGraphGenerator
                     _ => 0.15
                 };
 
-                if (Random.Shared.NextDouble() > probability)
+                if (random.NextDouble() > probability)
                     continue;
 
                 if (TryAddEdge(graph, cell, item.Cell))
@@ -2351,101 +2348,101 @@ public class ForestGraphGenerator : IForestGraphGenerator
         EnsureNoIsolatedNodes(graph, profile.MaxDegree);
     }
 
-   private void BuildFirebreakGapScenario(
-    ForestGraph graph,
-    int nodeCount,
-    SimulationParameters parameters,
-    Random random,
-    ClusteredScaleProfile profile)
-{
-    var used = new HashSet<(int X, int Y)>();
-    int total = Math.Max(140, nodeCount);
-
-    int northCount = Math.Max(42, (int)(total * 0.34));
-    int southCount = Math.Max(42, (int)(total * 0.34));
-    int firebreakCount = Math.Max(16, (int)(total * 0.11));
-    int eastBypassCount = Math.Max(26, (int)(total * 0.18));
-    int westDryCount = Math.Max(8, total - northCount - southCount - firebreakCount - eastBypassCount);
-
-    var northForest = AddScenarioPatchNodesEllipse(
-        graph, used, "северная-хвойная-зона",
-        0.40, 0.28, 0.28, 0.16, northCount,
-        parameters, random,
-        VegetationType.Coniferous, 0.08, 0.17, 4.0, 18.0);
-
-    var southForest = AddScenarioPatchNodesEllipse(
-        graph, used, "южная-смешанная-зона",
-        0.40, 0.72, 0.28, 0.16, southCount,
-        parameters, random,
-        VegetationType.Mixed, 0.14, 0.28, 0.0, 12.0);
-
-    var firebreak = AddScenarioPatchNodesEllipse(
-        graph, used, "горизонтальная-просека",
-        0.42, 0.50, 0.34, 0.035, firebreakCount,
-        parameters, random,
-        VegetationType.Bare, 0.04, 0.10, -1.0, 3.0);
-
-    var eastBypass = AddScenarioPatchNodesEllipse(
-        graph, used, "правый-обход-просеки",
-        0.82, 0.50, 0.105, 0.31, eastBypassCount,
-        parameters, random,
-        VegetationType.Grass, 0.08, 0.18, 0.0, 6.0);
-
-    var westDry = AddScenarioPatchNodesEllipse(
-        graph, used, "левая-сухая-кромка",
-        0.12, 0.50, 0.08, 0.22, westDryCount,
-        parameters, random,
-        VegetationType.Shrub, 0.08, 0.18, 1.0, 7.0);
-
-    ConnectScenarioNodesLocally(graph, northForest, profile.SupportRadius, profile.MaxDegree, profile.LocalTargetDegree);
-    ConnectScenarioNodesLocally(graph, southForest, profile.SupportRadius, profile.MaxDegree, profile.LocalTargetDegree);
-    ConnectScenarioNodesLocally(graph, firebreak, profile.CloseRadius, profile.MaxDegree, 1);
-    ConnectScenarioNodesLocally(graph, eastBypass, profile.SupportRadius, profile.MaxDegree, profile.LocalTargetDegree);
-    ConnectScenarioNodesLocally(graph, westDry, profile.CloseRadius, profile.MaxDegree, 2);
-
-    AddScenarioBridge(graph, northForest, eastBypass, 4, 0.90);
-    AddScenarioBridge(graph, eastBypass, southForest, 4, 0.86);
-
-    AddScenarioBridge(graph, northForest, westDry, 1, 0.48);
-    AddScenarioBridge(graph, westDry, southForest, 1, 0.44);
-
-    foreach (var barrierNode in firebreak)
+    private void BuildFirebreakGapScenario(
+     ForestGraph graph,
+     int nodeCount,
+     SimulationParameters parameters,
+     Random random,
+     ClusteredScaleProfile profile)
     {
-        var nearestNorth = northForest
-            .OrderBy(c => CalculateDistance(c.X, c.Y, barrierNode.X, barrierNode.Y))
-            .Take(1)
-            .ToList();
+        var used = new HashSet<(int X, int Y)>();
+        int total = Math.Max(140, nodeCount);
 
-        var nearestSouth = southForest
-            .OrderBy(c => CalculateDistance(c.X, c.Y, barrierNode.X, barrierNode.Y))
-            .Take(1)
-            .ToList();
+        int northCount = Math.Max(42, (int)(total * 0.34));
+        int southCount = Math.Max(42, (int)(total * 0.34));
+        int firebreakCount = Math.Max(16, (int)(total * 0.11));
+        int eastBypassCount = Math.Max(26, (int)(total * 0.18));
+        int westDryCount = Math.Max(8, total - northCount - southCount - firebreakCount - eastBypassCount);
 
-        foreach (var forestNode in nearestNorth.Concat(nearestSouth))
+        var northForest = AddScenarioPatchNodesEllipse(
+            graph, used, "северная-хвойная-зона",
+            0.40, 0.28, 0.28, 0.16, northCount,
+            parameters, random,
+            VegetationType.Coniferous, 0.08, 0.17, 4.0, 18.0);
+
+        var southForest = AddScenarioPatchNodesEllipse(
+            graph, used, "южная-смешанная-зона",
+            0.40, 0.72, 0.28, 0.16, southCount,
+            parameters, random,
+            VegetationType.Mixed, 0.14, 0.28, 0.0, 12.0);
+
+        var firebreak = AddScenarioPatchNodesEllipse(
+            graph, used, "горизонтальная-просека",
+            0.42, 0.50, 0.34, 0.035, firebreakCount,
+            parameters, random,
+            VegetationType.Bare, 0.04, 0.10, -1.0, 3.0);
+
+        var eastBypass = AddScenarioPatchNodesEllipse(
+            graph, used, "правый-обход-просеки",
+            0.82, 0.50, 0.105, 0.31, eastBypassCount,
+            parameters, random,
+            VegetationType.Grass, 0.08, 0.18, 0.0, 6.0);
+
+        var westDry = AddScenarioPatchNodesEllipse(
+            graph, used, "левая-сухая-кромка",
+            0.12, 0.50, 0.08, 0.22, westDryCount,
+            parameters, random,
+            VegetationType.Shrub, 0.08, 0.18, 1.0, 7.0);
+
+        ConnectScenarioNodesLocally(graph, northForest, profile.SupportRadius, profile.MaxDegree, profile.LocalTargetDegree);
+        ConnectScenarioNodesLocally(graph, southForest, profile.SupportRadius, profile.MaxDegree, profile.LocalTargetDegree);
+        ConnectScenarioNodesLocally(graph, firebreak, profile.CloseRadius, profile.MaxDegree, 1);
+        ConnectScenarioNodesLocally(graph, eastBypass, profile.SupportRadius, profile.MaxDegree, profile.LocalTargetDegree);
+        ConnectScenarioNodesLocally(graph, westDry, profile.CloseRadius, profile.MaxDegree, 2);
+
+        AddScenarioBridge(graph, northForest, eastBypass, 4, 0.90);
+        AddScenarioBridge(graph, eastBypass, southForest, 4, 0.86);
+
+        AddScenarioBridge(graph, northForest, westDry, 1, 0.48);
+        AddScenarioBridge(graph, westDry, southForest, 1, 0.44);
+
+        foreach (var barrierNode in firebreak)
         {
-            if (!TryAddEdge(graph, barrierNode, forestNode))
-                continue;
+            var nearestNorth = northForest
+                .OrderBy(c => CalculateDistance(c.X, c.Y, barrierNode.X, barrierNode.Y))
+                .Take(1)
+                .ToList();
 
-            var edge = GetEdge(graph, barrierNode, forestNode);
-            if (edge != null)
-                SetEdgeFireSpreadModifier(edge, Math.Clamp(edge.FireSpreadModifier * 0.14, 0.02, 0.22));
+            var nearestSouth = southForest
+                .OrderBy(c => CalculateDistance(c.X, c.Y, barrierNode.X, barrierNode.Y))
+                .Take(1)
+                .ToList();
+
+            foreach (var forestNode in nearestNorth.Concat(nearestSouth))
+            {
+                if (!TryAddEdge(graph, barrierNode, forestNode))
+                    continue;
+
+                var edge = GetEdge(graph, barrierNode, forestNode);
+                if (edge != null)
+                    SetEdgeFireSpreadModifier(edge, Math.Clamp(edge.FireSpreadModifier * 0.14, 0.02, 0.22));
+            }
         }
+
+        foreach (var edge in graph.Edges)
+        {
+            bool hasBare =
+                edge.FromCell.Vegetation == VegetationType.Bare ||
+                edge.ToCell.Vegetation == VegetationType.Bare;
+
+            if (hasBare)
+                SetEdgeFireSpreadModifier(edge, Math.Clamp(edge.FireSpreadModifier * 0.16, 0.02, 0.26));
+        }
+
+        ApplySurfaceBarrierEdgeModifiers(graph);
+        ApplyClusteredBridgeWeakening(graph, 0.70);
+        EnsureNoIsolatedNodes(graph, profile.MaxDegree);
     }
-
-    foreach (var edge in graph.Edges)
-    {
-        bool hasBare =
-            edge.FromCell.Vegetation == VegetationType.Bare ||
-            edge.ToCell.Vegetation == VegetationType.Bare;
-
-        if (hasBare)
-            SetEdgeFireSpreadModifier(edge, Math.Clamp(edge.FireSpreadModifier * 0.16, 0.02, 0.26));
-    }
-
-    ApplySurfaceBarrierEdgeModifiers(graph);
-    ApplyClusteredBridgeWeakening(graph, 0.70);
-    EnsureNoIsolatedNodes(graph, profile.MaxDegree);
-}
     private void BuildHillyClustersScenario(
        ForestGraph graph,
        int nodeCount,

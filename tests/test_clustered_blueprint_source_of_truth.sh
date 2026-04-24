@@ -6,7 +6,7 @@ OUT_DIR="/tmp/test_clustered_blueprint_source_of_truth_$(date +%s)"
 mkdir -p "$OUT_DIR"
 
 echo "============================================================"
-echo " ТЕСТ: clustered blueprint должен быть source of truth"
+echo " ТЕСТ: Large clustered blueprint должен быть source of truth"
 echo "============================================================"
 
 CREATE_JSON="$OUT_DIR/create.json"
@@ -24,7 +24,7 @@ curl -s -X POST "$API_URL/api/simulations" \
     \"name\": \"Blueprint source of truth test\",
     \"description\": \"Проверка сохранения ручной структуры clustered blueprint\",
     \"graphType\": 1,
-    \"graphScaleType\": 1,
+    \"graphScaleType\": 2,
     \"gridWidth\": 30,
     \"gridHeight\": 30,
     \"initialMoistureMin\": 0.20,
@@ -104,11 +104,6 @@ echo "simulation_id = $SIM_ID"
 
 curl -s "$API_URL/api/SimulationManager/$SIM_ID/graph" > "$GRAPH_JSON"
 
-if [[ ! -s "$GRAPH_JSON" ]]; then
-  echo "❌ Graph endpoint вернул пустой ответ"
-  exit 1
-fi
-
 GRAPH_SUCCESS=$(jq -r '.success // false' "$GRAPH_JSON" 2>/dev/null || echo "false")
 if [[ "$GRAPH_SUCCESS" != "true" ]]; then
   echo "❌ Не удалось получить graph JSON"
@@ -118,7 +113,6 @@ fi
 
 python3 - "$GRAPH_JSON" "$NODE_A" "$NODE_B" "$NODE_C" "$EDGE_AB" "$EDGE_BC" <<'PY'
 import json
-import math
 import sys
 
 graph_path = sys.argv[1]
@@ -147,15 +141,15 @@ if len(nodes) != 3:
     errors.append(f"ожидалось ровно 3 узла, получено {len(nodes)}")
 
 if len(edges) != 2:
-    errors.append(f"ожидалось ровно 2 ребра без soft-completion, получено {len(edges)}")
+    errors.append(f"ожидалось ровно 2 ребра, получено {len(edges)}")
 
-for required_node in [node_a, node_b, node_c]:
-    if required_node not in node_by_id:
-        errors.append(f"узел {required_node} отсутствует в результате")
+for node_id in [node_a, node_b, node_c]:
+    if node_id not in node_by_id:
+        errors.append(f"узел {node_id} отсутствует")
 
-for required_edge in [edge_ab_id, edge_bc_id]:
-    if required_edge not in edge_by_id:
-        errors.append(f"ребро {required_edge} отсутствует в результате")
+for edge_id in [edge_ab_id, edge_bc_id]:
+    if edge_id not in edge_by_id:
+        errors.append(f"ребро {edge_id} отсутствует")
 
 if errors:
     print("❌ Базовая структура не сохранена")
@@ -163,88 +157,55 @@ if errors:
         print("   -", err)
     sys.exit(1)
 
+def approx(x, y, eps=1e-6):
+    return abs(float(x) - float(y)) <= eps
+
 a = node_by_id[node_a]
 b = node_by_id[node_b]
 c = node_by_id[node_c]
 
-print(f"node_a = x:{a['x']} y:{a['y']} group:{a.get('groupKey')} vegetation:{a.get('vegetation')} moisture:{a.get('moisture')} elevation:{a.get('elevation')}")
-print(f"node_b = x:{b['x']} y:{b['y']} group:{b.get('groupKey')} vegetation:{b.get('vegetation')} moisture:{b.get('moisture')} elevation:{b.get('elevation')}")
-print(f"node_c = x:{c['x']} y:{c['y']} group:{c.get('groupKey')} vegetation:{c.get('vegetation')} moisture:{c.get('moisture')} elevation:{c.get('elevation')}")
+checks = [
+    (a["x"] == 3 and a["y"] == 4, "координаты node A не сохранены"),
+    (b["x"] == 9 and b["y"] == 5, "координаты node B не сохранены"),
+    (c["x"] == 15 and c["y"] == 8, "координаты node C не сохранены"),
+    ((a.get("groupKey") or "") == "alpha", "groupKey node A должен быть alpha"),
+    ((b.get("groupKey") or "") == "alpha", "groupKey node B должен быть alpha"),
+    ((c.get("groupKey") or "") == "beta", "groupKey node C должен быть beta"),
+    (a.get("vegetation") == "Coniferous", "vegetation node A должен быть Coniferous"),
+    (b.get("vegetation") == "Mixed", "vegetation node B должен быть Mixed"),
+    (c.get("vegetation") == "Deciduous", "vegetation node C должен быть Deciduous"),
+    (approx(a.get("moisture"), 0.12), "moisture node A должен быть 0.12"),
+    (approx(b.get("moisture"), 0.18), "moisture node B должен быть 0.18"),
+    (approx(c.get("moisture"), 0.27), "moisture node C должен быть 0.27"),
+    (approx(a.get("elevation"), 2.0), "elevation node A должен быть 2.0"),
+    (approx(b.get("elevation"), 4.0), "elevation node B должен быть 4.0"),
+    (approx(c.get("elevation"), 7.0), "elevation node C должен быть 7.0"),
+]
 
-def approx_equal(x, y, eps=1e-6):
-    return abs(float(x) - float(y)) <= eps
-
-if a["x"] != 3 or a["y"] != 4:
-    errors.append(f"координаты node A не сохранены: ({a['x']},{a['y']})")
-
-if b["x"] != 9 or b["y"] != 5:
-    errors.append(f"координаты node B не сохранены: ({b['x']},{b['y']})")
-
-if c["x"] != 15 or c["y"] != 8:
-    errors.append(f"координаты node C не сохранены: ({c['x']},{c['y']})")
-
-if (a.get("groupKey") or "") != "alpha":
-    errors.append(f"groupKey node A должен быть alpha, сейчас {a.get('groupKey')}")
-
-if (b.get("groupKey") or "") != "alpha":
-    errors.append(f"groupKey node B должен быть alpha, сейчас {b.get('groupKey')}")
-
-if (c.get("groupKey") or "") != "beta":
-    errors.append(f"groupKey node C должен быть beta, сейчас {c.get('groupKey')}")
-
-if a.get("vegetation") != "Coniferous":
-    errors.append(f"vegetation node A должен быть Coniferous, сейчас {a.get('vegetation')}")
-
-if b.get("vegetation") != "Mixed":
-    errors.append(f"vegetation node B должен быть Mixed, сейчас {b.get('vegetation')}")
-
-if c.get("vegetation") != "Deciduous":
-    errors.append(f"vegetation node C должен быть Deciduous, сейчас {c.get('vegetation')}")
-
-if not approx_equal(a.get("moisture"), 0.12):
-    errors.append(f"moisture node A должен быть 0.12, сейчас {a.get('moisture')}")
-
-if not approx_equal(b.get("moisture"), 0.18):
-    errors.append(f"moisture node B должен быть 0.18, сейчас {b.get('moisture')}")
-
-if not approx_equal(c.get("moisture"), 0.27):
-    errors.append(f"moisture node C должен быть 0.27, сейчас {c.get('moisture')}")
-
-if not approx_equal(a.get("elevation"), 2.0):
-    errors.append(f"elevation node A должен быть 2.0, сейчас {a.get('elevation')}")
-
-if not approx_equal(b.get("elevation"), 4.0):
-    errors.append(f"elevation node B должен быть 4.0, сейчас {b.get('elevation')}")
-
-if not approx_equal(c.get("elevation"), 7.0):
-    errors.append(f"elevation node C должен быть 7.0, сейчас {c.get('elevation')}")
+for ok, message in checks:
+    if not ok:
+        errors.append(message)
 
 ab = edge_by_id[edge_ab_id]
 bc = edge_by_id[edge_bc_id]
 
-print(f"edge_ab = from:{ab['fromCellId']} to:{ab['toCellId']} distance:{ab['distance']} modifier:{ab['fireSpreadModifier']}")
-print(f"edge_bc = from:{bc['fromCellId']} to:{bc['toCellId']} distance:{bc['distance']} modifier:{bc['fireSpreadModifier']}")
-
-ab_pair = {ab["fromCellId"], ab["toCellId"]}
-bc_pair = {bc["fromCellId"], bc["toCellId"]}
-
-if ab_pair != {node_a, node_b}:
+if {ab["fromCellId"], ab["toCellId"]} != {node_a, node_b}:
     errors.append("ребро AB соединяет не те узлы")
 
-if bc_pair != {node_b, node_c}:
+if {bc["fromCellId"], bc["toCellId"]} != {node_b, node_c}:
     errors.append("ребро BC соединяет не те узлы")
 
-if not approx_equal(ab["distance"], 2.5):
-    errors.append(f"distanceOverride для AB должен сохраниться как 2.5, сейчас {ab['distance']}")
+if not approx(ab["distance"], 2.5):
+    errors.append(f"distanceOverride для AB должен быть 2.5, сейчас {ab['distance']}")
 
-if not approx_equal(bc["distance"], 3.75):
-    errors.append(f"distanceOverride для BC должен сохраниться как 3.75, сейчас {bc['distance']}")
+if not approx(bc["distance"], 3.75):
+    errors.append(f"distanceOverride для BC должен быть 3.75, сейчас {bc['distance']}")
 
-if not approx_equal(ab["fireSpreadModifier"], 1.25):
-    errors.append(f"fireSpreadModifier для AB должен сохраниться как 1.25, сейчас {ab['fireSpreadModifier']}")
+if not approx(ab["fireSpreadModifier"], 1.25):
+    errors.append(f"fireSpreadModifier для AB должен быть 1.25, сейчас {ab['fireSpreadModifier']}")
 
-if not approx_equal(bc["fireSpreadModifier"], 0.55):
-    errors.append(f"fireSpreadModifier для BC должен сохраниться как 0.55, сейчас {bc['fireSpreadModifier']}")
+if not approx(bc["fireSpreadModifier"], 0.55):
+    errors.append(f"fireSpreadModifier для BC должен быть 0.55, сейчас {bc['fireSpreadModifier']}")
 
 if errors:
     print("❌ Blueprint не является source of truth")

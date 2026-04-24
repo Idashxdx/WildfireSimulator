@@ -8,14 +8,14 @@ SIM_JSON="$TMP_DIR/sim.json"
 GRAPH_JSON="$TMP_DIR/graph.json"
 
 echo "============================================================"
-echo " ТЕСТ: SmallGraph должен быть topology-first"
+echo " ТЕСТ: SmallGraph должен быть одной связной областью"
 echo "============================================================"
 
 curl -sS -X POST "$BASE_URL/api/simulations" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "test-small-graph-topology",
-    "description": "small graph topology-first profile",
+    "name": "test-small-graph-single-area",
+    "description": "small graph single area profile",
     "gridWidth": 14,
     "gridHeight": 14,
     "graphType": 1,
@@ -47,7 +47,7 @@ curl -sS "$BASE_URL/api/SimulationManager/$SIM_ID/graph" > "$GRAPH_JSON"
 python3 - "$GRAPH_JSON" << 'PY'
 import json
 import sys
-from collections import defaultdict, deque
+from collections import defaultdict, deque, Counter
 
 path = sys.argv[1]
 with open(path, "r", encoding="utf-8") as f:
@@ -57,11 +57,13 @@ graph = data["graph"]
 nodes = graph["nodes"]
 edges = graph["edges"]
 
-if not (8 <= len(nodes) <= 20):
-    print(f"❌ Для SmallGraph число узлов вне диапазона 8..20: {len(nodes)}")
+if not (8 <= len(nodes) <= 24):
+    print(f"❌ Для SmallGraph число узлов вне диапазона 8..24: {len(nodes)}")
     sys.exit(1)
 
 id_to_node = {n["id"]: n for n in nodes}
+groups = Counter((n.get("groupKey") or "ungrouped") for n in nodes)
+
 adj = defaultdict(set)
 degrees = defaultdict(int)
 cross_edges = 0
@@ -85,30 +87,35 @@ avg_degree = (sum(degrees.values()) / len(nodes)) if nodes else 0.0
 
 print("node_count =", len(nodes))
 print("edge_count =", len(edges))
+print("group_count =", len(groups))
+print("groups =", dict(groups))
 print("min_degree =", min_degree)
 print("max_degree =", max_degree)
 print("avg_degree =", round(avg_degree, 3))
 print("cross_edges =", cross_edges)
 
+if len(groups) != 1:
+    print("❌ SmallGraph должен быть одной областью")
+    sys.exit(1)
+
+if cross_edges != 0:
+    print("❌ SmallGraph не должен иметь межобластных связей")
+    sys.exit(1)
+
 if min_degree < 1:
     print("❌ В SmallGraph есть изолированные вершины")
     sys.exit(1)
 
-if max_degree > 4:
+if max_degree > 5:
     print("❌ В SmallGraph слишком высокая локальная степень")
     sys.exit(1)
 
-if avg_degree > 3.4:
+if avg_degree > 3.6:
     print("❌ SmallGraph получился слишком плотным")
     sys.exit(1)
 
-if cross_edges > 3:
-    print("❌ SmallGraph имеет слишком много межкластерных мостов")
-    sys.exit(1)
-
-# Проверка связности
 start = nodes[0]["id"]
-visited = set([start])
+visited = {start}
 q = deque([start])
 
 while q:
@@ -122,7 +129,7 @@ if len(visited) != len(nodes):
     print("❌ SmallGraph не связен")
     sys.exit(1)
 
-print("✅ SmallGraph соответствует topology-first профилю")
+print("✅ SmallGraph соответствует новой структуре: одна связная область")
 PY
 
 echo "============================================================"

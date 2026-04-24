@@ -6,7 +6,7 @@ OUT_DIR="/tmp/test_clustered_blueprint_validation_$(date +%s)"
 mkdir -p "$OUT_DIR"
 
 echo "============================================================"
-echo " ТЕСТ: clustered blueprint должен валидироваться и нормализоваться"
+echo " ТЕСТ: Large clustered blueprint должен валидироваться"
 echo "============================================================"
 
 CREATE_JSON="$OUT_DIR/create.json"
@@ -23,7 +23,7 @@ curl -s -X POST "$API_URL/api/simulations" \
     \"name\": \"Blueprint validation test\",
     \"description\": \"Проверка нормализации clustered blueprint\",
     \"graphType\": 1,
-    \"graphScaleType\": 0,
+    \"graphScaleType\": 2,
     \"gridWidth\": 20,
     \"gridHeight\": 20,
     \"initialMoistureMin\": 0.20,
@@ -124,11 +124,6 @@ echo "simulation_id = $SIM_ID"
 
 curl -s "$API_URL/api/SimulationManager/$SIM_ID/graph" > "$GRAPH_JSON"
 
-if [[ ! -s "$GRAPH_JSON" ]]; then
-  echo "❌ Graph endpoint вернул пустой ответ"
-  exit 1
-fi
-
 GRAPH_SUCCESS=$(jq -r '.success // false' "$GRAPH_JSON" 2>/dev/null || echo "false")
 if [[ "$GRAPH_SUCCESS" != "true" ]]; then
   echo "❌ Не удалось получить graph JSON"
@@ -155,20 +150,10 @@ edges = graph["edges"]
 
 node_ids = {n["id"] for n in nodes}
 degrees = defaultdict(int)
-normalized_pairs = set()
 
 for e in edges:
-    a = e["fromCellId"]
-    b = e["toCellId"]
-
-    degrees[a] += 1
-    degrees[b] += 1
-
-    key = tuple(sorted((a, b)))
-    normalized_pairs.add(key)
-
-node_count = len(nodes)
-edge_count = len(edges)
+    degrees[e["fromCellId"]] += 1
+    degrees[e["toCellId"]] += 1
 
 ab_edges = [
     e for e in edges
@@ -185,20 +170,17 @@ invalid_edges = [
     if e["fromCellId"] not in node_ids or e["toCellId"] not in node_ids
 ]
 
-c_degree = degrees.get(node_c, 0)
-
-print(f"node_count = {node_count}")
-print(f"edge_count = {edge_count}")
+print(f"node_count = {len(nodes)}")
+print(f"edge_count = {len(edges)}")
 print(f"ab_edge_count = {len(ab_edges)}")
 print(f"self_loop_count = {len(self_loops)}")
 print(f"invalid_edge_count = {len(invalid_edges)}")
-print(f"node_c_degree = {c_degree}")
-print(f"unique_undirected_pairs = {len(normalized_pairs)}")
+print(f"node_c_degree = {degrees.get(node_c, 0)}")
 
 errors = []
 
-if node_count != 3:
-    errors.append(f"ожидалось 3 узла после нормализации, получено {node_count}")
+if len(nodes) != 3:
+    errors.append(f"ожидалось 3 узла после нормализации, получено {len(nodes)}")
 
 if len(ab_edges) != 1:
     errors.append(f"дубликаты A-B должны схлопнуться до одного ребра, сейчас {len(ab_edges)}")
@@ -209,8 +191,8 @@ if len(self_loops) != 0:
 if len(invalid_edges) != 0:
     errors.append(f"рёбра на несуществующие узлы должны быть удалены, сейчас {len(invalid_edges)}")
 
-if c_degree == 0:
-    errors.append("изолированный узел C должен быть мягко подключён SoftCompleteBlueprintConnectivity")
+if degrees.get(node_c, 0) == 0:
+    errors.append("изолированный узел C должен быть мягко подключён")
 
 if errors:
     print("❌ Blueprint нормализован некорректно")
