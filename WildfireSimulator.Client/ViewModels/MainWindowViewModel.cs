@@ -729,18 +729,18 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         SimulationInfoText = value == AppPage.Grid
-            ? "Выберите сеточную симуляцию: случайная карта, demo presets или подготовленная итоговая карта из редактора."
-            : SelectedGraphCreationMode switch
-            {
-                GraphCreationMode.Small =>
-                    "Выберите или создайте малый граф: отдельные вершины, связи и критические мосты.",
-                GraphCreationMode.Medium =>
-                    "Выберите или создайте средний граф: кластеры, локальные группы и переходы между ними.",
-                GraphCreationMode.Large =>
-                    "Выберите или создайте большой граф: макрозоны и коридоры распространения.",
-                _ =>
-                    "Выберите графовую симуляцию."
-            };
+     ? "Выберите сеточную симуляцию: случайная карта, демо или подготовленная итоговая карта из редактора."
+     : SelectedGraphCreationMode switch
+     {
+         GraphCreationMode.Small =>
+             "Выберите или создайте малый граф: компактная случайная структура без демо-сценариев.",
+         GraphCreationMode.Medium =>
+             "Выберите или создайте средний граф: несколько областей и переходы между ними.",
+         GraphCreationMode.Large =>
+             "Выберите или создайте большой граф: несколько макрообластей и редкие переходы.",
+         _ =>
+             "Выберите графовую симуляцию."
+     };
 
         RefreshWorkflowStatus();
     }
@@ -758,11 +758,11 @@ public partial class MainWindowViewModel : ObservableObject
             SimulationInfoText = value switch
             {
                 GraphCreationMode.Small =>
-                    "Сейчас выбран режим создания: малый граф. Он подходит для мостов, узких мест и отдельных переходов.",
+                    "Сейчас выбран режим создания: малый граф. Это компактная случайная связная структура без демо-сценариев.",
                 GraphCreationMode.Medium =>
-                    "Сейчас выбран режим создания: средний граф. Он подходит для кластеров, барьеров и локального распространения.",
+                    "Сейчас выбран режим создания: средний граф. Он строится из нескольких областей со слабыми переходами между ними.",
                 GraphCreationMode.Large =>
-                    "Сейчас выбран режим создания: большой граф. Он подходит для макрозон и длинных коридоров распространения.",
+                    "Сейчас выбран режим создания: большой граф. Он строится из нескольких макрообластей с редкими переходами.",
                 _ =>
                     "Выберите графовую симуляцию."
             };
@@ -770,7 +770,6 @@ public partial class MainWindowViewModel : ObservableObject
 
         RefreshWorkflowStatus();
     }
-
     partial void OnSelectedSimulationGraphTypeChanged(GraphType value)
     {
         OnPropertyChanged(nameof(GraphTypeText));
@@ -1575,50 +1574,63 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var prefix = scaleType switch
         {
-            GraphScaleType.Small => "ДЕМО: Малый граф",
-            GraphScaleType.Medium => "ДЕМО: Средний граф",
-            GraphScaleType.Large => "ДЕМО: Большой граф",
-            _ => "ДЕМО: Граф"
+            GraphScaleType.Small => "Малый случайный граф",
+            GraphScaleType.Medium => "Средний случайный граф",
+            GraphScaleType.Large => "Большой случайный граф",
+            _ => "Графовая симуляция"
         };
 
         return $"{prefix} {DateTime.Now:dd.MM HH:mm}";
     }
+
     private string BuildGraphSimulationDescription(SimulationCreationResult creation)
     {
         var parts = new List<string>();
 
         parts.Add(creation.GraphScaleType switch
         {
-            GraphScaleType.Small => "Topology-first small graph",
-            GraphScaleType.Medium => "Clustered medium graph",
-            GraphScaleType.Large => "Macro-zones large graph",
-            _ => "Clustered graph"
+            GraphScaleType.Small => "Малый граф: случайная связная структура",
+            GraphScaleType.Medium => "Средний граф: несколько связанных областей",
+            GraphScaleType.Large => "Большой граф: несколько макрообластей",
+            _ => "Графовая модель"
         });
 
         parts.Add(creation.SelectedMapCreationMode switch
         {
-            MapCreationMode.Random => "random generation",
-            MapCreationMode.Scenario => $"scenario: {creation.SelectedClusteredScenarioType?.ToString() ?? "unknown"}",
+            MapCreationMode.Random => "режим: случайная генерация",
+            MapCreationMode.Scenario => $"режим: демо-сценарий {GetClusteredScenarioDisplayName(creation.SelectedClusteredScenarioType)}",
             MapCreationMode.SemiManual => creation.ClusteredBlueprint == null
-                ? "semi-manual blueprint: missing"
-                : $"semi-manual blueprint: nodes={creation.ClusteredBlueprint.Nodes?.Count ?? 0}, edges={creation.ClusteredBlueprint.Edges?.Count ?? 0}",
-            _ => "unknown mode"
+                ? "режим: редактор графа, структура не задана"
+                : $"режим: редактор графа, вершин {creation.ClusteredBlueprint.Nodes?.Count ?? 0}, рёбер {creation.ClusteredBlueprint.Edges?.Count ?? 0}",
+            _ => "режим: неизвестен"
         });
 
-        parts.Add($"canvas={creation.GridWidth}x{creation.GridHeight}");
-        parts.Add($"initialFire={creation.InitialFireCells}");
-        parts.Add($"moisture={creation.MoistureMin:F2}-{creation.MoistureMax:F2}");
-        parts.Add($"elevationVariation={creation.ElevationVariation:F1}");
-        parts.Add($"steps={creation.SimulationSteps}");
-        parts.Add($"stepDuration={creation.StepDurationSeconds}s");
-        parts.Add($"weather={creation.Temperature:F1}C/{creation.Humidity:F1}%/{creation.WindSpeed:F1}mps/{creation.WindDirection:F0}deg");
-        parts.Add($"precipitation={creation.Precipitation:F1}");
+        parts.Add($"область размещения: {creation.GridWidth}x{creation.GridHeight}");
+        parts.Add($"шагов: {creation.SimulationSteps}");
+        parts.Add($"длительность шага: {creation.StepDurationSeconds} сек");
+        parts.Add($"температура: {creation.Temperature:F1} °C");
+        parts.Add($"влажность воздуха: {creation.Humidity:F1} %");
+        parts.Add($"ветер: {creation.WindSpeed:F1} м/с");
+        parts.Add($"осадки: {creation.Precipitation:F1}");
 
-        if (creation.RandomSeed.HasValue)
-            parts.Add($"seed={creation.RandomSeed.Value}");
-
-        return string.Join(" • ", parts);
+        return string.Join("; ", parts);
     }
+    private string GetClusteredScenarioDisplayName(ClusteredScenarioType? scenario)
+    {
+        return scenario switch
+        {
+            ClusteredScenarioType.DenseDryConiferous => "сухой хвойный массив",
+            ClusteredScenarioType.WaterBarrier => "водный барьер",
+            ClusteredScenarioType.FirebreakGap => "просека",
+            ClusteredScenarioType.HillyClusters => "холмистые зоны",
+            ClusteredScenarioType.WetAfterRain => "влажные зоны",
+            ClusteredScenarioType.MixedDryHotspots => "смешанный лес",
+            null => "не выбран",
+            _ => "неизвестный сценарий"
+        };
+    }
+
+
     [RelayCommand]
     private async Task OpenCreateGraphSimulationDialogAsync()
     {

@@ -534,29 +534,20 @@ public partial class SimulationManager
     }
     private int GetGraphNodeCountForScale(SimulationParameters parameters)
     {
+        if (parameters.ClusteredBlueprint != null &&
+            parameters.ClusteredBlueprint.Nodes.Any())
+        {
+            return parameters.ClusteredBlueprint.Nodes.Count;
+        }
+
         var scale = parameters.GraphScaleType ?? GraphScaleType.Medium;
 
         return scale switch
         {
-            GraphScaleType.Small => Math.Clamp(
-                Math.Max(parameters.GridWidth, parameters.GridHeight),
-                8,
-                20),
-
-            GraphScaleType.Medium => Math.Clamp(
-                parameters.GridWidth * parameters.GridHeight / 2,
-                20,
-                80),
-
-            GraphScaleType.Large => Math.Clamp(
-                parameters.GridWidth * parameters.GridHeight,
-                80,
-                250),
-
-            _ => Math.Clamp(
-                parameters.GridWidth * parameters.GridHeight / 2,
-                20,
-                80)
+            GraphScaleType.Small => 20,
+            GraphScaleType.Medium => 70,
+            GraphScaleType.Large => 140,
+            _ => 70
         };
     }
     private List<(int X, int Y)> GetValidatedIgnitionPositions(

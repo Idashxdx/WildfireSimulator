@@ -113,18 +113,37 @@ public class SimulationsController : ControllerBase
                 ? ResolveGridScenarioType(request.SelectedDemoPreset, request.ScenarioType)
                 : null;
 
-            var effectiveMapCreationMode = request.GraphType == GraphType.Grid && request.PreparedMap != null
-                ? MapCreationMode.Random
-                : request.MapCreationMode;
+            GraphScaleType? effectiveGraphScaleType = request.GraphType == GraphType.Grid
+     ? null
+     : request.GraphScaleType ?? GraphScaleType.Medium;
+            var effectiveMapCreationMode = request.GraphType switch
+            {
+                GraphType.Grid when request.PreparedMap != null => MapCreationMode.Random,
+                GraphType.ClusteredGraph when effectiveGraphScaleType == GraphScaleType.Small => MapCreationMode.Random,
+                _ => request.MapCreationMode
+            };
+
+            var effectiveClusteredScenarioType =
+                request.GraphType == GraphType.ClusteredGraph &&
+                effectiveGraphScaleType != GraphScaleType.Small &&
+                effectiveMapCreationMode == MapCreationMode.Scenario
+                    ? request.ClusteredScenarioType
+                    : null;
+
+            var effectiveClusteredBlueprint =
+                request.GraphType == GraphType.ClusteredGraph &&
+                effectiveMapCreationMode == MapCreationMode.SemiManual &&
+                request.ClusteredBlueprint != null &&
+                request.ClusteredBlueprint.Nodes.Any()
+                    ? request.ClusteredBlueprint
+                    : null;
 
             var parameters = new SimulationParameters
             {
                 GridWidth = request.PreparedMap?.Width > 0 ? request.PreparedMap.Width : request.GridWidth,
                 GridHeight = request.PreparedMap?.Height > 0 ? request.PreparedMap.Height : request.GridHeight,
                 GraphType = request.GraphType,
-                GraphScaleType = request.GraphType == GraphType.Grid
-                    ? null
-                    : request.GraphScaleType ?? GraphScaleType.Medium,
+                GraphScaleType = effectiveGraphScaleType,
 
                 InitialMoistureMin = request.InitialMoistureMin,
                 InitialMoistureMax = request.InitialMoistureMax,
@@ -136,9 +155,7 @@ public class SimulationsController : ControllerBase
                 MapCreationMode = effectiveMapCreationMode,
 
                 ScenarioType = effectiveScenarioType,
-                ClusteredScenarioType = request.GraphType == GraphType.ClusteredGraph
-                    ? request.ClusteredScenarioType
-                    : null,
+                ClusteredScenarioType = effectiveClusteredScenarioType,
 
                 MapNoiseStrength = request.MapNoiseStrength,
                 MapDrynessFactor = request.MapDrynessFactor,
@@ -162,30 +179,28 @@ public class SimulationsController : ControllerBase
                 request.MapRegionObjects.Any())
             {
                 parameters.MapRegionObjects = request.MapRegionObjects
-     .Select(x => new MapRegionObject
-     {
-         Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
-         ObjectType = x.ObjectType,
-         Shape = MapObjectShape.Rectangle,
-         StartX = x.StartX,
-         StartY = x.StartY,
-         Width = x.Width,
-         Height = x.Height,
-         Strength = x.Strength,
-         Priority = x.Priority
-     })
-     .ToList();
+                    .Select(x => new MapRegionObject
+                    {
+                        Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
+                        ObjectType = x.ObjectType,
+                        Shape = MapObjectShape.Rectangle,
+                        StartX = x.StartX,
+                        StartY = x.StartY,
+                        Width = x.Width,
+                        Height = x.Height,
+                        Strength = x.Strength,
+                        Priority = x.Priority
+                    })
+                    .ToList();
             }
 
-            if (request.GraphType == GraphType.ClusteredGraph &&
-                request.ClusteredBlueprint != null &&
-                request.ClusteredBlueprint.Nodes.Any())
+            if (effectiveClusteredBlueprint != null)
             {
                 parameters.ClusteredBlueprint = new ClusteredGraphBlueprint
                 {
-                    CanvasWidth = request.ClusteredBlueprint.CanvasWidth,
-                    CanvasHeight = request.ClusteredBlueprint.CanvasHeight,
-                    Candidates = request.ClusteredBlueprint.Candidates
+                    CanvasWidth = effectiveClusteredBlueprint.CanvasWidth,
+                    CanvasHeight = effectiveClusteredBlueprint.CanvasHeight,
+                    Candidates = effectiveClusteredBlueprint.Candidates
                         .Select(x => new ClusteredCandidateNode
                         {
                             Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
@@ -193,7 +208,7 @@ public class SimulationsController : ControllerBase
                             Y = x.Y
                         })
                         .ToList(),
-                    Nodes = request.ClusteredBlueprint.Nodes
+                    Nodes = effectiveClusteredBlueprint.Nodes
                         .Select(x => new ClusteredNodeDraft
                         {
                             Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
@@ -205,7 +220,7 @@ public class SimulationsController : ControllerBase
                             Elevation = x.Elevation
                         })
                         .ToList(),
-                    Edges = request.ClusteredBlueprint.Edges
+                    Edges = effectiveClusteredBlueprint.Edges
                         .Select(x => new ClusteredEdgeDraft
                         {
                             Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
@@ -279,6 +294,7 @@ public class SimulationsController : ControllerBase
             });
         }
     }
+
     private static MapScenarioType? ResolveGridScenarioType(string? selectedDemoPreset, MapScenarioType? fallback)
     {
         if (string.IsNullOrWhiteSpace(selectedDemoPreset))
@@ -557,81 +573,81 @@ public class SimulationsController : ControllerBase
         }
     }
     [HttpDelete("{id}")]
-public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
-{
-    try
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        var simulation = await _context.Simulations
-            .Include(s => s.Metrics)
-            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
-
-        if (simulation == null)
+        try
         {
-            return NotFound(new
+            var simulation = await _context.Simulations
+                .Include(s => s.Metrics)
+                .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+
+            if (simulation == null)
             {
-                success = false,
-                message = $"Симуляция с ID {id} не найдена"
-            });
-        }
-
-        var activeRecord = await _context.ActiveSimulationRecords
-            .FirstOrDefaultAsync(x => x.SimulationId == id, cancellationToken);
-
-        if (activeRecord != null)
-            _context.ActiveSimulationRecords.Remove(activeRecord);
-
-        var metrics = await _context.FireMetrics
-            .Where(x => x.SimulationId == id)
-            .ToListAsync(cancellationToken);
-
-        if (metrics.Count > 0)
-            _context.FireMetrics.RemoveRange(metrics);
-
-        if (simulation.WeatherConditionId.HasValue)
-        {
-            var weather = await _context.WeatherConditions
-                .FirstOrDefaultAsync(w => w.Id == simulation.WeatherConditionId.Value, cancellationToken);
-
-            _context.Simulations.Remove(simulation);
-            await _context.SaveChangesAsync(cancellationToken);
-
-            if (weather != null)
-            {
-                var weatherStillUsed = await _context.Simulations
-                    .AnyAsync(s => s.WeatherConditionId == weather.Id, cancellationToken);
-
-                if (!weatherStillUsed)
+                return NotFound(new
                 {
-                    _context.WeatherConditions.Remove(weather);
-                    await _context.SaveChangesAsync(cancellationToken);
+                    success = false,
+                    message = $"Симуляция с ID {id} не найдена"
+                });
+            }
+
+            var activeRecord = await _context.ActiveSimulationRecords
+                .FirstOrDefaultAsync(x => x.SimulationId == id, cancellationToken);
+
+            if (activeRecord != null)
+                _context.ActiveSimulationRecords.Remove(activeRecord);
+
+            var metrics = await _context.FireMetrics
+                .Where(x => x.SimulationId == id)
+                .ToListAsync(cancellationToken);
+
+            if (metrics.Count > 0)
+                _context.FireMetrics.RemoveRange(metrics);
+
+            if (simulation.WeatherConditionId.HasValue)
+            {
+                var weather = await _context.WeatherConditions
+                    .FirstOrDefaultAsync(w => w.Id == simulation.WeatherConditionId.Value, cancellationToken);
+
+                _context.Simulations.Remove(simulation);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                if (weather != null)
+                {
+                    var weatherStillUsed = await _context.Simulations
+                        .AnyAsync(s => s.WeatherConditionId == weather.Id, cancellationToken);
+
+                    if (!weatherStillUsed)
+                    {
+                        _context.WeatherConditions.Remove(weather);
+                        await _context.SaveChangesAsync(cancellationToken);
+                    }
                 }
             }
-        }
-        else
-        {
-            _context.Simulations.Remove(simulation);
-            await _context.SaveChangesAsync(cancellationToken);
-        }
+            else
+            {
+                _context.Simulations.Remove(simulation);
+                await _context.SaveChangesAsync(cancellationToken);
+            }
 
-        _logger.LogInformation("Симуляция {Id} удалена", id);
+            _logger.LogInformation("Симуляция {Id} удалена", id);
 
-        return Ok(new
+            return Ok(new
+            {
+                success = true,
+                message = $"Симуляция {id} удалена"
+            });
+        }
+        catch (Exception ex)
         {
-            success = true,
-            message = $"Симуляция {id} удалена"
-        });
+            _logger.LogError(ex, "Ошибка при удалении симуляции с ID {Id}", id);
+            return StatusCode(500, new
+            {
+                success = false,
+                message = "Внутренняя ошибка сервера",
+                error = ex.Message
+            });
+        }
     }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Ошибка при удалении симуляции с ID {Id}", id);
-        return StatusCode(500, new
-        {
-            success = false,
-            message = "Внутренняя ошибка сервера",
-            error = ex.Message
-        });
-    }
-}
 }
 public class CreateSimulationWithWeatherRequest
 {

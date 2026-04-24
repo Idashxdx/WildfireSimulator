@@ -261,13 +261,23 @@ public partial class NodeGraphVisualization : UserControl
 
         DrawClusterPatchBackgrounds(nodes, points);
 
-        foreach (var edge in edges)
+        foreach (var edge in edges.OrderBy(e => IsCrossClusterEdge(e, nodeMap) ? 1 : 0))
             DrawEdge(edge, points, nodeMap, selectedNodeId, selectedEdgeIds);
 
-        foreach (var node in nodes.OrderBy(n => n.IsBurning ? 0 : 1))
+        foreach (var node in nodes.OrderBy(n => n.IsBurning ? 1 : 0))
             DrawNode(node, edges, points, selectedNodeId, neighborIds);
     }
 
+    private bool IsCrossClusterEdge(
+      SimulationGraphEdgeDto edge,
+      Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
+    {
+        return nodeMap.TryGetValue(edge.FromCellId, out var fromNode) &&
+               nodeMap.TryGetValue(edge.ToCellId, out var toNode) &&
+               !string.IsNullOrWhiteSpace(fromNode.GroupKey) &&
+               !string.IsNullOrWhiteSpace(toNode.GroupKey) &&
+               !string.Equals(fromNode.GroupKey, toNode.GroupKey, StringComparison.Ordinal);
+    }
     private double GetStandardGraphScale(
         List<SimulationGraphNodeDto> nodes,
         (double MinX, double MaxX, double MinY, double MaxY) bounds)
@@ -346,50 +356,68 @@ public partial class NodeGraphVisualization : UserControl
     }
 
     private void DrawEdge(
-        SimulationGraphEdgeDto edge,
-        Dictionary<Guid, Point> points,
-        Dictionary<Guid, SimulationGraphNodeDto> nodeMap,
-        Guid? selectedNodeId,
-        HashSet<Guid> selectedEdgeIds)
+     SimulationGraphEdgeDto edge,
+     Dictionary<Guid, Point> points,
+     Dictionary<Guid, SimulationGraphNodeDto> nodeMap,
+     Guid? selectedNodeId,
+     HashSet<Guid> selectedEdgeIds)
     {
         if (_graphCanvas == null)
             return;
 
         if (!points.TryGetValue(edge.FromCellId, out var fromPoint) ||
             !points.TryGetValue(edge.ToCellId, out var toPoint))
-        {
             return;
-        }
 
         bool isSelected = selectedEdgeIds.Contains(edge.Id);
         bool isIncidentToSelection =
             selectedNodeId.HasValue &&
             (edge.FromCellId == selectedNodeId.Value || edge.ToCellId == selectedNodeId.Value);
 
-        bool isCrossCluster =
-            nodeMap.TryGetValue(edge.FromCellId, out var fromNode) &&
-            nodeMap.TryGetValue(edge.ToCellId, out var toNode) &&
-            !string.IsNullOrWhiteSpace(fromNode.GroupKey) &&
-            !string.IsNullOrWhiteSpace(toNode.GroupKey) &&
-            !string.Equals(fromNode.GroupKey, toNode.GroupKey, StringComparison.Ordinal);
+        bool isCrossCluster = IsCrossClusterEdge(edge, nodeMap);
 
         var line = new Line
         {
             StartPoint = fromPoint,
             EndPoint = toPoint,
             Stroke = new SolidColorBrush(GetEffectiveEdgeColor(edge, isCrossCluster, isSelected, isIncidentToSelection)),
-            StrokeThickness = GetEffectiveEdgeThickness(edge, isSelected, isIncidentToSelection),
-            Opacity = GetEffectiveEdgeOpacity(edge, isSelected, isIncidentToSelection),
-            ZIndex = edge.IsCorridor ? 4 : isSelected ? 5 : 2,
+            StrokeThickness = GetEffectiveEdgeThickness(edge, isCrossCluster, isSelected, isIncidentToSelection),
+            Opacity = GetEffectiveEdgeOpacity(edge, isCrossCluster, isSelected, isIncidentToSelection),
+            ZIndex = isSelected ? 5 : isIncidentToSelection ? 4 : isCrossCluster ? 2 : 1,
             Cursor = new Cursor(StandardCursorType.Hand)
         };
 
+        if (isCrossCluster && !isSelected && !isIncidentToSelection)
+            line.StrokeDashArray = new AvaloniaList<double> { 6, 5 };
+
         ToolTip.SetTip(line, BuildEdgeTooltip(edge, nodeMap));
         _graphCanvas.Children.Add(line);
-
-        if (edge.IsCorridor)
-            DrawCorridorAccent(fromPoint, toPoint, isSelected);
     }
+
+    private void DrawAreaTransitionAccent(
+    Point fromPoint,
+    Point toPoint,
+    bool isSelected)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var accent = new Line
+        {
+            StartPoint = fromPoint,
+            EndPoint = toPoint,
+            Stroke = new SolidColorBrush(isSelected ? Color.Parse("#5B3CC4") : Color.Parse("#8E7CC3")),
+            StrokeThickness = isSelected ? 2.2 : 1.4,
+            Opacity = isSelected ? 0.95 : 0.55,
+            ZIndex = isSelected ? 7 : 5,
+            StrokeDashArray = new AvaloniaList<double> { 6, 5 },
+            IsHitTestVisible = false
+        };
+
+        _graphCanvas.Children.Add(accent);
+    }
+
+
 
     private void DrawCorridorAccent(
         Point fromPoint,
@@ -534,20 +562,33 @@ public partial class NodeGraphVisualization : UserControl
     private string BuildTooltip(SimulationGraphNodeDto node, List<SimulationGraphEdgeDto> edges)
     {
         int degree = edges.Count(e => e.FromCellId == node.Id || e.ToCellId == node.Id);
-        int corridorEdges = edges.Count(e =>
-            (e.FromCellId == node.Id || e.ToCellId == node.Id) &&
-            e.IsCorridor);
 
-        string clusterText = string.IsNullOrWhiteSpace(node.GroupKey)
-            ? "—"
-            : $"Кластер {node.GroupKey}";
+        int transitionEdges = edges.Count(e =>
+        {
+            if (e.FromCellId != node.Id && e.ToCellId != node.Id)
+                return false;
+
+            var otherNodeId = e.FromCellId == node.Id ? e.ToCellId : e.FromCellId;
+            var otherNode = Nodes?.FirstOrDefault(n => n.Id == otherNodeId);
+
+            if (otherNode == null)
+                return false;
+
+            return !string.IsNullOrWhiteSpace(node.GroupKey) &&
+                   !string.IsNullOrWhiteSpace(otherNode.GroupKey) &&
+                   !string.Equals(node.GroupKey, otherNode.GroupKey, StringComparison.Ordinal);
+        });
+
+        string groupText = string.IsNullOrWhiteSpace(node.GroupKey)
+            ? "Область: —"
+            : $"Область: {node.GroupKey}";
 
         return
             $"Вершина ({node.X}, {node.Y})\n" +
             $"Состояние: {GetStateText(node.State)}\n" +
             $"Растительность: {GetVegetationText(node.Vegetation)}\n" +
-            $"{clusterText}\n" +
-            $"Связей: {degree}, коридоров: {corridorEdges}\n" +
+            $"{groupText}\n" +
+            $"Связей: {degree}, переходов в другие области: {transitionEdges}\n" +
             $"Влажность: {node.Moisture:F2}\n" +
             $"Высота: {node.Elevation:F1}\n" +
             $"Стадия: {GetFireStageText(node.FireStage)}\n" +
@@ -557,41 +598,48 @@ public partial class NodeGraphVisualization : UserControl
     }
 
     private string BuildEdgeTooltip(
-        SimulationGraphEdgeDto edge,
-        Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
+     SimulationGraphEdgeDto edge,
+     Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
     {
         string fromText = BuildEdgeEndpointText(edge.FromCellId, edge.FromX, edge.FromY, nodeMap);
         string toText = BuildEdgeEndpointText(edge.ToCellId, edge.ToX, edge.ToY, nodeMap);
+
+        bool isAreaTransition =
+            nodeMap.TryGetValue(edge.FromCellId, out var fromNode) &&
+            nodeMap.TryGetValue(edge.ToCellId, out var toNode) &&
+            !string.IsNullOrWhiteSpace(fromNode.GroupKey) &&
+            !string.IsNullOrWhiteSpace(toNode.GroupKey) &&
+            !string.Equals(fromNode.GroupKey, toNode.GroupKey, StringComparison.Ordinal);
 
         return
             $"Связь\n" +
             $"От: {fromText}\n" +
             $"До: {toText}\n" +
+            $"Тип: {(isAreaTransition ? "переход между областями" : "внутренняя связь области")}\n" +
             $"Расстояние: {edge.Distance:F2}\n" +
             $"Уклон: {edge.Slope:F3}\n" +
             $"Модификатор распространения: {edge.FireSpreadModifier:F3}\n" +
-            $"Накопленное тепло: {edge.AccumulatedHeat:F2}\n" +
-            $"Коридор: {(edge.IsCorridor ? "Да" : "Нет")}";
+            $"Накопленное тепло: {edge.AccumulatedHeat:F2}";
     }
 
+
     private string BuildEdgeEndpointText(
-        Guid nodeId,
-        int x,
-        int y,
-        Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
+     Guid nodeId,
+     int x,
+     int y,
+     Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
     {
         if (nodeMap.TryGetValue(nodeId, out var node))
         {
-            string cluster = string.IsNullOrWhiteSpace(node.GroupKey)
-                ? "без кластера"
-                : $"кластер {node.GroupKey}";
+            string group = string.IsNullOrWhiteSpace(node.GroupKey)
+                ? "без области"
+                : $"область {node.GroupKey}";
 
-            return $"({x}, {y}), {cluster}";
+            return $"({x}, {y}), {group}";
         }
 
         return $"({x}, {y})";
     }
-
     private void DrawEmptyState()
     {
         if (_graphCanvas == null)
@@ -729,59 +777,58 @@ public partial class NodeGraphVisualization : UserControl
     }
 
     private Color GetEffectiveEdgeColor(
-        SimulationGraphEdgeDto edge,
-        bool isCrossCluster,
-        bool isSelected,
-        bool isIncidentToSelection)
+     SimulationGraphEdgeDto edge,
+     bool isCrossCluster,
+     bool isSelected,
+     bool isIncidentToSelection)
     {
         if (isSelected)
             return Color.Parse("#5B3CC4");
-
-        if (edge.IsCorridor)
-            return Color.Parse("#F59E0B");
 
         if (isIncidentToSelection)
             return Color.Parse("#8E7CC3");
 
         if (isCrossCluster)
-            return Color.Parse("#A78BFA");
+            return Color.Parse("#D9A441");
 
         return Color.Parse("#B8B2C5");
     }
-
     private double GetEffectiveEdgeThickness(
-        SimulationGraphEdgeDto edge,
-        bool isSelected,
-        bool isIncidentToSelection)
+    SimulationGraphEdgeDto edge,
+    bool isCrossCluster,
+    bool isSelected,
+    bool isIncidentToSelection)
     {
         if (isSelected)
-            return Math.Max(3.0, BaseEdgeThickness + 1.5);
-
-        if (edge.IsCorridor)
-            return Math.Max(2.2, BaseEdgeThickness + 0.8);
+            return 3.0;
 
         if (isIncidentToSelection)
-            return Math.Max(2.0, BaseEdgeThickness + 0.5);
+            return 2.1;
+
+        if (isCrossCluster)
+            return 1.35;
 
         return BaseEdgeThickness;
     }
 
     private double GetEffectiveEdgeOpacity(
-        SimulationGraphEdgeDto edge,
-        bool isSelected,
-        bool isIncidentToSelection)
+    SimulationGraphEdgeDto edge,
+    bool isCrossCluster,
+    bool isSelected,
+    bool isIncidentToSelection)
     {
         if (isSelected)
             return 1.0;
 
-        if (edge.IsCorridor)
-            return 0.95;
-
         if (isIncidentToSelection)
-            return 0.85;
+            return 0.9;
 
-        return 0.58;
+        if (isCrossCluster)
+            return 0.58;
+
+        return 0.55;
     }
+
 
     private string GetStateText(string? state)
     {
