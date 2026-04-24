@@ -1615,20 +1615,21 @@ public partial class MainWindowViewModel : ObservableObject
 
         return string.Join("; ", parts);
     }
-    private string GetClusteredScenarioDisplayName(ClusteredScenarioType? scenario)
+   private string GetClusteredScenarioDisplayName(ClusteredScenarioType? scenario)
+{
+    return scenario switch
     {
-        return scenario switch
-        {
-            ClusteredScenarioType.DenseDryConiferous => "сухой хвойный массив",
-            ClusteredScenarioType.WaterBarrier => "водный барьер",
-            ClusteredScenarioType.FirebreakGap => "просека",
-            ClusteredScenarioType.HillyClusters => "холмистые зоны",
-            ClusteredScenarioType.WetAfterRain => "влажные зоны",
-            ClusteredScenarioType.MixedDryHotspots => "смешанный лес",
-            null => "не выбран",
-            _ => "неизвестный сценарий"
-        };
-    }
+        ClusteredScenarioType.MixedForest => "смешанный лес",
+        ClusteredScenarioType.DryConiferousMassif => "сухой хвойный + ветер",
+        ClusteredScenarioType.ForestWithRiver => "река как барьер",
+        ClusteredScenarioType.ForestWithLake => "озеро и берег",
+        ClusteredScenarioType.WetForestAfterRain => "влажный лес",
+        ClusteredScenarioType.ForestWithFirebreak => "просека",
+        ClusteredScenarioType.HillyTerrain => "холмы",
+        null => "не выбран",
+        _ => "неизвестный сценарий"
+    };
+}
 
 
     [RelayCommand]

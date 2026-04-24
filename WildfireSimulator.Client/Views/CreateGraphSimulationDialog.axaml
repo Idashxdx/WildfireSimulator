@@ -44,52 +44,73 @@
                         CornerRadius="12"
                         Padding="12">
                     <StackPanel Spacing="8">
-                        <TextBlock Text="Демо графовой модели"
+                        <TextBlock Text="Демо и случайная карта"
                                    FontWeight="Bold"
                                    Foreground="#2F2A3A" />
 
                         <TextBlock x:Name="PresetHintTextBlock"
-                                   Text="Выберите готовое демо для графа"
+                                   Text="Выберите готовое демо или случайную карту"
                                    Foreground="#6E6A78"
                                    FontSize="12"
                                    TextWrapping="Wrap" />
 
-                        <WrapPanel>
-                            <Button x:Name="PresetButton1"
-                                    Classes="dialogButton"
-                                    Content="Сухой хвойный массив"
-                                    Tag="dry"
-                                    Background="#FFE4E1"
-                                    Margin="0,0,8,8" />
+                       <WrapPanel>
+    <Button x:Name="RandomMapButton"
+            Classes="dialogButton"
+            Content="Случайная карта"
+            Tag="random"
+            Background="#F1F0EC"
+            Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton2"
-                                    Classes="dialogButton"
-                                    Content="Водный барьер"
-                                    Tag="water"
-                                    Background="#E1F0FF"
-                                    Margin="0,0,8,8" />
+    <Button x:Name="PresetButton7"
+            Classes="dialogButton"
+            Content="Смешанный лес"
+            Tag="mixed"
+            Background="#EEF6E6"
+            Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton3"
-                                    Classes="dialogButton"
-                                    Content="Просека"
-                                    Tag="firebreak"
-                                    Background="#FFF4E1"
-                                    Margin="0,0,8,8" />
+    <Button x:Name="PresetButton1"
+            Classes="dialogButton"
+            Content="Сухой хвойный + ветер"
+            Tag="dry-coniferous"
+            Background="#FFE4E1"
+            Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton4"
-                                    Classes="dialogButton"
-                                    Content="Холмистые зоны"
-                                    Tag="hills"
-                                    Background="#F0E6FF"
-                                    Margin="0,0,8,8" />
+    <Button x:Name="PresetButton2"
+            Classes="dialogButton"
+            Content="Река как барьер"
+            Tag="river"
+            Background="#E1F0FF"
+            Margin="0,0,8,8" />
 
-                            <Button x:Name="PresetButton5"
-                                    Classes="dialogButton"
-                                    Content="Смешанный лес"
-                                    Tag="mixed"
-                                    Background="#EEF6E6"
-                                    Margin="0,0,8,8" />
-                        </WrapPanel>
+    <Button x:Name="PresetButton6"
+            Classes="dialogButton"
+            Content="Озеро и берег"
+            Tag="lake"
+            Background="#E8F4FF"
+            Margin="0,0,8,8" />
+
+    <Button x:Name="PresetButton3"
+            Classes="dialogButton"
+            Content="Влажный лес"
+            Tag="wet"
+            Background="#E6FFE6"
+            Margin="0,0,8,8" />
+
+    <Button x:Name="PresetButton4"
+            Classes="dialogButton"
+            Content="Просека"
+            Tag="firebreak"
+            Background="#FFF4E1"
+            Margin="0,0,8,8" />
+
+    <Button x:Name="PresetButton5"
+            Classes="dialogButton"
+            Content="Холмы"
+            Tag="hills"
+            Background="#F0E6FF"
+            Margin="0,0,8,8" />
+</WrapPanel>
                     </StackPanel>
                 </Border>
 

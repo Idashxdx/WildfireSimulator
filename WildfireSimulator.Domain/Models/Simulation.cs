@@ -377,14 +377,14 @@ public enum MapScenarioType
 
 public enum ClusteredScenarioType
 {
-    DenseDryConiferous = 0,
-    WaterBarrier = 1,
-    FirebreakGap = 2,
-    HillyClusters = 3,
-    WetAfterRain = 4,
-    MixedDryHotspots = 5
+    MixedForest = 0,
+    DryConiferousMassif = 1,
+    ForestWithRiver = 2,
+    ForestWithLake = 3,
+    ForestWithFirebreak = 4,
+    HillyTerrain = 5,
+    WetForestAfterRain = 6
 }
-
 public enum GraphScaleType
 {
     Small = 0,
