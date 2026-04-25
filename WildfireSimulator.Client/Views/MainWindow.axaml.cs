@@ -31,7 +31,10 @@ public partial class MainWindow : Window
         _clusteredGraphVisualization = this.FindControl<NodeGraphVisualization>("ClusteredGraphVisualization");
 
         if (_gridVisualization != null)
+        {
             _gridVisualization.CellClicked += OnGridCellClicked;
+            _gridVisualization.BackgroundClicked += OnGridBackgroundClicked;
+        }
 
         if (_clusteredGraphVisualization != null)
         {
@@ -39,6 +42,11 @@ public partial class MainWindow : Window
             _clusteredGraphVisualization.EdgeClicked += OnGraphEdgeClicked;
             _clusteredGraphVisualization.BackgroundClicked += OnGraphBackgroundClicked;
         }
+    }
+    private void OnGridBackgroundClicked(object? sender, EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+            vm.ClearGridSelection();
     }
     private void OnGraphEdgeClicked(object? sender, WildfireSimulator.Client.Models.SimulationGraphEdgeDto edge)
     {

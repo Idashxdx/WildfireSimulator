@@ -20,6 +20,25 @@ public partial class GraphVisualization : UserControl
     private INotifyCollectionChanged? _currentCollection;
     private bool _drawScheduled;
     private Dictionary<(int X, int Y), GraphCellDto> _cellLookup = new();
+    private Button? _zoomInButton;
+    private Button? _zoomOutButton;
+    private Button? _resetZoomButton;
+
+    private bool _hasManualZoom;
+    private double _zoom = 1.0;
+    private bool _needCenterAfterDraw;
+    public static readonly StyledProperty<GraphCellDto?> SelectedCellProperty =
+        AvaloniaProperty.Register<GraphVisualization, GraphCellDto?>(nameof(SelectedCell));
+
+    public GraphCellDto? SelectedCell
+    {
+        get => GetValue(SelectedCellProperty);
+        set => SetValue(SelectedCellProperty, value);
+    }
+
+    public event EventHandler? BackgroundClicked;
+    private const double MinZoom = 0.35;
+    private const double MaxZoom = 3.0;
 
     private const int PaddingSize = 24;
     private const int MinCellSize = 8;
@@ -79,26 +98,86 @@ public partial class GraphVisualization : UserControl
         _scrollHost = this.FindControl<ScrollViewer>("ScrollHost");
         _elevationToggle = this.FindControl<ToggleSwitch>("ElevationToggle");
 
+        _zoomInButton = this.FindControl<Button>("ZoomInButton");
+        _zoomOutButton = this.FindControl<Button>("ZoomOutButton");
+        _resetZoomButton = this.FindControl<Button>("ResetZoomButton");
+
+        if (_graphCanvas != null)
+            _graphCanvas.PointerPressed += OnCanvasPointerPressed;
+
+        if (_zoomInButton != null)
+            _zoomInButton.Click += (_, _) => ChangeZoom(true);
+
+        if (_zoomOutButton != null)
+            _zoomOutButton.Click += (_, _) => ChangeZoom(false);
+
+        if (_resetZoomButton != null)
+            _resetZoomButton.Click += (_, _) => ResetZoom();
+
         this.PropertyChanged += OnGraphPropertyChanged;
         this.AttachedToVisualTree += (_, _) => ScheduleDraw();
 
         if (_scrollHost != null)
-            _scrollHost.SizeChanged += (_, _) => ScheduleDraw();
+        {
+            _scrollHost.SizeChanged += (_, _) =>
+            {
+                if (!_hasManualZoom)
+                    ScheduleDraw();
+            };
+        }
 
         if (_elevationToggle != null)
         {
             _elevationToggle.IsChecked = ShowElevationLabels;
+
             _elevationToggle.Checked += (_, _) =>
             {
                 ShowElevationLabels = true;
                 ScheduleDraw();
             };
+
             _elevationToggle.Unchecked += (_, _) =>
             {
                 ShowElevationLabels = false;
                 ScheduleDraw();
             };
         }
+    }
+    private void ChangeZoom(bool zoomIn)
+    {
+        double factor = zoomIn ? 1.18 : 1.0 / 1.18;
+
+        _zoom = Math.Clamp(_zoom * factor, MinZoom, MaxZoom);
+        _hasManualZoom = true;
+        _needCenterAfterDraw = true;
+
+        ScheduleDraw();
+    }
+
+    private void ResetZoom()
+    {
+        _zoom = 1.0;
+        _hasManualZoom = false;
+        _needCenterAfterDraw = true;
+
+        ScheduleDraw();
+    }
+
+    private void OnCanvasPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var properties = e.GetCurrentPoint(_graphCanvas).Properties;
+
+        if (!properties.IsLeftButtonPressed)
+            return;
+
+        if (!ReferenceEquals(e.Source, _graphCanvas))
+            return;
+
+        BackgroundClicked?.Invoke(this, EventArgs.Empty);
+        e.Handled = true;
     }
 
     private void InitializeComponent()
@@ -110,14 +189,28 @@ public partial class GraphVisualization : UserControl
     {
         if (e.Property == CellsProperty)
         {
+            _zoom = 1.0;
+            _hasManualZoom = false;
+            _needCenterAfterDraw = true;
+
             RebindCollectionSubscription();
             ScheduleDraw();
             return;
         }
 
         if (e.Property == GridWidthProperty ||
-            e.Property == GridHeightProperty ||
-            e.Property == IsIgnitionSelectionEnabledProperty ||
+            e.Property == GridHeightProperty)
+        {
+            _zoom = 1.0;
+            _hasManualZoom = false;
+            _needCenterAfterDraw = true;
+
+            ScheduleDraw();
+            return;
+        }
+
+        if (e.Property == IsIgnitionSelectionEnabledProperty ||
+            e.Property == SelectedCellProperty ||
             e.Property == ShowElevationLabelsProperty)
         {
             if (e.Property == ShowElevationLabelsProperty && _elevationToggle != null)
@@ -130,7 +223,6 @@ public partial class GraphVisualization : UserControl
             ScheduleDraw();
         }
     }
-
     private void RebindCollectionSubscription()
     {
         if (_currentCollection != null)
@@ -148,9 +240,12 @@ public partial class GraphVisualization : UserControl
 
     private void OnCellsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        _zoom = 1.0;
+        _hasManualZoom = false;
+        _needCenterAfterDraw = true;
+
         ScheduleDraw();
     }
-
     private void ScheduleDraw()
     {
         if (_drawScheduled)
@@ -179,21 +274,36 @@ public partial class GraphVisualization : UserControl
 
         var safeGridWidth = Math.Max(1, GridWidth);
         var safeGridHeight = Math.Max(1, GridHeight);
-        var cellSize = GetCellSize(safeGridWidth, safeGridHeight);
 
-        var contentWidth = safeGridWidth * cellSize;
-        var contentHeight = safeGridHeight * cellSize;
+        int normalCellSize = GetNormalCellSize(safeGridWidth, safeGridHeight);
+        int cellSize = Math.Max(MinCellSize, (int)Math.Round(normalCellSize * _zoom));
 
-        var viewportWidth = _scrollHost?.Bounds.Width ?? 0;
-        var viewportHeight = _scrollHost?.Bounds.Height ?? 0;
+        double normalContentWidth = safeGridWidth * normalCellSize;
+        double normalContentHeight = safeGridHeight * normalCellSize;
 
-        var canvasWidth = Math.Max(
+        double contentWidth = safeGridWidth * cellSize;
+        double contentHeight = safeGridHeight * cellSize;
+
+        double normalViewportHeight = normalContentHeight + PaddingSize * 2;
+        double normalViewportWidth = normalContentWidth + PaddingSize * 2;
+
+        if (_scrollHost != null)
+        {
+            _scrollHost.Height = normalViewportHeight;
+            _scrollHost.MinHeight = normalViewportHeight;
+            _scrollHost.MaxHeight = normalViewportHeight;
+        }
+
+        double viewportWidth = _scrollHost?.Bounds.Width ?? 0;
+        double viewportHeight = normalViewportHeight;
+
+        double canvasWidth = Math.Max(
             contentWidth + PaddingSize * 2,
-            viewportWidth > 0 ? viewportWidth : contentWidth + PaddingSize * 2);
+            Math.Max(normalViewportWidth, viewportWidth));
 
-        var canvasHeight = Math.Max(
+        double canvasHeight = Math.Max(
             contentHeight + PaddingSize * 2,
-            viewportHeight > 0 ? viewportHeight : contentHeight + PaddingSize * 2);
+            viewportHeight);
 
         _graphCanvas.Width = canvasWidth;
         _graphCanvas.Height = canvasHeight;
@@ -201,8 +311,7 @@ public partial class GraphVisualization : UserControl
         var originX = Math.Max(PaddingSize, (canvasWidth - contentWidth) / 2.0);
         var originY = Math.Max(PaddingSize, (canvasHeight - contentHeight) / 2.0);
 
-        DrawGridBackground(originX, originY, contentWidth, contentHeight);
-
+       DrawGridBackground(originX, originY, (int)Math.Round(contentWidth), (int)Math.Round(contentHeight));
         if (cells.Count == 0)
         {
             DrawEmptyState(canvasWidth, canvasHeight);
@@ -214,8 +323,58 @@ public partial class GraphVisualization : UserControl
 
         if (ShowElevationLabels)
             DrawElevationLabelsForWholeMap(originX, originY, cellSize);
-    }
 
+        if (_needCenterAfterDraw)
+            CenterScrollViewerAfterDraw();
+    }
+    private int GetNormalCellSize(int gridWidth, int gridHeight)
+    {
+        int maxDimension = Math.Max(gridWidth, gridHeight);
+
+        if (maxDimension <= 20)
+            return 28;
+
+        if (maxDimension <= 30)
+            return 24;
+
+        if (maxDimension <= 40)
+            return 20;
+
+        if (maxDimension <= 60)
+            return 16;
+
+        if (maxDimension <= 90)
+            return 12;
+
+        return MinCellSize;
+    }
+    private void CenterScrollViewerAfterDraw()
+    {
+        if (_scrollHost == null || _graphCanvas == null)
+            return;
+
+        _needCenterAfterDraw = false;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_scrollHost == null || _graphCanvas == null)
+                return;
+
+            double viewportWidth = _scrollHost.Viewport.Width;
+            double viewportHeight = _scrollHost.Viewport.Height;
+
+            double extentWidth = _scrollHost.Extent.Width;
+            double extentHeight = _scrollHost.Extent.Height;
+
+            if (viewportWidth <= 0 || viewportHeight <= 0)
+                return;
+
+            double offsetX = Math.Max(0, (extentWidth - viewportWidth) / 2.0);
+            double offsetY = Math.Max(0, (extentHeight - viewportHeight) / 2.0);
+
+            _scrollHost.Offset = new Vector(offsetX, offsetY);
+        }, DispatcherPriority.Background);
+    }
     private void DrawCell(GraphCellDto cell, double originX, double originY, int cellSize)
     {
         if (_graphCanvas == null)
@@ -227,45 +386,75 @@ public partial class GraphVisualization : UserControl
         var fillColor = GetCellColor(cell);
         var strokeColor = GetStrokeColor(cell);
 
-        var strokeThickness = cell.IsSelectedIgnition
+        bool isSelectedCell = SelectedCell?.Id == cell.Id;
+
+        var strokeThickness = isSelectedCell
             ? 3
-            : cell.IsBurning
-                ? 2
-                : 1;
+            : cell.IsSelectedIgnition
+                ? 3
+                : cell.IsBurning
+                    ? 2
+                    : 1;
+
+        if (isSelectedCell)
+            strokeColor = Color.Parse("#5B3CC4");
 
         var rect = new Rectangle
         {
-            Width = cellSize - 2,
-            Height = cellSize - 2,
+            Width = Math.Max(2, cellSize - 2),
+            Height = Math.Max(2, cellSize - 2),
             Fill = new SolidColorBrush(fillColor),
             Stroke = new SolidColorBrush(strokeColor),
             StrokeThickness = strokeThickness,
             RadiusX = 3,
             RadiusY = 3,
-            Cursor = IsIgnitionSelectionEnabled && cell.IsIgnitable
-                ? new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
-                : new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Arrow)
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
         };
 
         ToolTip.SetTip(rect, GetCellTooltip(cell));
 
-        if (IsIgnitionSelectionEnabled && cell.IsIgnitable)
+        rect.PointerPressed += (_, e) =>
         {
-            rect.PointerPressed += (_, _) =>
-            {
-                CellClicked?.Invoke(this, cell);
-            };
-        }
+            if (!e.GetCurrentPoint(rect).Properties.IsLeftButtonPressed)
+                return;
+
+            CellClicked?.Invoke(this, cell);
+            e.Handled = true;
+        };
 
         Canvas.SetLeft(rect, x + 1);
         Canvas.SetTop(rect, y + 1);
         _graphCanvas.Children.Add(rect);
+
+        if (isSelectedCell)
+            DrawSelectedCellFrame(x, y, cellSize);
 
         if (cell.IsSelectedIgnition)
         {
             DrawIgnitionSelectionGlow(x, y, cellSize);
             DrawIgnitionMarker(x, y, cellSize);
         }
+    }
+    private void DrawSelectedCellFrame(double x, double y, int cellSize)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var frame = new Rectangle
+        {
+            Width = Math.Max(2, cellSize - 2),
+            Height = Math.Max(2, cellSize - 2),
+            Fill = Brushes.Transparent,
+            Stroke = new SolidColorBrush(Color.Parse("#5B3CC4")),
+            StrokeThickness = 3,
+            RadiusX = 4,
+            RadiusY = 4,
+            IsHitTestVisible = false
+        };
+
+        Canvas.SetLeft(frame, x + 1);
+        Canvas.SetTop(frame, y + 1);
+        _graphCanvas.Children.Add(frame);
     }
 
     private void DrawElevationLabelsForWholeMap(double originX, double originY, int cellSize)

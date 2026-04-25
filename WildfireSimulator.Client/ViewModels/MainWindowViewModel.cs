@@ -240,6 +240,108 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _isParametersExpanded = false;
     [ObservableProperty]
     private SimulationGraphEdgeDto? _selectedGraphEdge;
+
+    [ObservableProperty]
+    private GraphCellDto? _selectedGridCell;
+
+
+    public bool HasSelectedGridCell => SelectedGridCell != null;
+
+    public string SelectedGridCellTitle =>
+        SelectedGridCell == null
+            ? "Клетка не выбрана"
+            : $"Клетка ({SelectedGridCell.X}, {SelectedGridCell.Y})";
+
+    public string SelectedGridCellVegetationText =>
+        SelectedGridCell?.Vegetation switch
+        {
+            "Coniferous" => "Хвойный лес",
+            "Deciduous" => "Лиственный лес",
+            "Mixed" => "Смешанный лес",
+            "Grass" => "Трава",
+            "Shrub" => "Кустарник",
+            "Water" => "Вода",
+            "Bare" => "Пустая поверхность",
+            null => "Нет данных",
+            _ => SelectedGridCell?.Vegetation ?? "Нет данных"
+        };
+
+    public string SelectedGridCellStateText =>
+        SelectedGridCell?.State switch
+        {
+            "Burning" => "Горит",
+            "Burned" => "Сгорела",
+            "Normal" => "Нормальная",
+            null => "Нет данных",
+            _ => SelectedGridCell?.State ?? "Нет данных"
+        };
+
+    public string SelectedGridCellMoistureText =>
+        SelectedGridCell == null ? "—" : $"{SelectedGridCell.Moisture:F2}";
+
+    public string SelectedGridCellElevationText =>
+        SelectedGridCell == null ? "—" : $"{SelectedGridCell.Elevation:F0} м";
+
+    public string SelectedGridCellProbabilityText =>
+        SelectedGridCell == null ? "—" : $"{SelectedGridCell.BurnProbability:F3}";
+
+    public string SelectedGridCellFireStageText =>
+        SelectedGridCell?.FireStage switch
+        {
+            "Unburned" => "Не горела",
+            "Ignition" => "Воспламенение",
+            "Active" => "Активное горение",
+            "Intense" => "Интенсивное горение",
+            "Smoldering" => "Тление",
+            "BurnedOut" => "Полностью выгорела",
+            null or "" => "—",
+            _ => SelectedGridCell!.FireStage
+        };
+
+    public string SelectedGridCellFireIntensityText =>
+        SelectedGridCell == null ? "—" : $"{SelectedGridCell.FireIntensity:F2}";
+
+    public string SelectedGridCellFuelText =>
+        SelectedGridCell == null
+            ? "—"
+            : $"{SelectedGridCell.CurrentFuelLoad:F2} / {SelectedGridCell.FuelLoad:F2}";
+
+    public string SelectedGridCellHeatText =>
+        SelectedGridCell == null ? "—" : $"{SelectedGridCell.AccumulatedHeatJ:F2} Дж";
+
+    public string SelectedGridCellBurningElapsedText =>
+        SelectedGridCell == null ? "—" : $"{SelectedGridCell.BurningElapsedSeconds:F0} с";
+
+    public string SelectedGridCellIgnitableText =>
+        SelectedGridCell == null ? "—" : SelectedGridCell.IsIgnitable ? "Да" : "Нет";
+    public void SelectGridCell(GraphCellDto? cell)
+    {
+        SelectedGridCell = cell;
+        NotifyGridCellSelectionChanged();
+    }
+
+    public void ClearGridSelection()
+    {
+        SelectedGridCell = null;
+        NotifyGridCellSelectionChanged();
+    }
+
+    private void NotifyGridCellSelectionChanged()
+    {
+        OnPropertyChanged(nameof(HasSelectedGridCell));
+        OnPropertyChanged(nameof(SelectedGridCellTitle));
+        OnPropertyChanged(nameof(SelectedGridCellVegetationText));
+        OnPropertyChanged(nameof(SelectedGridCellStateText));
+        OnPropertyChanged(nameof(SelectedGridCellMoistureText));
+        OnPropertyChanged(nameof(SelectedGridCellElevationText));
+        OnPropertyChanged(nameof(SelectedGridCellProbabilityText));
+        OnPropertyChanged(nameof(SelectedGridCellFireStageText));
+        OnPropertyChanged(nameof(SelectedGridCellFireIntensityText));
+        OnPropertyChanged(nameof(SelectedGridCellFuelText));
+        OnPropertyChanged(nameof(SelectedGridCellHeatText));
+        OnPropertyChanged(nameof(SelectedGridCellBurningElapsedText));
+        OnPropertyChanged(nameof(SelectedGridCellIgnitableText));
+    }
     public bool HasSelectedGraphEdge => SelectedGraphEdge != null;
 
     public bool HasGraphSelection =>
@@ -909,7 +1011,12 @@ public partial class MainWindowViewModel : ObservableObject
         ClearSelectedIgnitionCells();
         ClearSelectedIgnitionNodes();
 
+        SelectedGridCell = null;
         SelectedGraphNode = null;
+        SelectedGraphEdge = null;
+
+        NotifyGridCellSelectionChanged();
+        NotifyGraphSelectionChanged();
         HasSavedIgnitionPreview = false;
         IsPreparedMapLoaded = false;
         IsIgnitionSelectionEnabled = false;
@@ -2924,6 +3031,9 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (cell == null)
             return;
+
+        SelectedGridCell = cell;
+        NotifyGridCellSelectionChanged();
 
         if (!IsIgnitionSelectionEnabled ||
             !IsManualIgnitionMode ||

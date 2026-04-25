@@ -539,13 +539,14 @@
                             BorderThickness="1"
                             Padding="12"
                             CornerRadius="12">
-                            <Grid MinHeight="560">
-                                <controls:GraphVisualization x:Name="GridVisualization"
-                                    Cells="{Binding Cells}"
-                                    GridWidth="{Binding GridWidth}"
-                                    GridHeight="{Binding GridHeight}"
-                                    IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
-                                    IsVisible="{Binding IsGridSelected}" />
+                            <Grid>
+                              <controls:GraphVisualization x:Name="GridVisualization"
+    Cells="{Binding Cells}"
+    GridWidth="{Binding GridWidth}"
+    GridHeight="{Binding GridHeight}"
+    SelectedCell="{Binding SelectedGridCell, Mode=TwoWay}"
+    IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
+    IsVisible="{Binding IsGridSelected}" />
 
                         <controls:NodeGraphVisualization
     x:Name="ClusteredGraphVisualization"
@@ -957,6 +958,83 @@
                    TextWrapping="Wrap" />
     </StackPanel>
 </Border>
+<Border Background="#FFFDF8"
+        BorderBrush="#E7E0F2"
+        BorderThickness="1"
+        CornerRadius="12"
+        Padding="12"
+        IsVisible="{Binding HasSelectedGridCell}">
+    <StackPanel Spacing="10">
+
+        <TextBlock Text="Выбранная клетка карты"
+                   Foreground="#2F2A3A"
+                   FontSize="16"
+                   FontWeight="Bold"
+                   TextWrapping="Wrap" />
+
+        <Border Background="#F8F5FF"
+                BorderBrush="#E6DFF1"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="10">
+            <StackPanel Spacing="6">
+                <TextBlock Text="{Binding SelectedGridCellTitle}"
+                           Foreground="#2F2A3A"
+                           FontWeight="Bold"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGridCellVegetationText, StringFormat=Тип поверхности: {0}}"
+                           Foreground="#6E6A78"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGridCellStateText, StringFormat=Состояние: {0}}"
+                           Foreground="#6E6A78"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGridCellMoistureText, StringFormat=Влажность: {0}}"
+                           Foreground="#6E6A78"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGridCellElevationText, StringFormat=Высота: {0}}"
+                           Foreground="#6E6A78"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGridCellProbabilityText, StringFormat=Вероятность горения: {0}}"
+                           Foreground="#6E6A78"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGridCellIgnitableText, StringFormat=Может загореться: {0}}"
+                           Foreground="#6E6A78"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGridCellFireStageText, StringFormat=Стадия пожара: {0}}"
+                           Foreground="#6E6A78"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGridCellFireIntensityText, StringFormat=Интенсивность: {0}}"
+                           Foreground="#6E6A78"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGridCellFuelText, StringFormat=Топливо: {0}}"
+                           Foreground="#6E6A78"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGridCellHeatText, StringFormat=Накопленное тепло: {0}}"
+                           Foreground="#6E6A78"
+                           TextWrapping="Wrap" />
+
+                <TextBlock Text="{Binding SelectedGridCellBurningElapsedText, StringFormat=Время горения: {0}}"
+                           Foreground="#6E6A78"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="Чтобы сбросить выбор, нажмите на свободное место внутри карты."
+                   Foreground="#8A8495"
+                   FontSize="11"
+                   TextWrapping="Wrap" />
+    </StackPanel>
+</Border>
 
                         <Border Background="#F8F5FF"
                             BorderBrush="#E6DFF1"
@@ -1064,26 +1142,53 @@
                                     </StackPanel>
                                 </Border>
 
-                                <Border Background="#FFFDF8"
-                                    BorderBrush="#ECE4F6"
-                                    BorderThickness="1"
-                                    Padding="10"
-                                    CornerRadius="8">
-                                    <StackPanel Spacing="6">
-                                        <TextBlock Text="Журнал событий"
-                                            Foreground="#7A7486"
-                                            FontSize="12" />
+                              <Border Background="#FFFDF8"
+        BorderBrush="#ECE4F6"
+        BorderThickness="1"
+        Padding="10"
+        CornerRadius="8">
+    <StackPanel Spacing="6">
+        <TextBlock Text="Журнал событий"
+                   Foreground="#7A7486"
+                   FontSize="12" />
 
-                                        <ListBox ItemsSource="{Binding EventLog}"
-                                            Background="#FAF8F2"
-                                            Foreground="#2F2A3A"
-                                            BorderBrush="#ECE4F6"
-                                            BorderThickness="1"
-                                            CornerRadius="8"
-                                            MinHeight="120"
-                                            MaxHeight="220" />
-                                    </StackPanel>
-                                </Border>
+       <ListBox ItemsSource="{Binding EventLog}"
+         Background="#FAF8F2"
+         Foreground="#2F2A3A"
+         BorderBrush="#ECE4F6"
+         BorderThickness="1"
+         CornerRadius="8"
+         MinHeight="120"
+         MaxHeight="220"
+         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+         ScrollViewer.VerticalScrollBarVisibility="Auto">
+
+    <ListBox.Styles>
+        <Style Selector="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+    </ListBox.Styles>
+
+    <ListBox.ItemTemplate>
+        <DataTemplate>
+            <Border Margin="3"
+                    Padding="6"
+                    Background="#FFFDF8"
+                    BorderBrush="#EEE7F6"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                <TextBlock Text="{Binding}"
+                           Foreground="#2F2A3A"
+                           FontSize="11"
+                           LineHeight="15"
+                           TextWrapping="Wrap"
+                           TextTrimming="None" />
+            </Border>
+        </DataTemplate>
+    </ListBox.ItemTemplate>
+</ListBox>
+    </StackPanel>
+</Border>
 
                             </StackPanel>
                         </Border>
