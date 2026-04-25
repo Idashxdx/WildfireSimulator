@@ -611,4 +611,92 @@ public class ApiService
             ? messageElement.GetString() ?? fallback
             : fallback;
     }
+    public async Task<ClusteredGraphBlueprintDto?> PreviewClusteredBlueprintAsync(
+    CreateSimulationDto dto,
+    double temperature,
+    double humidity,
+    double windSpeed,
+    double windDirection)
+    {
+        try
+        {
+            var request = new
+            {
+                name = dto.Name,
+                description = dto.Description,
+
+                gridWidth = dto.GridWidth,
+                gridHeight = dto.GridHeight,
+                graphType = dto.GraphType,
+                graphScaleType = dto.GraphScaleType,
+
+                initialMoistureMin = dto.InitialMoistureMin,
+                initialMoistureMax = dto.InitialMoistureMax,
+                elevationVariation = dto.ElevationVariation,
+                initialFireCellsCount = dto.InitialFireCellsCount,
+                simulationSteps = dto.SimulationSteps,
+                stepDurationSeconds = dto.StepDurationSeconds,
+                randomSeed = dto.RandomSeed,
+
+                vegetationDistributions = dto.VegetationDistributions,
+
+                mapCreationMode = dto.MapCreationMode,
+                scenarioType = dto.ScenarioType,
+                clusteredScenarioType = dto.ClusteredScenarioType,
+
+                mapNoiseStrength = dto.MapNoiseStrength,
+                mapDrynessFactor = dto.MapDrynessFactor,
+                reliefStrengthFactor = dto.ReliefStrengthFactor,
+                fuelDensityFactor = dto.FuelDensityFactor,
+
+                mapRegionObjects = dto.MapRegionObjects,
+                clusteredBlueprint = dto.ClusteredBlueprint,
+                initialFirePositions = dto.InitialFirePositions,
+
+                selectedDemoPreset = dto.SelectedDemoPreset,
+                preparedMap = dto.PreparedMap,
+
+                temperature = temperature,
+                humidity = humidity,
+                windSpeed = windSpeed,
+                windDirection = windDirection,
+                precipitation = dto.Precipitation
+            };
+
+            var json = JsonSerializer.Serialize(request, _jsonOptions);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync(
+                $"{_baseUrl}/api/simulationmanager/preview-clustered-blueprint",
+                content);
+
+            var responseJson = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"PreviewClusteredBlueprint failed: {response.StatusCode} {responseJson}");
+                return null;
+            }
+
+            using var document = JsonDocument.Parse(responseJson);
+
+            if (!document.RootElement.TryGetProperty("success", out var successElement) ||
+                !successElement.GetBoolean())
+            {
+                return null;
+            }
+
+            if (!document.RootElement.TryGetProperty("blueprint", out var blueprintElement))
+                return null;
+
+            var blueprintJson = blueprintElement.GetRawText();
+            return JsonSerializer.Deserialize<ClusteredGraphBlueprintDto>(blueprintJson, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error previewing clustered blueprint: {ex.Message}");
+            return null;
+        }
+    }
+
 }

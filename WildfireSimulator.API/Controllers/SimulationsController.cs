@@ -101,199 +101,200 @@ public class SimulationsController : ControllerBase
         }
     }
 
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateSimulationWithWeatherRequest request, CancellationToken cancellationToken)
+   [HttpPost]
+public async Task<IActionResult> Create([FromBody] CreateSimulationWithWeatherRequest request, CancellationToken cancellationToken)
+{
+    try
     {
-        try
-        {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
 
-            var effectiveScenarioType = request.GraphType == GraphType.Grid
-                ? ResolveGridScenarioType(request.SelectedDemoPreset, request.ScenarioType)
+        var effectiveScenarioType = request.GraphType == GraphType.Grid
+            ? ResolveGridScenarioType(request.SelectedDemoPreset, request.ScenarioType)
+            : null;
+
+        GraphScaleType? effectiveGraphScaleType = request.GraphType == GraphType.Grid
+            ? null
+            : request.GraphScaleType ?? GraphScaleType.Medium;
+
+        var effectiveClusteredBlueprint =
+            request.GraphType == GraphType.ClusteredGraph &&
+            request.ClusteredBlueprint != null &&
+            request.ClusteredBlueprint.Nodes.Any()
+                ? request.ClusteredBlueprint
                 : null;
 
-            GraphScaleType? effectiveGraphScaleType = request.GraphType == GraphType.Grid
-     ? null
-     : request.GraphScaleType ?? GraphScaleType.Medium;
-            var effectiveMapCreationMode = request.GraphType switch
+        var effectiveMapCreationMode = request.GraphType switch
+        {
+            GraphType.Grid when request.PreparedMap != null => MapCreationMode.Random,
+            GraphType.ClusteredGraph when effectiveClusteredBlueprint != null => MapCreationMode.SemiManual,
+            _ => request.MapCreationMode
+        };
+
+        var effectiveClusteredScenarioType =
+            request.GraphType == GraphType.ClusteredGraph &&
+            effectiveClusteredBlueprint == null &&
+            effectiveGraphScaleType == GraphScaleType.Large &&
+            effectiveMapCreationMode == MapCreationMode.Scenario
+                ? request.ClusteredScenarioType
+                : null;
+
+        var parameters = new SimulationParameters
+        {
+            GridWidth = request.PreparedMap?.Width > 0 ? request.PreparedMap.Width : request.GridWidth,
+            GridHeight = request.PreparedMap?.Height > 0 ? request.PreparedMap.Height : request.GridHeight,
+            GraphType = request.GraphType,
+            GraphScaleType = effectiveGraphScaleType,
+
+            InitialMoistureMin = request.InitialMoistureMin,
+            InitialMoistureMax = request.InitialMoistureMax,
+            ElevationVariation = request.ElevationVariation,
+            InitialFireCellsCount = request.InitialFireCellsCount,
+            SimulationSteps = request.SimulationSteps,
+            StepDurationSeconds = request.StepDurationSeconds,
+            RandomSeed = request.RandomSeed,
+            MapCreationMode = effectiveMapCreationMode,
+
+            ScenarioType = effectiveScenarioType,
+            ClusteredScenarioType = effectiveClusteredScenarioType,
+
+            MapNoiseStrength = request.MapNoiseStrength,
+            MapDrynessFactor = request.MapDrynessFactor,
+            ReliefStrengthFactor = request.ReliefStrengthFactor,
+            FuelDensityFactor = request.FuelDensityFactor
+        };
+
+        if (request.VegetationDistributions != null && request.VegetationDistributions.Any())
+        {
+            parameters.VegetationDistributions = request.VegetationDistributions
+                .Select(v => new VegetationDistribution
+                {
+                    VegetationType = v.VegetationType,
+                    Probability = v.Probability
+                })
+                .ToList();
+        }
+
+        if (request.GraphType == GraphType.Grid &&
+            request.MapRegionObjects != null &&
+            request.MapRegionObjects.Any())
+        {
+            parameters.MapRegionObjects = request.MapRegionObjects
+                .Select(x => new MapRegionObject
+                {
+                    Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
+                    ObjectType = x.ObjectType,
+                    Shape = MapObjectShape.Rectangle,
+                    StartX = x.StartX,
+                    StartY = x.StartY,
+                    Width = x.Width,
+                    Height = x.Height,
+                    Strength = x.Strength,
+                    Priority = x.Priority
+                })
+                .ToList();
+        }
+
+        if (effectiveClusteredBlueprint != null)
+        {
+            parameters.ClusteredBlueprint = new ClusteredGraphBlueprint
             {
-                GraphType.Grid when request.PreparedMap != null => MapCreationMode.Random,
-                GraphType.ClusteredGraph when effectiveGraphScaleType == GraphScaleType.Small => MapCreationMode.Random,
-                _ => request.MapCreationMode
-            };
-
-            var effectiveClusteredScenarioType =
-                request.GraphType == GraphType.ClusteredGraph &&
-                effectiveGraphScaleType != GraphScaleType.Small &&
-                effectiveMapCreationMode == MapCreationMode.Scenario
-                    ? request.ClusteredScenarioType
-                    : null;
-
-            var effectiveClusteredBlueprint =
-                request.GraphType == GraphType.ClusteredGraph &&
-                effectiveMapCreationMode == MapCreationMode.SemiManual &&
-                request.ClusteredBlueprint != null &&
-                request.ClusteredBlueprint.Nodes.Any()
-                    ? request.ClusteredBlueprint
-                    : null;
-
-            var parameters = new SimulationParameters
-            {
-                GridWidth = request.PreparedMap?.Width > 0 ? request.PreparedMap.Width : request.GridWidth,
-                GridHeight = request.PreparedMap?.Height > 0 ? request.PreparedMap.Height : request.GridHeight,
-                GraphType = request.GraphType,
-                GraphScaleType = effectiveGraphScaleType,
-
-                InitialMoistureMin = request.InitialMoistureMin,
-                InitialMoistureMax = request.InitialMoistureMax,
-                ElevationVariation = request.ElevationVariation,
-                InitialFireCellsCount = request.InitialFireCellsCount,
-                SimulationSteps = request.SimulationSteps,
-                StepDurationSeconds = request.StepDurationSeconds,
-                RandomSeed = request.RandomSeed,
-                MapCreationMode = effectiveMapCreationMode,
-
-                ScenarioType = effectiveScenarioType,
-                ClusteredScenarioType = effectiveClusteredScenarioType,
-
-                MapNoiseStrength = request.MapNoiseStrength,
-                MapDrynessFactor = request.MapDrynessFactor,
-                ReliefStrengthFactor = request.ReliefStrengthFactor,
-                FuelDensityFactor = request.FuelDensityFactor
-            };
-
-            if (request.VegetationDistributions != null && request.VegetationDistributions.Any())
-            {
-                parameters.VegetationDistributions = request.VegetationDistributions
-                    .Select(v => new VegetationDistribution
-                    {
-                        VegetationType = v.VegetationType,
-                        Probability = v.Probability
-                    })
-                    .ToList();
-            }
-
-            if (request.GraphType == GraphType.Grid &&
-                request.MapRegionObjects != null &&
-                request.MapRegionObjects.Any())
-            {
-                parameters.MapRegionObjects = request.MapRegionObjects
-                    .Select(x => new MapRegionObject
+                CanvasWidth = effectiveClusteredBlueprint.CanvasWidth,
+                CanvasHeight = effectiveClusteredBlueprint.CanvasHeight,
+                Candidates = effectiveClusteredBlueprint.Candidates
+                    .Select(x => new ClusteredCandidateNode
                     {
                         Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
-                        ObjectType = x.ObjectType,
-                        Shape = MapObjectShape.Rectangle,
-                        StartX = x.StartX,
-                        StartY = x.StartY,
-                        Width = x.Width,
-                        Height = x.Height,
-                        Strength = x.Strength,
-                        Priority = x.Priority
+                        X = x.X,
+                        Y = x.Y
                     })
-                    .ToList();
-            }
-
-            if (effectiveClusteredBlueprint != null)
-            {
-                parameters.ClusteredBlueprint = new ClusteredGraphBlueprint
-                {
-                    CanvasWidth = effectiveClusteredBlueprint.CanvasWidth,
-                    CanvasHeight = effectiveClusteredBlueprint.CanvasHeight,
-                    Candidates = effectiveClusteredBlueprint.Candidates
-                        .Select(x => new ClusteredCandidateNode
-                        {
-                            Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
-                            X = x.X,
-                            Y = x.Y
-                        })
-                        .ToList(),
-                    Nodes = effectiveClusteredBlueprint.Nodes
-                        .Select(x => new ClusteredNodeDraft
-                        {
-                            Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
-                            X = x.X,
-                            Y = x.Y,
-                            ClusterId = x.ClusterId ?? string.Empty,
-                            Vegetation = x.Vegetation,
-                            Moisture = x.Moisture,
-                            Elevation = x.Elevation
-                        })
-                        .ToList(),
-                    Edges = effectiveClusteredBlueprint.Edges
-                        .Select(x => new ClusteredEdgeDraft
-                        {
-                            Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
-                            FromNodeId = x.FromNodeId,
-                            ToNodeId = x.ToNodeId,
-                            DistanceOverride = x.DistanceOverride,
-                            FireSpreadModifier = x.FireSpreadModifier
-                        })
-                        .ToList()
-                };
-            }
-
-            var simulation = new Simulation(
-                request.Name,
-                request.Description,
-                parameters);
-
-            if (request.InitialFirePositions != null && request.InitialFirePositions.Any())
-            {
-                var fixedPositions = request.InitialFirePositions
-                    .Select(p => (p.X, p.Y))
-                    .ToList();
-
-                simulation.SaveInitialFirePositions(fixedPositions);
-            }
-
-            var weather = new WeatherCondition(
-                DateTime.UtcNow,
-                request.Temperature,
-                request.Humidity,
-                request.WindSpeed,
-                request.WindDirection,
-                request.Precipitation);
-
-            await _context.WeatherConditions.AddAsync(weather, cancellationToken);
-            simulation.SetWeatherCondition(weather);
-
-            if (request.GraphType == GraphType.Grid && request.PreparedMap != null)
-            {
-                var preparedGraph = BuildGridGraphFromPreparedMap(request.PreparedMap, parameters);
-                simulation.SaveGraph(preparedGraph);
-            }
-
-            await _simulationRepository.AddAsync(simulation, cancellationToken);
-
-            _logger.LogInformation(
-                "Создана симуляция {Id}. GraphType={GraphType}, GraphScaleType={GraphScaleType}, Mode={Mode}, GridScenario={GridScenario}, GraphScenario={GraphScenario}, GridObjects={ObjectsCount}, GraphNodes={GraphNodesCount}, HasPreparedMap={HasPreparedMap}",
-                simulation.Id,
-                simulation.Parameters.GraphType,
-                simulation.Parameters.GraphScaleType,
-                simulation.Parameters.MapCreationMode,
-                simulation.Parameters.ScenarioType,
-                simulation.Parameters.ClusteredScenarioType,
-                simulation.Parameters.MapRegionObjects.Count,
-                simulation.Parameters.ClusteredBlueprint?.Nodes.Count ?? 0,
-                request.PreparedMap != null);
-
-            return CreatedAtAction(
-                nameof(GetById),
-                new { id = simulation.Id },
-                SimulationDto.FromEntity(simulation));
+                    .ToList(),
+                Nodes = effectiveClusteredBlueprint.Nodes
+                    .Select(x => new ClusteredNodeDraft
+                    {
+                        Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
+                        X = x.X,
+                        Y = x.Y,
+                        ClusterId = x.ClusterId ?? string.Empty,
+                        Vegetation = x.Vegetation,
+                        Moisture = x.Moisture,
+                        Elevation = x.Elevation
+                    })
+                    .ToList(),
+                Edges = effectiveClusteredBlueprint.Edges
+                    .Select(x => new ClusteredEdgeDraft
+                    {
+                        Id = x.Id == Guid.Empty ? Guid.NewGuid() : x.Id,
+                        FromNodeId = x.FromNodeId,
+                        ToNodeId = x.ToNodeId,
+                        DistanceOverride = x.DistanceOverride,
+                        FireSpreadModifier = x.FireSpreadModifier
+                    })
+                    .ToList()
+            };
         }
-        catch (Exception ex)
+
+        var simulation = new Simulation(
+            request.Name,
+            request.Description,
+            parameters);
+
+        if (request.InitialFirePositions != null && request.InitialFirePositions.Any())
         {
-            _logger.LogError(ex, "Ошибка при создании симуляции");
-            return StatusCode(500, new
-            {
-                success = false,
-                message = "Внутренняя ошибка сервера",
-                error = ex.Message
-            });
+            var fixedPositions = request.InitialFirePositions
+                .Select(p => (p.X, p.Y))
+                .ToList();
+
+            simulation.SaveInitialFirePositions(fixedPositions);
         }
+
+        var weather = new WeatherCondition(
+            DateTime.UtcNow,
+            request.Temperature,
+            request.Humidity,
+            request.WindSpeed,
+            request.WindDirection,
+            request.Precipitation);
+
+        await _context.WeatherConditions.AddAsync(weather, cancellationToken);
+        simulation.SetWeatherCondition(weather);
+
+        if (request.GraphType == GraphType.Grid && request.PreparedMap != null)
+        {
+            var preparedGraph = BuildGridGraphFromPreparedMap(request.PreparedMap, parameters);
+            simulation.SaveGraph(preparedGraph);
+        }
+
+        await _simulationRepository.AddAsync(simulation, cancellationToken);
+
+        _logger.LogInformation(
+            "Создана симуляция {Id}. GraphType={GraphType}, GraphScaleType={GraphScaleType}, Mode={Mode}, GridScenario={GridScenario}, GraphScenario={GraphScenario}, GridObjects={ObjectsCount}, GraphNodes={GraphNodesCount}, HasPreparedMap={HasPreparedMap}",
+            simulation.Id,
+            simulation.Parameters.GraphType,
+            simulation.Parameters.GraphScaleType,
+            simulation.Parameters.MapCreationMode,
+            simulation.Parameters.ScenarioType,
+            simulation.Parameters.ClusteredScenarioType,
+            simulation.Parameters.MapRegionObjects.Count,
+            simulation.Parameters.ClusteredBlueprint?.Nodes.Count ?? 0,
+            request.PreparedMap != null);
+
+        return CreatedAtAction(
+            nameof(GetById),
+            new { id = simulation.Id },
+            SimulationDto.FromEntity(simulation));
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Ошибка при создании симуляции");
+        return StatusCode(500, new
+        {
+            success = false,
+            message = "Внутренняя ошибка сервера",
+            error = ex.Message
+        });
+    }
+}
 
     private static MapScenarioType? ResolveGridScenarioType(string? selectedDemoPreset, MapScenarioType? fallback)
     {

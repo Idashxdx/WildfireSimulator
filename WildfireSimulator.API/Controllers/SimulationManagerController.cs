@@ -928,6 +928,116 @@ public class SimulationManagerController : ControllerBase
             });
         }
     }
+    [HttpPost("preview-clustered-blueprint")]
+    public async Task<IActionResult> PreviewClusteredBlueprint(
+    [FromBody] CreateSimulationWithWeatherRequest request,
+    CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (request.GraphType != GraphType.ClusteredGraph)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Предпросмотр итогового графа доступен только для графовой модели."
+                });
+            }
+
+            var graphScaleType = request.GraphScaleType ?? GraphScaleType.Medium;
+
+            var parameters = new SimulationParameters
+            {
+                GridWidth = request.GridWidth,
+                GridHeight = request.GridHeight,
+                GraphType = GraphType.ClusteredGraph,
+                GraphScaleType = graphScaleType,
+
+                InitialMoistureMin = request.InitialMoistureMin,
+                InitialMoistureMax = request.InitialMoistureMax,
+                ElevationVariation = request.ElevationVariation,
+                InitialFireCellsCount = request.InitialFireCellsCount,
+                SimulationSteps = request.SimulationSteps,
+                StepDurationSeconds = request.StepDurationSeconds,
+                RandomSeed = request.RandomSeed,
+
+                MapCreationMode = request.MapCreationMode,
+                ScenarioType = null,
+                ClusteredScenarioType = graphScaleType == GraphScaleType.Large &&
+                                        request.MapCreationMode == MapCreationMode.Scenario
+                    ? request.ClusteredScenarioType
+                    : null,
+
+                MapNoiseStrength = request.MapNoiseStrength,
+                MapDrynessFactor = request.MapDrynessFactor,
+                ReliefStrengthFactor = request.ReliefStrengthFactor,
+                FuelDensityFactor = request.FuelDensityFactor
+            };
+
+            if (request.VegetationDistributions != null && request.VegetationDistributions.Any())
+            {
+                parameters.VegetationDistributions = request.VegetationDistributions
+                    .Select(v => new VegetationDistribution
+                    {
+                        VegetationType = v.VegetationType,
+                        Probability = v.Probability
+                    })
+                    .ToList();
+            }
+
+            int nodeCount = graphScaleType switch
+            {
+                GraphScaleType.Small => 20,
+                GraphScaleType.Medium => 70,
+                GraphScaleType.Large => 140,
+                _ => 70
+            };
+
+            var graph = await _graphGenerator.GenerateClusteredGraphAsync(nodeCount, parameters);
+
+            var blueprint = new
+            {
+                canvasWidth = graph.Width,
+                canvasHeight = graph.Height,
+                candidates = new List<object>(),
+                nodes = graph.Cells.Select(c => new
+                {
+                    id = c.Id,
+                    x = c.X,
+                    y = c.Y,
+                    clusterId = string.IsNullOrWhiteSpace(c.ClusterId) ? "область-1" : c.ClusterId,
+                    vegetation = c.Vegetation,
+                    moisture = c.Moisture,
+                    elevation = c.Elevation
+                }).ToList(),
+                edges = graph.Edges.Select(e => new
+                {
+                    id = e.Id,
+                    fromNodeId = e.FromCellId,
+                    toNodeId = e.ToCellId,
+                    distanceOverride = e.Distance,
+                    fireSpreadModifier = e.FireSpreadModifier
+                }).ToList()
+            };
+
+            return Ok(new
+            {
+                success = true,
+                blueprint = blueprint
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ошибка при подготовке итогового графа для редактора");
+            return StatusCode(500, new
+            {
+                success = false,
+                message = "Ошибка при подготовке итогового графа",
+                error = ex.Message
+            });
+        }
+    }
+
     [HttpPost("{simulationId}/refresh-ignitions")]
     public async Task<IActionResult> RefreshIgnitions(Guid simulationId, CancellationToken cancellationToken)
     {

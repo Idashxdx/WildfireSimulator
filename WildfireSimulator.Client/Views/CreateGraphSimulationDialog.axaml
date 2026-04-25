@@ -528,8 +528,12 @@
                 <TextBlock x:Name="SemiManualDescriptionTextBlock"
                            IsVisible="False" />
 
-                <Button x:Name="OpenMapEditorButton"
-                        IsVisible="False" />
+              <Button x:Name="OpenMapEditorButton"
+        Classes="dialogButton"
+        Content="Открыть редактор итогового графа"
+        Background="#E8F2E1"
+        Foreground="#2F2A3A"
+        Click="OpenMapEditorButton_Click" />
 
             </StackPanel>
         </ScrollViewer>
