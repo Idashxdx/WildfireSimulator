@@ -14,45 +14,70 @@
                     BorderBrush="#E6DFEE"
                     BorderThickness="1"
                     CornerRadius="10"
-                    Padding="8"
+                    Padding="7"
                     Margin="0,0,0,8">
-                <StackPanel Orientation="Horizontal"
-                            HorizontalAlignment="Right"
-                            Spacing="8">
-                    <Button x:Name="ZoomOutButton"
-                            Content="-"
-                            Width="38"
-                            Height="32"
-                            Background="#D9D5CF"
-                            Foreground="#2F2A3A"
-                            FontWeight="Bold"/>
+                <Grid ColumnDefinitions="*,Auto"
+                      ColumnSpacing="10">
 
-                    <Button x:Name="ResetZoomButton"
-                            Content="Сброс"
-                            Height="32"
-                            Padding="14,0"
-                            Background="#E7E1D8"
-                            Foreground="#2F2A3A"/>
+                    <TextBlock Grid.Column="0"
+                               Text="Визуализация графа"
+                               Foreground="#554E63"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"/>
 
-                    <Button x:Name="ZoomInButton"
-                            Content="+"
-                            Width="38"
-                            Height="32"
-                            Background="#D9D5CF"
-                            Foreground="#2F2A3A"
-                            FontWeight="Bold"/>
-                </StackPanel>
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                Spacing="6"
+                                VerticalAlignment="Center">
+                        <Button x:Name="ZoomOutButton"
+                                Content="−"
+                                Width="30"
+                                Height="30"
+                                CornerRadius="15"
+                                Padding="0"
+                                HorizontalContentAlignment="Center"
+                                VerticalContentAlignment="Center"
+                                Background="#E6E1D8"
+                                Foreground="#2F2A3A"
+                                FontSize="16"
+                                FontWeight="Bold"/>
+
+                        <Button x:Name="ResetZoomButton"
+                                Content="Сброс"
+                                Height="30"
+                                Padding="12,0"
+                                CornerRadius="15"
+                                HorizontalContentAlignment="Center"
+                                VerticalContentAlignment="Center"
+                                Background="#EFEAE2"
+                                Foreground="#2F2A3A"
+                                FontSize="12"
+                                FontWeight="SemiBold"/>
+
+                        <Button x:Name="ZoomInButton"
+                                Content="+"
+                                Width="30"
+                                Height="30"
+                                CornerRadius="15"
+                                Padding="0"
+                                HorizontalContentAlignment="Center"
+                                VerticalContentAlignment="Center"
+                                Background="#E6E1D8"
+                                Foreground="#2F2A3A"
+                                FontSize="16"
+                                FontWeight="Bold"/>
+                    </StackPanel>
+                </Grid>
             </Border>
 
             <ScrollViewer x:Name="ScrollHost"
-                          HorizontalScrollBarVisibility="Visible"
-                          VerticalScrollBarVisibility="Visible"
-                          AllowAutoHide="False"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto"
                           Background="Transparent">
                 <Canvas x:Name="GraphCanvas"
                         Background="#FBF9F4"
-                        MinWidth="420"
-                        MinHeight="420"/>
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"/>
             </ScrollViewer>
         </DockPanel>
     </Border>

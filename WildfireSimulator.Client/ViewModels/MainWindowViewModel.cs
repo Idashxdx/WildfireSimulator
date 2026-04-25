@@ -233,6 +233,95 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private double _anomalyCurrentArea;
+    [ObservableProperty]
+    private bool _isLegendExpanded = false;
+
+    [ObservableProperty]
+    private bool _isParametersExpanded = false;
+    [ObservableProperty]
+    private SimulationGraphEdgeDto? _selectedGraphEdge;
+    public bool HasSelectedGraphEdge => SelectedGraphEdge != null;
+
+    public bool HasGraphSelection =>
+        SelectedGraphNode != null || SelectedGraphEdge != null;
+
+    public string SelectedGraphEdgeTitle =>
+        SelectedGraphEdge == null
+            ? "Связь не выбрана"
+            : $"Связь ({SelectedGraphEdge.FromX}, {SelectedGraphEdge.FromY}) → ({SelectedGraphEdge.ToX}, {SelectedGraphEdge.ToY})";
+
+    public string SelectedGraphEdgeTypeText
+    {
+        get
+        {
+            if (SelectedGraphEdge == null)
+                return "—";
+
+            var fromNode = GraphNodes.FirstOrDefault(n => n.Id == SelectedGraphEdge.FromCellId);
+            var toNode = GraphNodes.FirstOrDefault(n => n.Id == SelectedGraphEdge.ToCellId);
+
+            bool isBridge =
+                SelectedGraphEdge.IsCorridor ||
+                fromNode != null &&
+                toNode != null &&
+                !string.IsNullOrWhiteSpace(fromNode.GroupKey) &&
+                !string.IsNullOrWhiteSpace(toNode.GroupKey) &&
+                !string.Equals(fromNode.GroupKey, toNode.GroupKey, StringComparison.Ordinal);
+
+            return isBridge ? "Мост между областями" : "Связь внутри области";
+        }
+    }
+    public void SelectGraphEdge(SimulationGraphEdgeDto? edge)
+    {
+        SelectedGraphEdge = edge;
+        SelectedGraphNode = null;
+
+        NotifyGraphSelectionChanged();
+    }
+
+    public void ClearGraphSelection()
+    {
+        SelectedGraphNode = null;
+        SelectedGraphEdge = null;
+
+        NotifyGraphSelectionChanged();
+    }
+
+    private void NotifyGraphSelectionChanged()
+    {
+        OnPropertyChanged(nameof(HasSelectedGraphNode));
+        OnPropertyChanged(nameof(HasSelectedGraphEdge));
+        OnPropertyChanged(nameof(HasGraphSelection));
+
+        OnPropertyChanged(nameof(SelectedGraphNodeTitle));
+        OnPropertyChanged(nameof(SelectedGraphNodeStateText));
+        OnPropertyChanged(nameof(SelectedGraphNodeVegetationText));
+        OnPropertyChanged(nameof(SelectedGraphNodeGroupText));
+        OnPropertyChanged(nameof(SelectedGraphNodeMoistureText));
+        OnPropertyChanged(nameof(SelectedGraphNodeElevationText));
+        OnPropertyChanged(nameof(SelectedGraphNodeDegreeSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFireSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFuelSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeThermalSummaryText));
+
+        OnPropertyChanged(nameof(SelectedGraphEdgeTitle));
+        OnPropertyChanged(nameof(SelectedGraphEdgeTypeText));
+        OnPropertyChanged(nameof(SelectedGraphEdgeDistanceText));
+        OnPropertyChanged(nameof(SelectedGraphEdgeSlopeText));
+        OnPropertyChanged(nameof(SelectedGraphEdgeSpreadText));
+        OnPropertyChanged(nameof(SelectedGraphEdgeHeatText));
+    }
+    public string SelectedGraphEdgeDistanceText =>
+        SelectedGraphEdge == null ? "—" : $"{SelectedGraphEdge.Distance:F2}";
+
+    public string SelectedGraphEdgeSlopeText =>
+        SelectedGraphEdge == null ? "—" : $"{SelectedGraphEdge.Slope:F3}";
+
+    public string SelectedGraphEdgeSpreadText =>
+        SelectedGraphEdge == null ? "—" : $"{SelectedGraphEdge.FireSpreadModifier:F3}";
+
+    public string SelectedGraphEdgeHeatText =>
+        SelectedGraphEdge == null ? "—" : $"{SelectedGraphEdge.AccumulatedHeat:F2}";
 
     public string StreamMovingAverageText =>
         $"MA3: {MovingAverage3:F1} • MA5: {MovingAverage5:F1} • MA10: {MovingAverage10:F1}";
@@ -492,7 +581,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             if (SelectedSimulationGraphType == GraphType.Grid)
             {
-                return "Регулярная карта: каждая клетка — участок поверхности, огонь распространяется по соседям и формирует фронт.";
+                return "Сетка: каждая клетка — участок карты. Цвет клетки показывает тип поверхности или состояние пожара.";
             }
 
             var scale = SelectedSimulation?.GraphScaleType;
@@ -500,13 +589,16 @@ public partial class MainWindowViewModel : ObservableObject
             return scale switch
             {
                 GraphScaleType.Small =>
-                    "Малый граф: topology-first визуализация. Хорошо видны отдельные вершины, рёбра, мосты и развилки распространения.",
+                    "Малый граф: одна область. Вершины показывают участки леса, рёбра — возможные пути распространения огня.",
+
                 GraphScaleType.Medium =>
-                    "Средний граф: patch/cluster-модель. Хорошо заметны локальные группы узлов, барьеры, мосты между кластерами и неоднородная связность.",
+                    "Средний граф: несколько отдельных областей. Голубые связи показывают мосты между областями.",
+
                 GraphScaleType.Large =>
-                    "Большой граф: area-like графовая карта. Поведение ближе к крупным зонам и секторам, чем к отдельным изолированным вершинам.",
+                    "Большой граф: несколько областей с мостами и частичным смешиванием. Подходит для макросценариев распространения.",
+
                 _ =>
-                    "Графовая модель: вершины образуют единый граф с локальной кластеризацией, мостами и неоднородной связностью."
+                    "Граф: вершины показывают участки леса, рёбра — возможные пути распространения огня."
             };
         }
     }
@@ -517,21 +609,25 @@ public partial class MainWindowViewModel : ObservableObject
         {
             if (SelectedSimulationGraphType == GraphType.Grid)
             {
-                return "Масштаб: 1 клетка = 1 гектар.";
+                return "Масштаб: одна клетка соответствует одному участку карты.";
             }
+
 
             var scale = SelectedSimulation?.GraphScaleType;
 
             return scale switch
             {
                 GraphScaleType.Small =>
-                    "Масштаб: малый граф, обычно 8–20 узлов. Акцент на вершинах, рёбрах и локальной топологии.",
+                     "Масштаб: малый граф, одна область и небольшое число вершин.",
+
                 GraphScaleType.Medium =>
-                    "Масштаб: средний граф, обычно 20–80 узлов. Акцент на патчах, кластерах, мостах и локальных барьерах.",
+                    "Масштаб: средний граф, несколько непересекающихся областей и мосты между ними.",
+
                 GraphScaleType.Large =>
-                    "Масштаб: большой граф, обычно 80–250+ узлов. Акцент на макрозонах, секторах и коридорах распространения.",
+                    "Масштаб: большой граф, несколько крупных областей, мосты и частичное смешивание областей.",
+
                 _ =>
-                    "Масштаб: узел — отдельный объект графа; важнее локальная связность, мосты и кластеры."
+                    "Масштаб: вершина — отдельный участок графовой модели."
             };
         }
     }
@@ -605,18 +701,23 @@ public partial class MainWindowViewModel : ObservableObject
     public string CurrentPageHintText => CurrentPage switch
     {
         AppPage.Grid =>
-            "Grid — клеточная карта леса: случайная карта, demo presets и редактор итоговой карты.",
+            "Сеточная модель: карта состоит из клеток. Огонь распространяется между соседними участками с учётом растительности, влажности, рельефа и ветра.",
+
         AppPage.Graph => SelectedGraphCreationMode switch
         {
             GraphCreationMode.Small =>
-                "SmallGraph — компактный граф для topology demos: хорошо видны отдельные вершины, рёбра и мосты.",
+                "Малый граф: одна область, компактная структура для проверки связей между вершинами.",
+
             GraphCreationMode.Medium =>
-                "MediumGraph — clustered / patch-like граф для локальных групп, барьеров и межкластерных переходов.",
+                "Средний граф: несколько отдельных областей, соединённых мостами.",
+
             GraphCreationMode.Large =>
-                "LargeGraph — area-like граф для крупных зон, corridor-связей и макромасштабного распространения.",
+                "Большой граф: несколько областей и мостов; области могут частично смешиваться между собой.",
+
             _ =>
-                "Графовая модель с несколькими масштабами."
+                "Графовая модель: лес представлен вершинами и связями между ними."
         },
+
         _ => "Выберите режим моделирования."
     };
 
@@ -788,6 +889,11 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedGraphNodeThermalSummaryText));
 
         OnPropertyChanged(nameof(CurrentPageHintText));
+
+        OnPropertyChanged(nameof(CurrentPageHintText));
+        OnPropertyChanged(nameof(VisualizationMeaningText));
+        OnPropertyChanged(nameof(StructureScaleText));
+        OnPropertyChanged(nameof(SpreadBehaviorText));
 
         RefreshWorkflowStatus();
     }
@@ -1615,21 +1721,21 @@ public partial class MainWindowViewModel : ObservableObject
 
         return string.Join("; ", parts);
     }
-   private string GetClusteredScenarioDisplayName(ClusteredScenarioType? scenario)
-{
-    return scenario switch
+    private string GetClusteredScenarioDisplayName(ClusteredScenarioType? scenario)
     {
-        ClusteredScenarioType.MixedForest => "смешанный лес",
-        ClusteredScenarioType.DryConiferousMassif => "сухой хвойный + ветер",
-        ClusteredScenarioType.ForestWithRiver => "река как барьер",
-        ClusteredScenarioType.ForestWithLake => "озеро и берег",
-        ClusteredScenarioType.WetForestAfterRain => "влажный лес",
-        ClusteredScenarioType.ForestWithFirebreak => "просека",
-        ClusteredScenarioType.HillyTerrain => "холмы",
-        null => "не выбран",
-        _ => "неизвестный сценарий"
-    };
-}
+        return scenario switch
+        {
+            ClusteredScenarioType.MixedForest => "смешанный лес",
+            ClusteredScenarioType.DryConiferousMassif => "сухой хвойный + ветер",
+            ClusteredScenarioType.ForestWithRiver => "река как барьер",
+            ClusteredScenarioType.ForestWithLake => "озеро и берег",
+            ClusteredScenarioType.WetForestAfterRain => "влажный лес",
+            ClusteredScenarioType.ForestWithFirebreak => "просека",
+            ClusteredScenarioType.HillyTerrain => "холмы",
+            null => "не выбран",
+            _ => "неизвестный сценарий"
+        };
+    }
 
 
     [RelayCommand]
@@ -2865,7 +2971,8 @@ public partial class MainWindowViewModel : ObservableObject
             return;
 
         SelectedGraphNode = node;
-
+        SelectedGraphEdge = null;
+        NotifyGraphSelectionChanged();
         OnPropertyChanged(nameof(HasSelectedGraphNode));
         OnPropertyChanged(nameof(SelectedGraphNodeTitle));
         OnPropertyChanged(nameof(SelectedGraphNodeStateText));

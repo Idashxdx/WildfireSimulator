@@ -27,22 +27,21 @@ public partial class NodeGraphVisualization : UserControl
     private INotifyCollectionChanged? _currentEdgesCollection;
 
     private bool _drawScheduled;
+    private bool _hasManualZoom;
     private double _zoom = 1.0;
 
-    private const double MinZoom = 0.55;
-    private const double MaxZoom = 2.40;
-    private const double ZoomStep = 0.18;
+    private const double MinZoom = 0.25;
+    private const double MaxZoom = 2.80;
+    private const double ZoomStep = 0.16;
 
     private const double BaseNodeRadius = 8.5;
     private const double SelectedNodeRadius = 11.5;
     private const double NeighborNodeRadius = 9.5;
 
     private const double BaseEdgeThickness = 1.4;
-    private const double MinCanvasSize = 500.0;
     private const double CanvasPadding = 56.0;
-
     public static readonly StyledProperty<IEnumerable<SimulationGraphNodeDto>?> NodesProperty =
-        AvaloniaProperty.Register<NodeGraphVisualization, IEnumerable<SimulationGraphNodeDto>?>(nameof(Nodes));
+     AvaloniaProperty.Register<NodeGraphVisualization, IEnumerable<SimulationGraphNodeDto>?>(nameof(Nodes));
 
     public static readonly StyledProperty<IEnumerable<SimulationGraphEdgeDto>?> EdgesProperty =
         AvaloniaProperty.Register<NodeGraphVisualization, IEnumerable<SimulationGraphEdgeDto>?>(nameof(Edges));
@@ -87,6 +86,7 @@ public partial class NodeGraphVisualization : UserControl
     }
 
     public event EventHandler<SimulationGraphNodeDto>? NodeClicked;
+    public event EventHandler? BackgroundClicked;
 
     public NodeGraphVisualization()
     {
@@ -98,6 +98,9 @@ public partial class NodeGraphVisualization : UserControl
         _zoomInButton = this.FindControl<Button>("ZoomInButton");
         _zoomOutButton = this.FindControl<Button>("ZoomOutButton");
         _resetZoomButton = this.FindControl<Button>("ResetZoomButton");
+
+        if (_graphCanvas != null)
+            _graphCanvas.PointerPressed += OnCanvasPointerPressed;
 
         if (_zoomInButton != null)
             _zoomInButton.Click += (_, _) => ChangeZoom(ZoomStep);
@@ -112,9 +115,41 @@ public partial class NodeGraphVisualization : UserControl
         AttachedToVisualTree += (_, _) => ScheduleDraw();
 
         if (_scrollHost != null)
-            _scrollHost.SizeChanged += (_, _) => ScheduleDraw();
+        {
+            _scrollHost.SizeChanged += (_, _) =>
+            {
+                if (!_hasManualZoom)
+                    ScheduleDraw();
+            };
+        }
+    }
+    public static readonly StyledProperty<SimulationGraphEdgeDto?> SelectedEdgeProperty =
+    AvaloniaProperty.Register<NodeGraphVisualization, SimulationGraphEdgeDto?>(nameof(SelectedEdge));
+
+    public SimulationGraphEdgeDto? SelectedEdge
+    {
+        get => GetValue(SelectedEdgeProperty);
+        set => SetValue(SelectedEdgeProperty, value);
     }
 
+    public event EventHandler<SimulationGraphEdgeDto>? EdgeClicked;
+
+    private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var properties = e.GetCurrentPoint(_graphCanvas).Properties;
+
+        if (!properties.IsLeftButtonPressed)
+            return;
+
+        if (!ReferenceEquals(e.Source, _graphCanvas))
+            return;
+
+        BackgroundClicked?.Invoke(this, EventArgs.Empty);
+        e.Handled = true;
+    }
     private void InitializeComponent()
     {
         AvaloniaXamlLoader.Load(this);
@@ -122,28 +157,108 @@ public partial class NodeGraphVisualization : UserControl
 
     private void ChangeZoom(double delta)
     {
-        _zoom = Math.Clamp(_zoom + delta, MinZoom, MaxZoom);
-        ApplyZoom();
+        double factor = delta > 0 ? 1.18 : 1.0 / 1.18;
+
+        _zoom = Math.Clamp(_zoom * factor, MinZoom, MaxZoom);
+        _hasManualZoom = true;
+
+        ScheduleDraw();
     }
 
     private void ResetZoom()
     {
-        _zoom = 1.0;
-        ApplyZoom();
+        _hasManualZoom = false;
+        ScheduleDraw();
     }
 
-    private void ApplyZoom()
+    private void DrawGraph()
     {
         if (_graphCanvas == null)
             return;
 
-        _graphCanvas.RenderTransform = new ScaleTransform(_zoom, _zoom);
+        _graphCanvas.Children.Clear();
+
+        var nodes = Nodes?.ToList() ?? new List<SimulationGraphNodeDto>();
+        var edges = Edges?.ToList() ?? new List<SimulationGraphEdgeDto>();
+
+        if (nodes.Count == 0)
+        {
+            DrawEmptyState();
+            return;
+        }
+
+        DrawStandardGraph(nodes, edges);
+    }
+
+    private void DrawStandardGraph(List<SimulationGraphNodeDto> nodes, List<SimulationGraphEdgeDto> edges)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        var bounds = GetNodeBounds(nodes);
+        double graphScale = GetStandardGraphScale(nodes, bounds);
+
+        double logicalWidth = (bounds.MaxX - bounds.MinX) * graphScale + CanvasPadding * 2;
+        double logicalHeight = (bounds.MaxY - bounds.MinY) * graphScale + CanvasPadding * 2;
+
+        if (!_hasManualZoom)
+            _zoom = CalculateFitZoom(logicalWidth, logicalHeight);
+
+        double scaledWidth = logicalWidth * _zoom;
+        double scaledHeight = logicalHeight * _zoom;
+
+        _graphCanvas.Width = scaledWidth;
+        _graphCanvas.Height = scaledHeight;
+        _graphCanvas.MinWidth = scaledWidth;
+        _graphCanvas.MinHeight = scaledHeight;
+
+        double scaledPadding = CanvasPadding * _zoom;
+        double scaledGraphScale = graphScale * _zoom;
+
+        var points = nodes.ToDictionary(
+            n => n.Id,
+            n => new Point(
+                scaledPadding + (n.RenderX - bounds.MinX) * scaledGraphScale,
+                scaledPadding + (n.RenderY - bounds.MinY) * scaledGraphScale));
+
+        var nodeMap = nodes.ToDictionary(n => n.Id);
+
+        var selectedNodeId = SelectedNode?.Id;
+        var selectedEdgeId = SelectedEdge?.Id;
+        var selectedEdgeIds = GetSelectedEdgeIds(edges, selectedNodeId);
+        var neighborIds = GetNeighborIds(edges, selectedNodeId);
+
+        DrawClusterPatchBackgrounds(nodes, points, _zoom);
+
+        foreach (var edge in edges.OrderBy(e => IsBridgeEdge(e, nodeMap) ? 1 : 0))
+            DrawEdge(edge, points, nodeMap, selectedNodeId, selectedEdgeId, selectedEdgeIds, _zoom);
+
+        foreach (var node in nodes.OrderBy(n => n.IsBurning ? 1 : 0))
+            DrawNode(node, edges, points, selectedNodeId, neighborIds, _zoom);
+    }
+
+    private double CalculateFitZoom(double logicalWidth, double logicalHeight)
+    {
+        if (_scrollHost == null)
+            return 1.0;
+
+        double viewportWidth = Math.Max(1.0, _scrollHost.Bounds.Width - 18);
+        double viewportHeight = Math.Max(1.0, _scrollHost.Bounds.Height - 18);
+
+        if (logicalWidth <= 1.0 || logicalHeight <= 1.0)
+            return 1.0;
+
+        double zoomByWidth = viewportWidth / logicalWidth;
+        double zoomByHeight = viewportHeight / logicalHeight;
+
+        return Math.Clamp(Math.Min(zoomByWidth, zoomByHeight) * 0.96, MinZoom, MaxZoom);
     }
 
     private void OnGraphPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
         if (e.Property == NodesProperty)
         {
+            _hasManualZoom = false;
             RebindNodesCollection();
             ScheduleDraw();
             return;
@@ -151,14 +266,21 @@ public partial class NodeGraphVisualization : UserControl
 
         if (e.Property == EdgesProperty)
         {
+            _hasManualZoom = false;
             RebindEdgesCollection();
             ScheduleDraw();
             return;
         }
 
         if (e.Property == LayoutHintProperty ||
-            e.Property == SelectedNodeProperty ||
             e.Property == IsIgnitionSelectionEnabledProperty)
+        {
+            ScheduleDraw();
+            return;
+        }
+
+        if (e.Property == SelectedNodeProperty ||
+     e.Property == SelectedEdgeProperty)
         {
             ScheduleDraw();
         }
@@ -196,6 +318,7 @@ public partial class NodeGraphVisualization : UserControl
 
     private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        _hasManualZoom = false;
         ScheduleDraw();
     }
 
@@ -213,71 +336,20 @@ public partial class NodeGraphVisualization : UserControl
         }, DispatcherPriority.Background);
     }
 
-    private void DrawGraph()
+    private bool IsBridgeEdge(
+        SimulationGraphEdgeDto edge,
+        Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
     {
-        if (_graphCanvas == null)
-            return;
+        if (edge.IsCorridor)
+            return true;
 
-        _graphCanvas.Children.Clear();
-
-        var nodes = Nodes?.ToList() ?? new List<SimulationGraphNodeDto>();
-        var edges = Edges?.ToList() ?? new List<SimulationGraphEdgeDto>();
-
-        if (nodes.Count == 0)
-        {
-            DrawEmptyState();
-            return;
-        }
-
-        DrawStandardGraph(nodes, edges);
-        ApplyZoom();
-    }
-
-    private void DrawStandardGraph(List<SimulationGraphNodeDto> nodes, List<SimulationGraphEdgeDto> edges)
-    {
-        if (_graphCanvas == null)
-            return;
-
-        var bounds = GetNodeBounds(nodes);
-        var scale = GetStandardGraphScale(nodes, bounds);
-
-        var width = Math.Max(MinCanvasSize, (bounds.MaxX - bounds.MinX) * scale + CanvasPadding * 2);
-        var height = Math.Max(MinCanvasSize, (bounds.MaxY - bounds.MinY) * scale + CanvasPadding * 2);
-
-        _graphCanvas.Width = width;
-        _graphCanvas.Height = height;
-
-        var points = nodes.ToDictionary(
-            n => n.Id,
-            n => new Point(
-                CanvasPadding + (n.RenderX - bounds.MinX) * scale,
-                CanvasPadding + (n.RenderY - bounds.MinY) * scale));
-
-        var nodeMap = nodes.ToDictionary(n => n.Id);
-
-        var selectedNodeId = SelectedNode?.Id;
-        var selectedEdgeIds = GetSelectedEdgeIds(edges, selectedNodeId);
-        var neighborIds = GetNeighborIds(edges, selectedNodeId);
-
-        DrawClusterPatchBackgrounds(nodes, points);
-
-        foreach (var edge in edges.OrderBy(e => IsCrossClusterEdge(e, nodeMap) ? 1 : 0))
-            DrawEdge(edge, points, nodeMap, selectedNodeId, selectedEdgeIds);
-
-        foreach (var node in nodes.OrderBy(n => n.IsBurning ? 1 : 0))
-            DrawNode(node, edges, points, selectedNodeId, neighborIds);
-    }
-
-    private bool IsCrossClusterEdge(
-      SimulationGraphEdgeDto edge,
-      Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
-    {
         return nodeMap.TryGetValue(edge.FromCellId, out var fromNode) &&
                nodeMap.TryGetValue(edge.ToCellId, out var toNode) &&
                !string.IsNullOrWhiteSpace(fromNode.GroupKey) &&
                !string.IsNullOrWhiteSpace(toNode.GroupKey) &&
                !string.Equals(fromNode.GroupKey, toNode.GroupKey, StringComparison.Ordinal);
     }
+
     private double GetStandardGraphScale(
         List<SimulationGraphNodeDto> nodes,
         (double MinX, double MaxX, double MinY, double MaxY) bounds)
@@ -309,8 +381,9 @@ public partial class NodeGraphVisualization : UserControl
     }
 
     private void DrawClusterPatchBackgrounds(
-        List<SimulationGraphNodeDto> nodes,
-        Dictionary<Guid, Point> points)
+     List<SimulationGraphNodeDto> nodes,
+     Dictionary<Guid, Point> points,
+     double zoom)
     {
         if (_graphCanvas == null)
             return;
@@ -337,7 +410,7 @@ public partial class NodeGraphVisualization : UserControl
             if (groupPoints.Count < 3)
                 continue;
 
-            var hull = BuildSoftHull(groupPoints);
+            var hull = BuildSoftHull(groupPoints, zoom);
             if (hull.Count < 3)
                 continue;
 
@@ -346,7 +419,7 @@ public partial class NodeGraphVisualization : UserControl
                 Points = new AvaloniaList<Point>(hull),
                 Fill = new SolidColorBrush(GetClusterTint(colorIndex), 0.12),
                 Stroke = new SolidColorBrush(GetClusterTint(colorIndex), 0.35),
-                StrokeThickness = 1.2,
+                StrokeThickness = Math.Max(0.8, 1.2 * zoom),
                 IsHitTestVisible = false
             };
 
@@ -360,121 +433,57 @@ public partial class NodeGraphVisualization : UserControl
      Dictionary<Guid, Point> points,
      Dictionary<Guid, SimulationGraphNodeDto> nodeMap,
      Guid? selectedNodeId,
-     HashSet<Guid> selectedEdgeIds)
+     Guid? selectedEdgeId,
+     HashSet<Guid> selectedEdgeIds,
+     double zoom)
     {
         if (_graphCanvas == null)
             return;
 
         if (!points.TryGetValue(edge.FromCellId, out var fromPoint) ||
             !points.TryGetValue(edge.ToCellId, out var toPoint))
+        {
             return;
+        }
 
-        bool isSelected = selectedEdgeIds.Contains(edge.Id);
-        bool isIncidentToSelection =
-            selectedNodeId.HasValue &&
-            (edge.FromCellId == selectedNodeId.Value || edge.ToCellId == selectedNodeId.Value);
-
-        bool isCrossCluster = IsCrossClusterEdge(edge, nodeMap);
+        bool isBridge = IsBridgeEdge(edge, nodeMap);
+        bool isSelectedEdge = selectedEdgeId.HasValue && edge.Id == selectedEdgeId.Value;
+        bool isIncidentToSelectedNode = selectedEdgeIds.Contains(edge.Id);
 
         var line = new Line
         {
             StartPoint = fromPoint,
             EndPoint = toPoint,
-            Stroke = new SolidColorBrush(GetEffectiveEdgeColor(edge, isCrossCluster, isSelected, isIncidentToSelection)),
-            StrokeThickness = GetEffectiveEdgeThickness(edge, isCrossCluster, isSelected, isIncidentToSelection),
-            Opacity = GetEffectiveEdgeOpacity(edge, isCrossCluster, isSelected, isIncidentToSelection),
-            ZIndex = isSelected ? 5 : isIncidentToSelection ? 4 : isCrossCluster ? 2 : 1,
-            Cursor = new Cursor(StandardCursorType.Hand)
+            Stroke = new SolidColorBrush(GetEffectiveEdgeColor(edge, isBridge, isSelectedEdge, isIncidentToSelectedNode)),
+            StrokeThickness = Math.Max(0.8, GetEffectiveEdgeThickness(edge, isBridge, isSelectedEdge, isIncidentToSelectedNode) * zoom),
+            Opacity = GetEffectiveEdgeOpacity(edge, isBridge, isSelectedEdge, isIncidentToSelectedNode),
+            ZIndex = isSelectedEdge ? 9 : isIncidentToSelectedNode ? 7 : isBridge ? 6 : 4,
+            Cursor = new Cursor(StandardCursorType.Hand),
+            StrokeDashArray = isBridge
+                ? new AvaloniaList<double> { 7 * zoom, 5 * zoom }
+                : null
         };
-
-        if (isCrossCluster && !isSelected && !isIncidentToSelection)
-            line.StrokeDashArray = new AvaloniaList<double> { 6, 5 };
 
         ToolTip.SetTip(line, BuildEdgeTooltip(edge, nodeMap));
+
+        line.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(line).Properties.IsLeftButtonPressed)
+                return;
+
+            EdgeClicked?.Invoke(this, edge);
+            e.Handled = true;
+        };
+
         _graphCanvas.Children.Add(line);
     }
-
-    private void DrawAreaTransitionAccent(
-    Point fromPoint,
-    Point toPoint,
-    bool isSelected)
-    {
-        if (_graphCanvas == null)
-            return;
-
-        var accent = new Line
-        {
-            StartPoint = fromPoint,
-            EndPoint = toPoint,
-            Stroke = new SolidColorBrush(isSelected ? Color.Parse("#5B3CC4") : Color.Parse("#8E7CC3")),
-            StrokeThickness = isSelected ? 2.2 : 1.4,
-            Opacity = isSelected ? 0.95 : 0.55,
-            ZIndex = isSelected ? 7 : 5,
-            StrokeDashArray = new AvaloniaList<double> { 6, 5 },
-            IsHitTestVisible = false
-        };
-
-        _graphCanvas.Children.Add(accent);
-    }
-
-
-
-    private void DrawCorridorAccent(
-        Point fromPoint,
-        Point toPoint,
-        bool isSelected)
-    {
-        if (_graphCanvas == null)
-            return;
-
-        var accent = new Line
-        {
-            StartPoint = fromPoint,
-            EndPoint = toPoint,
-            Stroke = new SolidColorBrush(isSelected ? Color.Parse("#EA580C") : Color.Parse("#FDBA74")),
-            StrokeThickness = isSelected ? 2.2 : 1.2,
-            Opacity = 0.95,
-            ZIndex = 6,
-            StrokeDashArray = new AvaloniaList<double> { 6, 4 },
-            IsHitTestVisible = false
-        };
-
-        _graphCanvas.Children.Add(accent);
-
-        var centerX = (fromPoint.X + toPoint.X) / 2.0;
-        var centerY = (fromPoint.Y + toPoint.Y) / 2.0;
-
-        var badge = new Border
-        {
-            Background = new SolidColorBrush(Color.FromArgb(235, 255, 247, 237)),
-            BorderBrush = new SolidColorBrush(Color.Parse("#EA580C")),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(7),
-            Padding = new Thickness(6, 2),
-            IsHitTestVisible = false,
-            Child = new TextBlock
-            {
-                Text = "КОРИДОР",
-                FontSize = 10,
-                FontWeight = FontWeight.Bold,
-                Foreground = new SolidColorBrush(Color.Parse("#C2410C"))
-            }
-        };
-
-        badge.Measure(Size.Infinity);
-
-        Canvas.SetLeft(badge, centerX - badge.DesiredSize.Width / 2.0);
-        Canvas.SetTop(badge, centerY - badge.DesiredSize.Height / 2.0 - 12.0);
-
-        _graphCanvas.Children.Add(badge);
-    }
-
     private void DrawNode(
-        SimulationGraphNodeDto node,
-        List<SimulationGraphEdgeDto> edges,
-        Dictionary<Guid, Point> points,
-        Guid? selectedNodeId,
-        HashSet<Guid> neighborIds)
+     SimulationGraphNodeDto node,
+     List<SimulationGraphEdgeDto> edges,
+     Dictionary<Guid, Point> points,
+     Guid? selectedNodeId,
+     HashSet<Guid> neighborIds,
+     double zoom)
     {
         if (_graphCanvas == null)
             return;
@@ -495,14 +504,18 @@ public partial class NodeGraphVisualization : UserControl
         else if (isIgnition)
             radius = BaseNodeRadius + 1.4;
 
+        radius *= zoom;
+
         if (isSelected || isNeighbor)
         {
+            double glowExtra = (isSelected ? 10 : 6) * zoom;
+
             var glow = new Ellipse
             {
-                Width = radius * 2 + (isSelected ? 10 : 6),
-                Height = radius * 2 + (isSelected ? 10 : 6),
+                Width = radius * 2 + glowExtra,
+                Height = radius * 2 + glowExtra,
                 Stroke = new SolidColorBrush(isSelected ? Color.Parse("#5B3CC4") : Color.Parse("#8E7CC3")),
-                StrokeThickness = isSelected ? 1.8 : 1.2,
+                StrokeThickness = Math.Max(0.8, (isSelected ? 1.8 : 1.2) * zoom),
                 Opacity = isSelected ? 0.65 : 0.35,
                 ZIndex = 7,
                 IsHitTestVisible = false
@@ -519,7 +532,7 @@ public partial class NodeGraphVisualization : UserControl
             Height = radius * 2,
             Fill = new SolidColorBrush(GetNodeColor(node)),
             Stroke = new SolidColorBrush(GetNodeStrokeColor(node, isSelected, isNeighbor, isIgnition)),
-            StrokeThickness = isSelected ? 3.0 : isIgnition ? 2.6 : isNeighbor ? 2.1 : 1.4,
+            StrokeThickness = Math.Max(0.7, (isSelected ? 3.0 : isIgnition ? 2.6 : isNeighbor ? 2.1 : 1.4) * zoom),
             ZIndex = isSelected ? 12 : isIgnition ? 11 : isNeighbor ? 10 : 8,
             Cursor = new Cursor(StandardCursorType.Hand)
         };
@@ -541,13 +554,15 @@ public partial class NodeGraphVisualization : UserControl
 
         if (isIgnition)
         {
+            double ringExtra = 8 * zoom;
+
             var ignitionRing = new Ellipse
             {
-                Width = radius * 2 + 8,
-                Height = radius * 2 + 8,
+                Width = radius * 2 + ringExtra,
+                Height = radius * 2 + ringExtra,
                 Stroke = new SolidColorBrush(Color.Parse("#D97706")),
-                StrokeThickness = 1.8,
-                StrokeDashArray = new AvaloniaList<double> { 4, 3 },
+                StrokeThickness = Math.Max(0.8, 1.8 * zoom),
+                StrokeDashArray = new AvaloniaList<double> { 4 * zoom, 3 * zoom },
                 Opacity = 0.95,
                 ZIndex = 9,
                 IsHitTestVisible = false
@@ -558,45 +573,46 @@ public partial class NodeGraphVisualization : UserControl
             _graphCanvas.Children.Add(ignitionRing);
         }
     }
-
-    private string BuildTooltip(SimulationGraphNodeDto node, List<SimulationGraphEdgeDto> edges)
+    private string BuildTooltip(
+      SimulationGraphNodeDto node,
+      List<SimulationGraphEdgeDto> edges)
     {
         int degree = edges.Count(e => e.FromCellId == node.Id || e.ToCellId == node.Id);
 
-        int transitionEdges = edges.Count(e =>
+        int bridgeEdges = edges.Count(edge =>
         {
-            if (e.FromCellId != node.Id && e.ToCellId != node.Id)
+            if (edge.FromCellId != node.Id && edge.ToCellId != node.Id)
                 return false;
 
-            var otherNodeId = e.FromCellId == node.Id ? e.ToCellId : e.FromCellId;
+            var otherNodeId = edge.FromCellId == node.Id
+                ? edge.ToCellId
+                : edge.FromCellId;
+
             var otherNode = Nodes?.FirstOrDefault(n => n.Id == otherNodeId);
 
-            if (otherNode == null)
-                return false;
-
-            return !string.IsNullOrWhiteSpace(node.GroupKey) &&
+            return otherNode != null &&
+                   !string.IsNullOrWhiteSpace(node.GroupKey) &&
                    !string.IsNullOrWhiteSpace(otherNode.GroupKey) &&
                    !string.Equals(node.GroupKey, otherNode.GroupKey, StringComparison.Ordinal);
         });
 
         string groupText = string.IsNullOrWhiteSpace(node.GroupKey)
-            ? "Область: —"
+            ? "Область: не задана"
             : $"Область: {node.GroupKey}";
 
         return
             $"Вершина ({node.X}, {node.Y})\n" +
             $"Состояние: {GetStateText(node.State)}\n" +
-            $"Растительность: {GetVegetationText(node.Vegetation)}\n" +
+            $"Тип поверхности: {GetVegetationText(node.Vegetation)}\n" +
             $"{groupText}\n" +
-            $"Связей: {degree}, переходов в другие области: {transitionEdges}\n" +
+            $"Связей: {degree}, мостов в другие области: {bridgeEdges}\n" +
             $"Влажность: {node.Moisture:F2}\n" +
-            $"Высота: {node.Elevation:F1}\n" +
-            $"Стадия: {GetFireStageText(node.FireStage)}\n" +
-            $"Интенсивность: {node.FireIntensity:F2}\n" +
-            $"Топливо: {node.CurrentFuelLoad:F2} / {node.FuelLoad:F2}\n" +
-            $"Накопленное тепло: {node.AccumulatedHeatJ:F2}";
+            $"Высота: {node.Elevation:F1} м\n" +
+            $"Стадия пожара: {GetFireStageText(node.FireStage)}\n" +
+            $"Интенсивность горения: {node.FireIntensity:F2}\n" +
+            $"Остаток топлива: {node.CurrentFuelLoad:F2} / {node.FuelLoad:F2}\n" +
+            $"Накопленное тепло: {node.AccumulatedHeatJ:F2} Дж";
     }
-
     private string BuildEdgeTooltip(
      SimulationGraphEdgeDto edge,
      Dictionary<Guid, SimulationGraphNodeDto> nodeMap)
@@ -604,24 +620,18 @@ public partial class NodeGraphVisualization : UserControl
         string fromText = BuildEdgeEndpointText(edge.FromCellId, edge.FromX, edge.FromY, nodeMap);
         string toText = BuildEdgeEndpointText(edge.ToCellId, edge.ToX, edge.ToY, nodeMap);
 
-        bool isAreaTransition =
-            nodeMap.TryGetValue(edge.FromCellId, out var fromNode) &&
-            nodeMap.TryGetValue(edge.ToCellId, out var toNode) &&
-            !string.IsNullOrWhiteSpace(fromNode.GroupKey) &&
-            !string.IsNullOrWhiteSpace(toNode.GroupKey) &&
-            !string.Equals(fromNode.GroupKey, toNode.GroupKey, StringComparison.Ordinal);
+        bool isBridge = IsBridgeEdge(edge, nodeMap);
 
         return
-            $"Связь\n" +
+            $"Связь графа\n" +
             $"От: {fromText}\n" +
             $"До: {toText}\n" +
-            $"Тип: {(isAreaTransition ? "переход между областями" : "внутренняя связь области")}\n" +
+            $"Тип: {(isBridge ? "мост между областями" : "связь внутри области")}\n" +
             $"Расстояние: {edge.Distance:F2}\n" +
             $"Уклон: {edge.Slope:F3}\n" +
-            $"Модификатор распространения: {edge.FireSpreadModifier:F3}\n" +
-            $"Накопленное тепло: {edge.AccumulatedHeat:F2}";
+            $"Сила передачи огня: {edge.FireSpreadModifier:F3}\n" +
+            $"Накопленное тепло на связи: {edge.AccumulatedHeat:F2}";
     }
-
 
     private string BuildEdgeEndpointText(
      Guid nodeId,
@@ -635,11 +645,12 @@ public partial class NodeGraphVisualization : UserControl
                 ? "без области"
                 : $"область {node.GroupKey}";
 
-            return $"({x}, {y}), {group}";
+            return $"вершина ({x}, {y}), {group}";
         }
 
-        return $"({x}, {y})";
+        return $"вершина ({x}, {y})";
     }
+
     private void DrawEmptyState()
     {
         if (_graphCanvas == null)
@@ -701,20 +712,23 @@ public partial class NodeGraphVisualization : UserControl
         return result;
     }
 
-    private List<Point> BuildSoftHull(List<Point> points)
+    private List<Point> BuildSoftHull(List<Point> points, double zoom)
     {
-        double minX = points.Min(p => p.X) - 22;
-        double maxX = points.Max(p => p.X) + 22;
-        double minY = points.Min(p => p.Y) - 18;
-        double maxY = points.Max(p => p.Y) + 18;
+        double horizontalPadding = 22 * zoom;
+        double verticalPadding = 18 * zoom;
+
+        double minX = points.Min(p => p.X) - horizontalPadding;
+        double maxX = points.Max(p => p.X) + horizontalPadding;
+        double minY = points.Min(p => p.Y) - verticalPadding;
+        double maxY = points.Max(p => p.Y) + verticalPadding;
 
         return new List<Point>
-        {
-            new(minX, minY),
-            new(maxX, minY),
-            new(maxX, maxY),
-            new(minX, maxY)
-        };
+    {
+        new(minX, minY),
+        new(maxX, minY),
+        new(maxX, maxY),
+        new(minX, maxY)
+    };
     }
 
     private Color GetClusterTint(int index)
@@ -778,7 +792,7 @@ public partial class NodeGraphVisualization : UserControl
 
     private Color GetEffectiveEdgeColor(
      SimulationGraphEdgeDto edge,
-     bool isCrossCluster,
+     bool isBridge,
      bool isSelected,
      bool isIncidentToSelection)
     {
@@ -788,16 +802,17 @@ public partial class NodeGraphVisualization : UserControl
         if (isIncidentToSelection)
             return Color.Parse("#8E7CC3");
 
-        if (isCrossCluster)
-            return Color.Parse("#D9A441");
+        if (isBridge)
+            return Color.Parse("#4DA6FF");
 
         return Color.Parse("#B8B2C5");
     }
+
     private double GetEffectiveEdgeThickness(
-    SimulationGraphEdgeDto edge,
-    bool isCrossCluster,
-    bool isSelected,
-    bool isIncidentToSelection)
+     SimulationGraphEdgeDto edge,
+     bool isBridge,
+     bool isSelected,
+     bool isIncidentToSelection)
     {
         if (isSelected)
             return 3.0;
@@ -805,17 +820,17 @@ public partial class NodeGraphVisualization : UserControl
         if (isIncidentToSelection)
             return 2.1;
 
-        if (isCrossCluster)
-            return 1.35;
+        if (isBridge)
+            return 2.0;
 
         return BaseEdgeThickness;
     }
 
     private double GetEffectiveEdgeOpacity(
-    SimulationGraphEdgeDto edge,
-    bool isCrossCluster,
-    bool isSelected,
-    bool isIncidentToSelection)
+        SimulationGraphEdgeDto edge,
+        bool isBridge,
+        bool isSelected,
+        bool isIncidentToSelection)
     {
         if (isSelected)
             return 1.0;
@@ -823,13 +838,11 @@ public partial class NodeGraphVisualization : UserControl
         if (isIncidentToSelection)
             return 0.9;
 
-        if (isCrossCluster)
-            return 0.58;
+        if (isBridge)
+            return 0.82;
 
         return 0.55;
     }
-
-
     private string GetStateText(string? state)
     {
         return state switch

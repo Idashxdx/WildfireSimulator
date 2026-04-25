@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
@@ -33,10 +34,23 @@ public partial class MainWindow : Window
             _gridVisualization.CellClicked += OnGridCellClicked;
 
         if (_clusteredGraphVisualization != null)
+        {
             _clusteredGraphVisualization.NodeClicked += OnGraphNodeClicked;
-
+            _clusteredGraphVisualization.EdgeClicked += OnGraphEdgeClicked;
+            _clusteredGraphVisualization.BackgroundClicked += OnGraphBackgroundClicked;
+        }
+    }
+    private void OnGraphEdgeClicked(object? sender, WildfireSimulator.Client.Models.SimulationGraphEdgeDto edge)
+    {
+        if (DataContext is MainWindowViewModel vm)
+            vm.SelectGraphEdge(edge);
     }
 
+    private void OnGraphBackgroundClicked(object? sender, EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel vm)
+            vm.ClearGraphSelection();
+    }
     private void OnGridCellClicked(object? sender, WildfireSimulator.Client.Models.GraphCellDto cell)
     {
         if (DataContext is MainWindowViewModel vm)

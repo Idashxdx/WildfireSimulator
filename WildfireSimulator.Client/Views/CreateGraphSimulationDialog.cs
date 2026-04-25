@@ -1031,45 +1031,137 @@ public partial class CreateGraphSimulationDialog : Window
 
     private async Task OpenGraphEditorAsync()
     {
-        int width = _mode switch
-        {
-            GraphCreationMode.Small => 24,
-            GraphCreationMode.Medium => 44,
-            GraphCreationMode.Large => 64,
-            _ => 44
-        };
-
-        int height = _mode switch
-        {
-            GraphCreationMode.Small => 18,
-            GraphCreationMode.Medium => 34,
-            GraphCreationMode.Large => 46,
-            _ => 34
-        };
-
-        var graphScaleType = _mode switch
-        {
-            GraphCreationMode.Small => GraphScaleType.Small,
-            GraphCreationMode.Medium => GraphScaleType.Medium,
-            GraphCreationMode.Large => GraphScaleType.Large,
-            _ => GraphScaleType.Medium
-        };
-
-        var editor = new ClusteredGraphEditorDialog(width, height, graphScaleType, ClusteredBlueprint);
-        var result = await editor.ShowDialog<bool>(this);
-
-        if (!result)
-            return;
-
-        ClusteredBlueprint = editor.EditedBlueprint;
-        SelectedMapCreationMode = MapCreationMode.SemiManual;
-
-        UpdateMapEditorSummary();
-        UpdateMapModeUi();
-        UpdateScenarioDescription();
-        UpdateStructurePreview();
-        UpdatePresetButtonsUi();
         ClearErrors();
+
+        try
+        {
+            CollectBasicValuesForGraphEditor();
+
+            var graphScaleType = _mode switch
+            {
+                GraphCreationMode.Small => GraphScaleType.Small,
+                GraphCreationMode.Medium => GraphScaleType.Medium,
+                GraphCreationMode.Large => GraphScaleType.Large,
+                _ => GraphScaleType.Medium
+            };
+
+            ClusteredGraphBlueprintDto? blueprintForEditor = ClusteredBlueprint;
+
+            if (blueprintForEditor == null || !blueprintForEditor.Nodes.Any())
+            {
+                var mapCreationMode = _mode == GraphCreationMode.Large
+                    ? SelectedMapCreationMode
+                    : MapCreationMode.Random;
+
+                var clusteredScenarioType =
+                    _mode == GraphCreationMode.Large &&
+                    mapCreationMode == MapCreationMode.Scenario
+                        ? SelectedClusteredScenarioType
+                        : null;
+
+                var dto = new CreateSimulationDto
+                {
+                    Name = string.IsNullOrWhiteSpace(SimulationName)
+                        ? "Графовая симуляция"
+                        : SimulationName,
+
+                    Description = "Предпросмотр итогового графа",
+
+                    GridWidth = GridWidth,
+                    GridHeight = GridHeight,
+                    GraphType = (int)GraphType.ClusteredGraph,
+                    GraphScaleType = graphScaleType,
+
+                    InitialMoistureMin = MoistureMin,
+                    InitialMoistureMax = MoistureMax,
+                    ElevationVariation = ElevationVariation,
+                    InitialFireCellsCount = InitialFireCells,
+                    SimulationSteps = SimulationSteps,
+                    StepDurationSeconds = StepDurationSeconds,
+                    RandomSeed = RandomSeed,
+
+                    MapCreationMode = mapCreationMode,
+                    ScenarioType = null,
+                    ClusteredScenarioType = clusteredScenarioType,
+
+                    MapNoiseStrength = MapNoiseStrength,
+                    MapDrynessFactor = MapDrynessFactor,
+                    ReliefStrengthFactor = ReliefStrengthFactor,
+                    FuelDensityFactor = FuelDensityFactor,
+
+                    VegetationDistributions = VegetationDistributions
+                        .Select(x => new VegetationDistributionDto
+                        {
+                            VegetationType = (VegetationType)x.VegetationType,
+                            Probability = x.Probability
+                        })
+                        .ToList(),
+
+                    MapRegionObjects = new List<MapRegionObjectDto>(),
+                    ClusteredBlueprint = null,
+                    InitialFirePositions = new List<InitialFirePositionDto>(),
+                    Precipitation = Precipitation
+                };
+
+                var apiService = new ApiService();
+
+                blueprintForEditor = await apiService.PreviewClusteredBlueprintAsync(
+                    dto,
+                    Temperature,
+                    Humidity,
+                    WindSpeed,
+                    WindDirection);
+
+                if (blueprintForEditor == null || !blueprintForEditor.Nodes.Any())
+                {
+                    ShowError("Не удалось подготовить итоговый граф для редактора.");
+                    return;
+                }
+            }
+
+            var editor = new ClusteredGraphEditorDialog(
+                blueprintForEditor.CanvasWidth,
+                blueprintForEditor.CanvasHeight,
+                graphScaleType,
+                blueprintForEditor);
+
+            var result = await editor.ShowDialog<bool>(this);
+
+            if (!result)
+            {
+                UpdateMapEditorSummary();
+                UpdateMapModeUi();
+                UpdateScenarioDescription();
+                UpdateStructurePreview();
+                UpdatePresetButtonsUi();
+                return;
+            }
+
+            ClusteredBlueprint = editor.EditedBlueprint;
+
+            if (ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any())
+            {
+                SelectedMapCreationMode = MapCreationMode.SemiManual;
+                SelectedClusteredScenarioType = null;
+
+                if (_mapCreationModeBox != null)
+                    _mapCreationModeBox.SelectedIndex = 2;
+
+                if (_scenarioTypeBox != null)
+                    _scenarioTypeBox.SelectedIndex = -1;
+            }
+
+            UpdateMapModeUi();
+            UpdateMapEditorSummary();
+            UpdateScenarioDescription();
+            UpdateStructurePreview();
+            UpdatePresetButtonsUi();
+            ClearErrors();
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Не удалось открыть редактор итогового графа: {ex.Message}");
+        }
     }
 
     private void UpdateVegetationDistributionFromInputs()
