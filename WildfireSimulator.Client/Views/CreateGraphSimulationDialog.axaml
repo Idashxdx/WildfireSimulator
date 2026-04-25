@@ -44,94 +44,73 @@
                         CornerRadius="12"
                         Padding="12">
                     <StackPanel Spacing="8">
-                        <TextBlock Text="Демо и случайная карта"
+                        <TextBlock Text="Демо и случайный граф"
                                    FontWeight="Bold"
                                    Foreground="#2F2A3A" />
 
                         <TextBlock x:Name="PresetHintTextBlock"
-                                   Text="Выберите готовое демо или случайную карту"
+                                   Text="Выберите готовое демо или случайный граф"
                                    Foreground="#6E6A78"
                                    FontSize="12"
                                    TextWrapping="Wrap" />
 
-                       <WrapPanel>
-    <Button x:Name="RandomMapButton"
-            Classes="dialogButton"
-            Content="Случайная карта"
-            Tag="random"
-            Background="#F1F0EC"
-            Margin="0,0,8,8" />
+                        <WrapPanel>
+                            <Button x:Name="RandomMapButton"
+                                    Classes="dialogButton"
+                                    Content="Случайный граф"
+                                    Tag="random"
+                                    Background="#F1F0EC"
+                                    Margin="0,0,8,8" />
 
-    <Button x:Name="PresetButton7"
-            Classes="dialogButton"
-            Content="Смешанный лес"
-            Tag="mixed"
-            Background="#EEF6E6"
-            Margin="0,0,8,8" />
+                            <Button x:Name="PresetButton7"
+                                    Classes="dialogButton"
+                                    Content="Смешанный лес"
+                                    Tag="mixed"
+                                    Background="#EEF6E6"
+                                    Margin="0,0,8,8" />
 
-    <Button x:Name="PresetButton1"
-            Classes="dialogButton"
-            Content="Сухой хвойный + ветер"
-            Tag="dry-coniferous"
-            Background="#FFE4E1"
-            Margin="0,0,8,8" />
+                            <Button x:Name="PresetButton1"
+                                    Classes="dialogButton"
+                                    Content="Сухой хвойный + ветер"
+                                    Tag="dry-coniferous"
+                                    Background="#FFE4E1"
+                                    Margin="0,0,8,8" />
 
-    <Button x:Name="PresetButton2"
-            Classes="dialogButton"
-            Content="Река как барьер"
-            Tag="river"
-            Background="#E1F0FF"
-            Margin="0,0,8,8" />
+                            <Button x:Name="PresetButton2"
+                                    Classes="dialogButton"
+                                    Content="Река как барьер"
+                                    Tag="river"
+                                    Background="#E1F0FF"
+                                    Margin="0,0,8,8" />
 
-    <Button x:Name="PresetButton6"
-            Classes="dialogButton"
-            Content="Озеро и берег"
-            Tag="lake"
-            Background="#E8F4FF"
-            Margin="0,0,8,8" />
+                            <Button x:Name="PresetButton6"
+                                    Classes="dialogButton"
+                                    Content="Озеро и берег"
+                                    Tag="lake"
+                                    Background="#E8F4FF"
+                                    Margin="0,0,8,8" />
 
-    <Button x:Name="PresetButton3"
-            Classes="dialogButton"
-            Content="Влажный лес"
-            Tag="wet"
-            Background="#E6FFE6"
-            Margin="0,0,8,8" />
+                            <Button x:Name="PresetButton3"
+                                    Classes="dialogButton"
+                                    Content="Влажный лес"
+                                    Tag="wet"
+                                    Background="#E6FFE6"
+                                    Margin="0,0,8,8" />
 
-    <Button x:Name="PresetButton4"
-            Classes="dialogButton"
-            Content="Просека"
-            Tag="firebreak"
-            Background="#FFF4E1"
-            Margin="0,0,8,8" />
+                            <Button x:Name="PresetButton4"
+                                    Classes="dialogButton"
+                                    Content="Просека"
+                                    Tag="firebreak"
+                                    Background="#FFF4E1"
+                                    Margin="0,0,8,8" />
 
-    <Button x:Name="PresetButton5"
-            Classes="dialogButton"
-            Content="Холмы"
-            Tag="hills"
-            Background="#F0E6FF"
-            Margin="0,0,8,8" />
-</WrapPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Background="#F3F7FF"
-                        BorderBrush="#D7E4FF"
-                        BorderThickness="1"
-                        CornerRadius="10"
-                        Padding="12">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Тип модели"
-                                   Foreground="#6E6A78"
-                                   FontSize="12" />
-                        <TextBlock x:Name="TypeInfoTextBlock"
-                                   Text="Графовая симуляция"
-                                   Foreground="#2F2A3A"
-                                   FontSize="16"
-                                   FontWeight="Bold" />
-                        <TextBlock x:Name="TypeHintTextBlock"
-                                   Text="Выберите демо графа и настройте параметры среды."
-                                   Foreground="#6E6A78"
-                                   TextWrapping="Wrap" />
+                            <Button x:Name="PresetButton5"
+                                    Classes="dialogButton"
+                                    Content="Холмы"
+                                    Tag="hills"
+                                    Background="#F0E6FF"
+                                    Margin="0,0,8,8" />
+                        </WrapPanel>
                     </StackPanel>
                 </Border>
 
@@ -169,17 +148,19 @@
                                        FontSize="11" />
                         </StackPanel>
 
-        
-
                         <StackPanel Spacing="4">
                             <TextBlock Text="Начальные очаги"
                                        Foreground="#6E6A78" />
                             <TextBox x:Name="FireCellsBox"
                                      Text="2" />
                             <TextBlock x:Name="FireCellsHintTextBlock"
-                                       Text="Число стартовых очагов при случайном запуске."
+                                       Text="Диапазон: 1..50"
                                        Foreground="#8A8793"
                                        FontSize="11" />
+                            <TextBlock Text="Задаёт число стартовых очагов при случайном запуске пожара."
+                                       Foreground="#8A8793"
+                                       FontSize="11"
+                                       TextWrapping="Wrap" />
                         </StackPanel>
 
                         <Grid ColumnDefinitions="*,*"
@@ -192,6 +173,10 @@
                                 <TextBlock Text="Диапазон: 1..10000"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Ограничивает максимальную длительность симуляции по числу шагов."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="4">
@@ -202,6 +187,10 @@
                                 <TextBlock Text="Диапазон: 1..7200"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Задаёт, сколько модельного времени проходит за один шаг."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
                         </Grid>
                     </StackPanel>
@@ -228,6 +217,10 @@
                                 <TextBlock Text="Диапазон: 0.0..1.0"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Задаёт нижнюю границу влажности растительности в вершинах графа."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="4">
@@ -238,6 +231,10 @@
                                 <TextBlock Text="Диапазон: 0.0..1.0"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Задаёт верхнюю границу влажности растительности в вершинах графа."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
                         </Grid>
 
@@ -246,9 +243,13 @@
                                        Foreground="#6E6A78" />
                             <TextBox x:Name="ElevationBox"
                                      Text="55" />
-                            <TextBlock Text="Рекомендуемый диапазон: 0..500"
+                            <TextBlock Text="Диапазон: 0..500"
                                        Foreground="#8A8793"
                                        FontSize="11" />
+                            <TextBlock Text="Определяет возможную разницу высот между вершинами графа."
+                                       Foreground="#8A8793"
+                                       FontSize="11"
+                                       TextWrapping="Wrap" />
                         </StackPanel>
 
                         <Grid ColumnDefinitions="*,*"
@@ -258,9 +259,13 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="TempBox"
                                          Text="26" />
-                                <TextBlock Text="Рекомендуемый диапазон: -50..60"
+                                <TextBlock Text="Диапазон: -50..60"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Влияет на интенсивность горения и вероятность воспламенения."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="4">
@@ -271,6 +276,10 @@
                                 <TextBlock Text="Диапазон: 0..100"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Большее значение замедляет распространение огня."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
                         </Grid>
 
@@ -281,9 +290,13 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="WindSpeedBox"
                                          Text="5" />
-                                <TextBlock Text="Рекомендуемый диапазон: 0..40"
+                                <TextBlock Text="Диапазон: 0..40"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Усиливает перенос огня в направлении ветра."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="4">
@@ -300,9 +313,10 @@
                                     <ComboBoxItem Content="Запад" />
                                     <ComboBoxItem Content="Северо-запад" />
                                 </ComboBox>
-                                <TextBlock Text="Выберите одно из направлений."
+                                <TextBlock Text="Задаёт направление, в котором ветер ускоряет распространение огня."
                                            Foreground="#8A8793"
-                                           FontSize="11" />
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
                         </Grid>
 
@@ -313,9 +327,13 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="PrecipitationBox"
                                          Text="0" />
-                                <TextBlock Text="Рекомендуемый диапазон: 0..100"
+                                <TextBlock Text="Диапазон: 0..100"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Большее значение снижает вероятность распространения пожара."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="4">
@@ -323,9 +341,13 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="RandomSeedBox"
                                          Text="" />
-                                <TextBlock Text="Целое число или пусто для случайной генерации."
+                                <TextBlock Text="Целое число или пустое поле"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Позволяет повторить ту же случайную генерацию графа."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
                         </Grid>
                     </StackPanel>
@@ -352,6 +374,10 @@
                                 <TextBlock Text="Диапазон: 0.0..1.0"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Чем больше значение, тем менее равномерно размещаются вершины графа."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="4">
@@ -359,9 +385,13 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="MapDrynessBox"
                                          Text="1.0" />
-                                <TextBlock Text="Рекомендуемый диапазон: 0.5..2.0"
+                                <TextBlock Text="Диапазон: 0.5..2.0"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Большее значение делает вершины суше и повышает вероятность распространения огня."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
                         </Grid>
 
@@ -372,9 +402,13 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="ReliefStrengthBox"
                                          Text="1.0" />
-                                <TextBlock Text="Рекомендуемый диапазон: 0.5..2.0"
+                                <TextBlock Text="Диапазон: 0.5..2.0"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Определяет, насколько перепады высот влияют на свойства графа."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="4">
@@ -382,9 +416,13 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="FuelDensityBox"
                                          Text="1.0" />
-                                <TextBlock Text="Рекомендуемый диапазон: 0.5..2.0"
+                                <TextBlock Text="Диапазон: 0.5..2.0"
                                            Foreground="#8A8793"
                                            FontSize="11" />
+                                <TextBlock Text="Чем больше значение, тем гуще горючий материал в вершинах графа."
+                                           Foreground="#8A8793"
+                                           FontSize="11"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
                         </Grid>
                     </StackPanel>
@@ -408,6 +446,9 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="ConiferousBox"
                                          Text="0.24" />
+                                <TextBlock Text="Диапазон: 0.0..1.0"
+                                           Foreground="#8A8793"
+                                           FontSize="11" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="4">
@@ -415,6 +456,9 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="DeciduousBox"
                                          Text="0.18" />
+                                <TextBlock Text="Диапазон: 0.0..1.0"
+                                           Foreground="#8A8793"
+                                           FontSize="11" />
                             </StackPanel>
                         </Grid>
 
@@ -425,6 +469,9 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="MixedBox"
                                          Text="0.28" />
+                                <TextBlock Text="Диапазон: 0.0..1.0"
+                                           Foreground="#8A8793"
+                                           FontSize="11" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="4">
@@ -432,6 +479,9 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="GrassBox"
                                          Text="0.12" />
+                                <TextBlock Text="Диапазон: 0.0..1.0"
+                                           Foreground="#8A8793"
+                                           FontSize="11" />
                             </StackPanel>
                         </Grid>
 
@@ -442,6 +492,9 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="ShrubBox"
                                          Text="0.10" />
+                                <TextBlock Text="Диапазон: 0.0..1.0"
+                                           Foreground="#8A8793"
+                                           FontSize="11" />
                             </StackPanel>
 
                             <StackPanel Grid.Column="1" Spacing="4">
@@ -449,6 +502,9 @@
                                            Foreground="#6E6A78" />
                                 <TextBox x:Name="WaterBox"
                                          Text="0.04" />
+                                <TextBlock Text="Диапазон: 0.0..1.0"
+                                           Foreground="#8A8793"
+                                           FontSize="11" />
                             </StackPanel>
                         </Grid>
 
@@ -457,6 +513,9 @@
                                        Foreground="#6E6A78" />
                             <TextBox x:Name="BareBox"
                                      Text="0.04" />
+                            <TextBlock Text="Диапазон: 0.0..1.0"
+                                       Foreground="#8A8793"
+                                       FontSize="11" />
                             <TextBlock Text="Значения используются для случайного графа и отдельных демо. Сумма будет нормализована автоматически."
                                        Foreground="#8A8793"
                                        FontSize="11"
@@ -465,19 +524,43 @@
                     </StackPanel>
                 </Border>
 
-                <Border Background="#F8F5FF"
-                        BorderBrush="#E6DFF1"
+                <Border Background="#F6FBF6"
+                        BorderBrush="#D9E8D9"
                         BorderThickness="1"
                         CornerRadius="12"
                         Padding="14">
-                    <StackPanel Spacing="8">
-                        <TextBlock Text="Описание выбранного демо"
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Структура графа"
+                                   Foreground="#2F2A3A"
+                                   FontSize="16"
+                                   FontWeight="Bold" />
+
+                        <TextBlock x:Name="StructureSummaryTextBlock"
+                                   Text="Структура графа"
+                                   Foreground="#2F2A3A"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock x:Name="StructureDetailTextBlock"
+                                   Text="Описание структуры графа."
+                                   Foreground="#6E6A78"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#F7F5FF"
+                        BorderBrush="#DDD5F1"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="14">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Итоговый граф"
                                    Foreground="#2F2A3A"
                                    FontSize="16"
                                    FontWeight="Bold" />
 
                         <TextBlock x:Name="MapModeDescriptionTextBlock"
-                                   Text="Граф создаётся по выбранному демо."
+                                   Text="Будет создан граф по выбранным параметрам."
                                    Foreground="#6E6A78"
                                    TextWrapping="Wrap" />
 
@@ -486,30 +569,23 @@
                                    Foreground="#6E6A78"
                                    TextWrapping="Wrap" />
 
-                        <TextBlock x:Name="MapEditorSummaryTextBlock"
-                                   Text="Редактор итогового графа будет доработан отдельно."
-                                   Foreground="#8A8793"
-                                   FontSize="11"
-                                   TextWrapping="Wrap" />
-                    </StackPanel>
-                </Border>
+                        <Button x:Name="OpenMapEditorButton"
+                                Classes="dialogButton"
+                                Content="Открыть редактор итогового графа"
+                                Background="#E8F2E1"
+                                Foreground="#2F2A3A"
+                                Click="OpenMapEditorButton_Click" />
 
-                <Border Background="#F6FBF6"
-                        BorderBrush="#D9E8D9"
-                        BorderThickness="1"
-                        CornerRadius="12"
-                        Padding="14">
-                    <StackPanel Spacing="6">
-                        <TextBlock x:Name="StructureSummaryTextBlock"
-                                   Text="Структура графа"
-                                   Foreground="#2F2A3A"
-                                   FontSize="16"
-                                   FontWeight="Bold" />
-
-                        <TextBlock x:Name="StructureDetailTextBlock"
-                                   Text="Описание структуры графа."
-                                   Foreground="#6E6A78"
-                                   TextWrapping="Wrap" />
+                        <Border Background="#FFFDF8"
+                                BorderBrush="#E7E0F2"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="10">
+                            <TextBlock x:Name="MapEditorSummaryTextBlock"
+                                       Text="Редактор графа ещё не использовался."
+                                       Foreground="#6E6A78"
+                                       TextWrapping="Wrap" />
+                        </Border>
                     </StackPanel>
                 </Border>
 
@@ -527,13 +603,6 @@
 
                 <TextBlock x:Name="SemiManualDescriptionTextBlock"
                            IsVisible="False" />
-
-              <Button x:Name="OpenMapEditorButton"
-        Classes="dialogButton"
-        Content="Открыть редактор итогового графа"
-        Background="#E8F2E1"
-        Foreground="#2F2A3A"
-        Click="OpenMapEditorButton_Click" />
 
             </StackPanel>
         </ScrollViewer>

@@ -137,70 +137,70 @@ public partial class CreateGraphSimulationDialog : Window
         AvaloniaXamlLoader.Load(this);
     }
 
-   public SimulationCreationResult GetResult()
-{
-    var graphScaleType = _mode switch
+    public SimulationCreationResult GetResult()
     {
-        GraphCreationMode.Small => GraphScaleType.Small,
-        GraphCreationMode.Medium => GraphScaleType.Medium,
-        GraphCreationMode.Large => GraphScaleType.Large,
-        _ => GraphScaleType.Medium
-    };
+        var graphScaleType = _mode switch
+        {
+            GraphCreationMode.Small => GraphScaleType.Small,
+            GraphCreationMode.Medium => GraphScaleType.Medium,
+            GraphCreationMode.Large => GraphScaleType.Large,
+            _ => GraphScaleType.Medium
+        };
 
-    bool hasBlueprint = ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any();
+        bool hasBlueprint = ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any();
 
-    var mapCreationMode = hasBlueprint
-        ? MapCreationMode.SemiManual
-        : _mode == GraphCreationMode.Large
-            ? SelectedMapCreationMode
-            : MapCreationMode.Random;
+        var mapCreationMode = hasBlueprint
+            ? MapCreationMode.SemiManual
+            : _mode == GraphCreationMode.Large
+                ? SelectedMapCreationMode
+                : MapCreationMode.Random;
 
-    var clusteredScenarioType =
-        !hasBlueprint &&
-        _mode == GraphCreationMode.Large &&
-        mapCreationMode == MapCreationMode.Scenario
-            ? SelectedClusteredScenarioType
-            : null;
+        var clusteredScenarioType =
+            !hasBlueprint &&
+            _mode == GraphCreationMode.Large &&
+            mapCreationMode == MapCreationMode.Scenario
+                ? SelectedClusteredScenarioType
+                : null;
 
-    return new SimulationCreationResult
-    {
-        GraphType = GraphType.ClusteredGraph,
-        GraphScaleType = graphScaleType,
+        return new SimulationCreationResult
+        {
+            GraphType = GraphType.ClusteredGraph,
+            GraphScaleType = graphScaleType,
 
-        SimulationName = SimulationName,
+            SimulationName = SimulationName,
 
-        GridWidth = GridWidth,
-        GridHeight = GridHeight,
-        InitialFireCells = InitialFireCells,
+            GridWidth = GridWidth,
+            GridHeight = GridHeight,
+            InitialFireCells = InitialFireCells,
 
-        MoistureMin = MoistureMin,
-        MoistureMax = MoistureMax,
-        ElevationVariation = ElevationVariation,
+            MoistureMin = MoistureMin,
+            MoistureMax = MoistureMax,
+            ElevationVariation = ElevationVariation,
 
-        SimulationSteps = SimulationSteps,
-        StepDurationSeconds = StepDurationSeconds,
+            SimulationSteps = SimulationSteps,
+            StepDurationSeconds = StepDurationSeconds,
 
-        Temperature = Temperature,
-        Humidity = Humidity,
-        WindSpeed = WindSpeed,
-        WindDirection = WindDirection,
-        Precipitation = Precipitation,
+            Temperature = Temperature,
+            Humidity = Humidity,
+            WindSpeed = WindSpeed,
+            WindDirection = WindDirection,
+            Precipitation = Precipitation,
 
-        RandomSeed = RandomSeed,
+            RandomSeed = RandomSeed,
 
-        SelectedMapCreationMode = mapCreationMode,
-        SelectedScenarioType = null,
-        SelectedClusteredScenarioType = clusteredScenarioType,
+            SelectedMapCreationMode = mapCreationMode,
+            SelectedScenarioType = null,
+            SelectedClusteredScenarioType = clusteredScenarioType,
 
-        MapNoiseStrength = MapNoiseStrength,
-        MapDrynessFactor = MapDrynessFactor,
-        ReliefStrengthFactor = ReliefStrengthFactor,
-        FuelDensityFactor = FuelDensityFactor,
+            MapNoiseStrength = MapNoiseStrength,
+            MapDrynessFactor = MapDrynessFactor,
+            ReliefStrengthFactor = ReliefStrengthFactor,
+            FuelDensityFactor = FuelDensityFactor,
 
-        VegetationDistributions = new List<(int VegetationType, double Probability)>(VegetationDistributions),
-        ClusteredBlueprint = hasBlueprint ? ClusteredBlueprint : null
-    };
-}
+            VegetationDistributions = new List<(int VegetationType, double Probability)>(VegetationDistributions),
+            ClusteredBlueprint = hasBlueprint ? ClusteredBlueprint : null
+        };
+    }
     private void FindControls()
     {
         _nameBox = this.FindControl<TextBox>("NameBox");
@@ -484,53 +484,15 @@ public partial class CreateGraphSimulationDialog : Window
 
     private void ApplyModeTexts()
     {
-        if (_typeInfoTextBlock != null)
-        {
-            _typeInfoTextBlock.Text = _mode switch
-            {
-                GraphCreationMode.Small => "Малый случайный граф",
-                GraphCreationMode.Medium => "Средний случайный граф",
-                GraphCreationMode.Large => "Большой граф",
-                _ => "Графовая симуляция"
-            };
-        }
-
-        if (_typeHintTextBlock != null)
-        {
-            _typeHintTextBlock.Text = _mode switch
-            {
-                GraphCreationMode.Small =>
-                    "Компактный случайный граф без демо-сценариев. Используется для быстрой проверки модели.",
-                GraphCreationMode.Medium =>
-                    "Средний граф создаётся случайно: отдельные непересекающиеся области соединяются мостами.",
-                GraphCreationMode.Large =>
-                    "Большой граф может строиться случайно или по демо-сценарию. Области могут пересекаться, также используются мосты и обходные пути.",
-                _ =>
-                    "Графовая симуляция распространения пожара."
-            };
-        }
-
-        if (_widthLabelTextBlock != null)
-            _widthLabelTextBlock.Text = "Ширина области размещения";
-
-        if (_heightLabelTextBlock != null)
-            _heightLabelTextBlock.Text = "Высота области размещения";
-
-        if (_widthHintTextBlock != null)
-            _widthHintTextBlock.Text = "Не количество вершин, а размер поля, внутри которого размещается граф.";
-
-        if (_heightHintTextBlock != null)
-            _heightHintTextBlock.Text = "Не количество вершин, а размер поля, внутри которого размещается граф.";
-
         if (_fireCellsHintTextBlock != null)
-            _fireCellsHintTextBlock.Text = "Стартовые очаги будут выбраны случайно или вручную на визуализации графа.";
+            _fireCellsHintTextBlock.Text = "Диапазон: 1..50";
     }
 
     private void UpdatePresetButtonsUi()
     {
         bool showDemoButtons = _mode == GraphCreationMode.Large;
 
-        SetPresetButtonVisible(_randomMapButton, showDemoButtons);
+        SetPresetButtonVisible(_randomMapButton, true);
         SetPresetButtonVisible(_presetButton1, showDemoButtons);
         SetPresetButtonVisible(_presetButton2, showDemoButtons);
         SetPresetButtonVisible(_presetButton3, showDemoButtons);
@@ -548,29 +510,29 @@ public partial class CreateGraphSimulationDialog : Window
         UpdatePresetButtonStyle(_presetButton4, SelectedClusteredScenarioType == ClusteredScenarioType.ForestWithFirebreak);
         UpdatePresetButtonStyle(_presetButton5, SelectedClusteredScenarioType == ClusteredScenarioType.HillyTerrain);
 
-        if (_presetHintTextBlock != null)
+        if (_presetHintTextBlock == null)
+            return;
+
+        _presetHintTextBlock.Text = _mode switch
         {
-            _presetHintTextBlock.Text = _mode switch
-            {
-                GraphCreationMode.Large when SelectedMapCreationMode == MapCreationMode.Random =>
-                    "Сейчас выбрана случайная карта",
+            GraphCreationMode.Small =>
+                "Малый граф создаётся как одна компактная область.",
 
-                GraphCreationMode.Large when SelectedClusteredScenarioType.HasValue =>
-                    $"Сейчас выбрано демо: {GetScenarioDisplayName(SelectedClusteredScenarioType.Value)}",
+            GraphCreationMode.Medium =>
+                "Средний граф создаётся как несколько непересекающихся областей, соединённых мостами.",
 
-                GraphCreationMode.Large =>
-                    "Выберите готовое демо или случайную карту",
+            GraphCreationMode.Large when SelectedMapCreationMode == MapCreationMode.Random =>
+                "Сейчас выбран случайный большой граф.",
 
-                GraphCreationMode.Medium =>
-                    "Средний граф создаётся случайно: отдельные непересекающиеся области соединяются мостами.",
+            GraphCreationMode.Large when SelectedClusteredScenarioType.HasValue =>
+                $"Сейчас выбрано демо: {GetScenarioDisplayName(SelectedClusteredScenarioType.Value)}",
 
-                GraphCreationMode.Small =>
-                    "Малый граф создаётся случайно для быстрой проверки модели.",
+            GraphCreationMode.Large =>
+                "Выберите готовое демо или случайный большой граф.",
 
-                _ =>
-                    "Настройте параметры графа."
-            };
-        }
+            _ =>
+                "Настройте параметры графа."
+        };
     }
 
     private static void UpdatePresetButtonStyle(Button? button, bool isActive)
@@ -614,7 +576,7 @@ public partial class CreateGraphSimulationDialog : Window
         SetText(_reliefStrengthBox, "1.00");
         SetText(_fuelDensityBox, "1.00");
 
-        SetVegetationDistribution(24, 18, 28, 12, 10, 4, 4);
+        SetVegetationDistribution(0.24, 0.18, 0.28, 0.12, 0.10, 0.04, 0.04);
 
         UpdateVegetationDistributionFromInputs();
         UpdateMapModeUi();
@@ -623,7 +585,6 @@ public partial class CreateGraphSimulationDialog : Window
         UpdateStructurePreview();
         UpdatePresetButtonsUi();
     }
-
     private void ApplyPresetFromButton(Button? button)
     {
         if (button == null || _mode != GraphCreationMode.Large)
@@ -658,7 +619,7 @@ public partial class CreateGraphSimulationDialog : Window
                 SetText(_mapDrynessBox, "1.00");
                 SetText(_reliefStrengthBox, "1.00");
                 SetText(_fuelDensityBox, "1.00");
-                SetVegetationDistribution(18, 24, 40, 8, 10, 0, 0);
+                SetVegetationDistribution(0.18, 0.24, 0.40, 0.08, 0.10, 0.00, 0.00);
                 SelectWindDirectionIndex(1);
                 break;
 
@@ -677,7 +638,7 @@ public partial class CreateGraphSimulationDialog : Window
                 SetText(_mapDrynessBox, "1.20");
                 SetText(_reliefStrengthBox, "1.00");
                 SetText(_fuelDensityBox, "1.15");
-                SetVegetationDistribution(76, 1, 14, 3, 6, 0, 0);
+                SetVegetationDistribution(0.76, 0.01, 0.14, 0.03, 0.06, 0.00, 0.00);
                 SelectWindDirectionIndex(2);
                 break;
 
@@ -696,7 +657,7 @@ public partial class CreateGraphSimulationDialog : Window
                 SetText(_mapDrynessBox, "0.95");
                 SetText(_reliefStrengthBox, "0.85");
                 SetText(_fuelDensityBox, "0.96");
-                SetVegetationDistribution(15, 32, 38, 6, 9, 0, 0);
+                SetVegetationDistribution(0.15, 0.32, 0.38, 0.06, 0.09, 0.00, 0.00);
                 SelectWindDirectionIndex(1);
                 break;
 
@@ -715,7 +676,7 @@ public partial class CreateGraphSimulationDialog : Window
                 SetText(_mapDrynessBox, "0.92");
                 SetText(_reliefStrengthBox, "0.85");
                 SetText(_fuelDensityBox, "0.96");
-                SetVegetationDistribution(16, 30, 36, 8, 10, 0, 0);
+                SetVegetationDistribution(0.16, 0.30, 0.36, 0.08, 0.10, 0.00, 0.00);
                 SelectWindDirectionIndex(1);
                 break;
 
@@ -734,7 +695,7 @@ public partial class CreateGraphSimulationDialog : Window
                 SetText(_mapDrynessBox, "0.70");
                 SetText(_reliefStrengthBox, "0.90");
                 SetText(_fuelDensityBox, "0.90");
-                SetVegetationDistribution(10, 32, 38, 8, 12, 0, 0);
+                SetVegetationDistribution(0.10, 0.32, 0.38, 0.08, 0.12, 0.00, 0.00);
                 SelectWindDirectionIndex(1);
                 break;
 
@@ -753,7 +714,7 @@ public partial class CreateGraphSimulationDialog : Window
                 SetText(_mapDrynessBox, "1.08");
                 SetText(_reliefStrengthBox, "0.95");
                 SetText(_fuelDensityBox, "1.06");
-                SetVegetationDistribution(24, 18, 40, 8, 10, 0, 0);
+                SetVegetationDistribution(0.24, 0.18, 0.40, 0.08, 0.10, 0.00, 0.00);
                 SelectWindDirectionIndex(2);
                 break;
 
@@ -772,7 +733,7 @@ public partial class CreateGraphSimulationDialog : Window
                 SetText(_mapDrynessBox, "1.00");
                 SetText(_reliefStrengthBox, "1.25");
                 SetText(_fuelDensityBox, "1.00");
-                SetVegetationDistribution(24, 18, 34, 10, 14, 0, 0);
+                SetVegetationDistribution(0.24, 0.18, 0.34, 0.10, 0.14, 0.00, 0.00);
                 SelectWindDirectionIndex(1);
                 break;
 
@@ -807,7 +768,6 @@ public partial class CreateGraphSimulationDialog : Window
 
         button.IsVisible = isVisible;
     }
-
     private void SetVegetationDistribution(
         double coniferous,
         double deciduous,
@@ -867,26 +827,22 @@ public partial class CreateGraphSimulationDialog : Window
         };
     }
 
-   private void UpdateMapModeUi()
-{
-    bool hasBlueprint = ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any();
-
-    if (_mode != GraphCreationMode.Large)
+    private void UpdateMapModeUi()
     {
-        if (hasBlueprint)
-        {
-            SelectedMapCreationMode = MapCreationMode.SemiManual;
-        }
-        else
-        {
-            SelectedMapCreationMode = MapCreationMode.Random;
-        }
+        bool hasBlueprint = ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any();
 
-        SelectedClusteredScenarioType = null;
+        if (hasBlueprint)
+            SelectedMapCreationMode = MapCreationMode.SemiManual;
 
         if (_mapCreationModeBox != null)
         {
-            _mapCreationModeBox.SelectedIndex = SelectedMapCreationMode == MapCreationMode.SemiManual ? 2 : 0;
+            _mapCreationModeBox.SelectedIndex = SelectedMapCreationMode switch
+            {
+                MapCreationMode.Scenario => 1,
+                MapCreationMode.SemiManual => 2,
+                _ => 0
+            };
+
             _mapCreationModeBox.IsEnabled = false;
         }
 
@@ -896,175 +852,167 @@ public partial class CreateGraphSimulationDialog : Window
         if (_semiManualPanel != null)
             _semiManualPanel.IsVisible = false;
 
-        if (_mapModeDescriptionTextBlock != null)
+        if (_mapModeDescriptionTextBlock == null)
+            return;
+
+        if (hasBlueprint)
         {
-            _mapModeDescriptionTextBlock.Text = _mode == GraphCreationMode.Medium
-                ? "Средний граф: отдельные области с локальными связями и мостами между ними."
-                : "Малый граф: компактная topology-first структура для проверки узлов, рёбер и мостов.";
+            _mapModeDescriptionTextBlock.Text =
+                "Будет создан итоговый граф из редактора.";
+            return;
         }
 
-        return;
+        _mapModeDescriptionTextBlock.Text = _mode switch
+        {
+            GraphCreationMode.Small =>
+                "Будет создан малый граф: одна область с локальными связями между вершинами.",
+
+            GraphCreationMode.Medium =>
+                "Будет создан средний граф: несколько отдельных областей, соединённых мостами.",
+
+            GraphCreationMode.Large when SelectedMapCreationMode == MapCreationMode.Scenario && SelectedClusteredScenarioType.HasValue =>
+                $"Будет создан большой граф по демо «{GetScenarioDisplayName(SelectedClusteredScenarioType.Value)}».",
+
+            GraphCreationMode.Large =>
+                "Будет создан большой случайный граф: области могут частично сближаться и соединяться мостами.",
+
+            _ =>
+                "Будет создан граф по выбранным параметрам."
+        };
     }
-
-    if (_mapCreationModeBox != null)
-        _mapCreationModeBox.IsEnabled = true;
-
-    if (_scenarioPanel != null)
-        _scenarioPanel.IsVisible = SelectedMapCreationMode == MapCreationMode.Scenario;
-
-    if (_semiManualPanel != null)
-        _semiManualPanel.IsVisible = SelectedMapCreationMode == MapCreationMode.SemiManual;
-
-    if (_mapModeDescriptionTextBlock == null)
-        return;
-
-    _mapModeDescriptionTextBlock.Text = SelectedMapCreationMode switch
-    {
-        MapCreationMode.Scenario =>
-            "Демо-сценарий большого графа. Области могут пересекаться, между ними создаются мосты, обходы и барьеры.",
-
-        MapCreationMode.SemiManual =>
-            "Итоговый граф задан через редактор: области, вершины, мосты и параметры узлов сохраняются как структура создаваемой симуляции.",
-
-        _ =>
-            "Случайный большой граф: макрообласти генерируются автоматически."
-    };
-}
     private void UpdateScenarioDescription()
     {
-        if (_mapModeDescriptionTextBlock != null)
+        if (_scenarioDescriptionTextBlock == null)
+            return;
+
+        if (ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any())
         {
-            _mapModeDescriptionTextBlock.Text = SelectedMapCreationMode switch
-            {
-                MapCreationMode.Random =>
-                    "Будет создан случайный большой граф: несколько областей, локальные связи и мосты между зонами.",
-
-                MapCreationMode.Scenario =>
-                    "Будет создан демонстрационный большой граф с заранее настроенной структурой и параметрами.",
-
-                MapCreationMode.SemiManual =>
-                    "Будет использован итоговый граф из редактора: области, вершины и рёбра задаются вручную.",
-
-                _ =>
-                    "Выберите способ создания графа."
-            };
+            _scenarioDescriptionTextBlock.Text =
+                "Используется итоговый граф из редактора. Именно его структура будет сохранена в симуляции.";
+            return;
         }
 
-        if (_scenarioDescriptionTextBlock != null)
+        if (_mode == GraphCreationMode.Small)
         {
-            _scenarioDescriptionTextBlock.Text = SelectedClusteredScenarioType switch
-            {
-                ClusteredScenarioType.MixedForest =>
-                    "Смешанный лес: несколько областей с разной растительностью и умеренными переходами между ними.",
-
-                ClusteredScenarioType.DryConiferousMassif =>
-                    "Сухой хвойный массив: пожароопасная структура с быстрым распространением по сухим хвойным зонам.",
-
-                ClusteredScenarioType.ForestWithRiver =>
-                    "Река как барьер: водная зона ограничивает распространение, а огонь ищет переходы через мосты.",
-
-                ClusteredScenarioType.ForestWithLake =>
-                    "Озеро и берег: водоём формирует естественный барьер и влияет на влажность соседних областей.",
-
-                ClusteredScenarioType.WetForestAfterRain =>
-                    "Влажный лес: высокая влажность замедляет распространение и снижает вероятность новых очагов.",
-
-                ClusteredScenarioType.ForestWithFirebreak =>
-                    "Просека: слабогорючая зона разрывает лесной массив, пожар распространяется через обходные пути.",
-
-                ClusteredScenarioType.HillyTerrain =>
-                    "Холмы: рельеф влияет на распространение, подъём и спуск меняют передачу тепла между областями.",
-
-                _ =>
-                    SelectedMapCreationMode == MapCreationMode.Scenario
-                        ? "Выберите демо для большого графа."
-                        : "Описание демо недоступно для выбранного режима."
-            };
+            _scenarioDescriptionTextBlock.Text =
+                "Малый граф состоит из одной области. Он удобен для быстрой проверки распространения пожара между вершинами.";
+            return;
         }
 
-        if (_semiManualDescriptionTextBlock != null)
+        if (_mode == GraphCreationMode.Medium)
         {
-            _semiManualDescriptionTextBlock.Text =
-                ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any()
-                    ? $"Редактор использован: вершин {ClusteredBlueprint.Nodes.Count}, рёбер {ClusteredBlueprint.Edges.Count}."
-                    : "Редактор пока не использован. Можно создать области, вершины, мосты и задать параметры узлов.";
+            _scenarioDescriptionTextBlock.Text =
+                "Средний граф состоит из нескольких непересекающихся областей. Между областями создаются мосты.";
+            return;
         }
+
+        if (SelectedClusteredScenarioType == null)
+        {
+            _scenarioDescriptionTextBlock.Text =
+                "Большой случайный граф состоит из нескольких областей. Области могут частично сближаться и соединяться мостами.";
+            return;
+        }
+
+        _scenarioDescriptionTextBlock.Text = SelectedClusteredScenarioType.Value switch
+        {
+            ClusteredScenarioType.MixedForest =>
+                "Смешанный лес: несколько областей с разными типами растительности и умеренными условиями распространения.",
+
+            ClusteredScenarioType.DryConiferousMassif =>
+                "Сухой хвойный лес: низкая влажность, высокая температура и ветер ускоряют распространение пожара.",
+
+            ClusteredScenarioType.ForestWithRiver =>
+                "Река как барьер: водная область разделяет граф и ограничивает переход огня между частями леса.",
+
+            ClusteredScenarioType.ForestWithLake =>
+                "Озеро и берег: водная зона и влажные участки замедляют распространение пожара.",
+
+            ClusteredScenarioType.WetForestAfterRain =>
+                "Влажный лес: высокая влажность и осадки снижают скорость распространения огня.",
+
+            ClusteredScenarioType.ForestWithFirebreak =>
+                "Просека: участки без горючего материала создают разрыв между лесными областями.",
+
+            ClusteredScenarioType.HillyTerrain =>
+                "Холмы: выраженный рельеф влияет на направление и скорость распространения пожара.",
+
+            _ =>
+                "Выбран графовый сценарий."
+        };
     }
 
-   private void UpdateMapEditorSummary()
-{
-    if (_mapEditorSummaryTextBlock == null)
-        return;
-
-    if (ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any())
+    private void UpdateMapEditorSummary()
     {
-        _mapEditorSummaryTextBlock.Text =
-            $"Подготовлен итоговый граф: вершин {ClusteredBlueprint.Nodes.Count}, рёбер {ClusteredBlueprint.Edges.Count}.";
-        return;
+        if (_mapEditorSummaryTextBlock == null)
+            return;
+
+        if (ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any())
+        {
+            _mapEditorSummaryTextBlock.Text =
+                $"Итоговый граф подготовлен: вершин {ClusteredBlueprint.Nodes.Count}, рёбер {ClusteredBlueprint.Edges.Count}.";
+            return;
+        }
+
+        _mapEditorSummaryTextBlock.Text = _mode switch
+        {
+            GraphCreationMode.Small =>
+                "Редактор можно открыть, чтобы изменить малый граф перед созданием симуляции.",
+
+            GraphCreationMode.Medium =>
+                "Редактор можно открыть, чтобы изменить области, вершины, рёбра и мосты среднего графа.",
+
+            GraphCreationMode.Large when SelectedClusteredScenarioType.HasValue =>
+                $"Выбрано демо «{GetScenarioDisplayName(SelectedClusteredScenarioType.Value)}». Редактор можно открыть для ручной доработки графа.",
+
+            GraphCreationMode.Large =>
+                "Выбран случайный большой граф. Редактор можно открыть для ручной доработки.",
+
+            _ =>
+                "Редактор графа ещё не использовался."
+        };
     }
-
-    _mapEditorSummaryTextBlock.Text = _mode switch
+    private void UpdateStructurePreview()
     {
-        GraphCreationMode.Small =>
-            "Редактор откроет итоговый малый граф. После сохранения именно он будет создан.",
+        if (_structureSummaryTextBlock == null || _structureDetailTextBlock == null)
+            return;
 
-        GraphCreationMode.Medium =>
-            "Редактор откроет итоговый средний граф. После сохранения именно он будет создан.",
+        int fireCells = Math.Max(1, ParseInt(_fireCellsBox?.Text, InitialFireCells));
 
-        GraphCreationMode.Large when SelectedMapCreationMode == MapCreationMode.Scenario =>
-            "Для демо большого графа редактор должен открывать подготовленную демо-структуру.",
+        double moistureMin = ParseDouble(_moistureMinBox?.Text, MoistureMin);
+        double moistureMax = ParseDouble(_moistureMaxBox?.Text, MoistureMax);
+        double elevation = ParseDouble(_elevationBox?.Text, ElevationVariation);
 
-        GraphCreationMode.Large =>
-            "Итоговый граф пока не подготовлен.",
+        string scaleText = _mode switch
+        {
+            GraphCreationMode.Small => "малый граф",
+            GraphCreationMode.Medium => "средний граф",
+            GraphCreationMode.Large => "большой граф",
+            _ => "граф"
+        };
 
-        _ =>
-            "Итоговый граф пока не подготовлен."
-    };
-}
-   private void UpdateStructurePreview()
-{
-    if (_structureSummaryTextBlock == null || _structureDetailTextBlock == null)
-        return;
+        string sourceText;
 
-    int width = Math.Max(1, ParseInt(_widthBox?.Text, GridWidth));
-    int height = Math.Max(1, ParseInt(_heightBox?.Text, GridHeight));
-    int fireCells = Math.Max(1, ParseInt(_fireCellsBox?.Text, InitialFireCells));
+        if (ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any())
+        {
+            sourceText = "Итоговый граф из редактора";
+        }
+        else if (_mode == GraphCreationMode.Large &&
+                 SelectedMapCreationMode == MapCreationMode.Scenario &&
+                 SelectedClusteredScenarioType.HasValue)
+        {
+            sourceText = $"Демо: {GetScenarioDisplayName(SelectedClusteredScenarioType.Value)}";
+        }
+        else
+        {
+            sourceText = "Случайный граф";
+        }
 
-    double moistureMin = ParseDouble(_moistureMinBox?.Text, MoistureMin);
-    double moistureMax = ParseDouble(_moistureMaxBox?.Text, MoistureMax);
-    double elevation = ParseDouble(_elevationBox?.Text, ElevationVariation);
+        _structureSummaryTextBlock.Text =
+            $"{sourceText} • {scaleText}";
 
-    string scaleText = _mode switch
-    {
-        GraphCreationMode.Small => "малый граф",
-        GraphCreationMode.Medium => "средний граф",
-        GraphCreationMode.Large => "большой граф",
-        _ => "граф"
-    };
-
-    string sourceText;
-
-    if (ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any())
-    {
-        sourceText = "Итоговый граф из редактора";
+        _structureDetailTextBlock.Text =
+            $"Очагов: {fireCells} • влажность {moistureMin:F2}..{moistureMax:F2} • перепад высот ±{elevation:F0}";
     }
-    else if (_mode == GraphCreationMode.Large &&
-             SelectedMapCreationMode == MapCreationMode.Scenario &&
-             SelectedClusteredScenarioType.HasValue)
-    {
-        sourceText = $"Демо: {GetScenarioDisplayName(SelectedClusteredScenarioType.Value)}";
-    }
-    else
-    {
-        sourceText = "Случайный граф";
-    }
-
-    _structureSummaryTextBlock.Text =
-        $"{sourceText} • {scaleText} • область {width}×{height}";
-
-    _structureDetailTextBlock.Text =
-        $"Очагов: {fireCells} • влажность {moistureMin:F2}..{moistureMax:F2} • перепад высот ±{elevation:F0}";
-}
 
     private string GetScenarioDisplayName(ClusteredScenarioType scenario)
     {
@@ -1083,150 +1031,59 @@ public partial class CreateGraphSimulationDialog : Window
 
     private async Task OpenGraphEditorAsync()
     {
+        int width = _mode switch
+        {
+            GraphCreationMode.Small => 24,
+            GraphCreationMode.Medium => 44,
+            GraphCreationMode.Large => 64,
+            _ => 44
+        };
+
+        int height = _mode switch
+        {
+            GraphCreationMode.Small => 18,
+            GraphCreationMode.Medium => 34,
+            GraphCreationMode.Large => 46,
+            _ => 34
+        };
+
+        var graphScaleType = _mode switch
+        {
+            GraphCreationMode.Small => GraphScaleType.Small,
+            GraphCreationMode.Medium => GraphScaleType.Medium,
+            GraphCreationMode.Large => GraphScaleType.Large,
+            _ => GraphScaleType.Medium
+        };
+
+        var editor = new ClusteredGraphEditorDialog(width, height, graphScaleType, ClusteredBlueprint);
+        var result = await editor.ShowDialog<bool>(this);
+
+        if (!result)
+            return;
+
+        ClusteredBlueprint = editor.EditedBlueprint;
+        SelectedMapCreationMode = MapCreationMode.SemiManual;
+
+        UpdateMapEditorSummary();
+        UpdateMapModeUi();
+        UpdateScenarioDescription();
+        UpdateStructurePreview();
+        UpdatePresetButtonsUi();
         ClearErrors();
-
-        try
-        {
-            CollectBasicValuesForGraphEditor();
-
-            var graphScaleType = _mode switch
-            {
-                GraphCreationMode.Small => GraphScaleType.Small,
-                GraphCreationMode.Medium => GraphScaleType.Medium,
-                GraphCreationMode.Large => GraphScaleType.Large,
-                _ => GraphScaleType.Medium
-            };
-
-            ClusteredGraphBlueprintDto? blueprintForEditor = ClusteredBlueprint;
-
-            if (blueprintForEditor == null || !blueprintForEditor.Nodes.Any())
-            {
-                var mapCreationMode = _mode == GraphCreationMode.Large
-                    ? SelectedMapCreationMode
-                    : MapCreationMode.Random;
-
-                var clusteredScenarioType =
-                    _mode == GraphCreationMode.Large &&
-                    mapCreationMode == MapCreationMode.Scenario
-                        ? SelectedClusteredScenarioType
-                        : null;
-
-                var dto = new CreateSimulationDto
-                {
-                    Name = string.IsNullOrWhiteSpace(SimulationName)
-                        ? "Графовая симуляция"
-                        : SimulationName,
-
-                    Description = "Предпросмотр итогового графа",
-
-                    GridWidth = GridWidth,
-                    GridHeight = GridHeight,
-                    GraphType = (int)GraphType.ClusteredGraph,
-                    GraphScaleType = graphScaleType,
-
-                    InitialMoistureMin = MoistureMin,
-                    InitialMoistureMax = MoistureMax,
-                    ElevationVariation = ElevationVariation,
-                    InitialFireCellsCount = InitialFireCells,
-                    SimulationSteps = SimulationSteps,
-                    StepDurationSeconds = StepDurationSeconds,
-                    RandomSeed = RandomSeed,
-
-                    MapCreationMode = mapCreationMode,
-                    ScenarioType = null,
-                    ClusteredScenarioType = clusteredScenarioType,
-
-                    MapNoiseStrength = MapNoiseStrength,
-                    MapDrynessFactor = MapDrynessFactor,
-                    ReliefStrengthFactor = ReliefStrengthFactor,
-                    FuelDensityFactor = FuelDensityFactor,
-
-                    VegetationDistributions = VegetationDistributions
-                        .Select(x => new VegetationDistributionDto
-                        {
-                            VegetationType = (VegetationType)x.VegetationType,
-                            Probability = x.Probability
-                        })
-                        .ToList(),
-
-                    MapRegionObjects = new List<MapRegionObjectDto>(),
-                    ClusteredBlueprint = null,
-                    InitialFirePositions = new List<InitialFirePositionDto>(),
-                    Precipitation = Precipitation
-                };
-
-                var apiService = new ApiService();
-
-                blueprintForEditor = await apiService.PreviewClusteredBlueprintAsync(
-                    dto,
-                    Temperature,
-                    Humidity,
-                    WindSpeed,
-                    WindDirection);
-
-                if (blueprintForEditor == null || !blueprintForEditor.Nodes.Any())
-                {
-                    ShowError("Не удалось подготовить итоговый граф для редактора.");
-                    return;
-                }
-            }
-
-            var editor = new ClusteredGraphEditorDialog(
-                blueprintForEditor.CanvasWidth,
-                blueprintForEditor.CanvasHeight,
-                graphScaleType,
-                blueprintForEditor);
-
-            var result = await editor.ShowDialog<bool>(this);
-
-            if (!result)
-            {
-                UpdateMapEditorSummary();
-                UpdateScenarioDescription();
-                UpdateStructurePreview();
-                UpdatePresetButtonsUi();
-                return;
-            }
-
-            ClusteredBlueprint = editor.EditedBlueprint;
-
-            if (ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any())
-            {
-                SelectedMapCreationMode = MapCreationMode.SemiManual;
-                SelectedClusteredScenarioType = null;
-
-                if (_mapCreationModeBox != null)
-                    _mapCreationModeBox.SelectedIndex = 2;
-
-                if (_scenarioTypeBox != null)
-                    _scenarioTypeBox.SelectedIndex = -1;
-            }
-
-            UpdateMapModeUi();
-            UpdateMapEditorSummary();
-            UpdateScenarioDescription();
-            UpdateStructurePreview();
-            UpdatePresetButtonsUi();
-            ClearErrors();
-        }
-        catch (Exception ex)
-        {
-            ShowError($"Не удалось открыть редактор итогового графа: {ex.Message}");
-        }
     }
 
     private void UpdateVegetationDistributionFromInputs()
     {
         var values = new List<(int VegetationType, double Probability)>
-        {
-            ((int)VegetationType.Coniferous, ParseDouble(_coniferousBox?.Text, 24)),
-            ((int)VegetationType.Deciduous, ParseDouble(_deciduousBox?.Text, 18)),
-            ((int)VegetationType.Mixed, ParseDouble(_mixedBox?.Text, 28)),
-            ((int)VegetationType.Grass, ParseDouble(_grassBox?.Text, 12)),
-            ((int)VegetationType.Shrub, ParseDouble(_shrubBox?.Text, 10)),
-            ((int)VegetationType.Water, ParseDouble(_waterBox?.Text, 4)),
-            ((int)VegetationType.Bare, ParseDouble(_bareBox?.Text, 4))
-        };
+    {
+        ((int)VegetationType.Coniferous, ParseDouble(_coniferousBox?.Text, 0.24)),
+        ((int)VegetationType.Deciduous, ParseDouble(_deciduousBox?.Text, 0.18)),
+        ((int)VegetationType.Mixed, ParseDouble(_mixedBox?.Text, 0.28)),
+        ((int)VegetationType.Grass, ParseDouble(_grassBox?.Text, 0.12)),
+        ((int)VegetationType.Shrub, ParseDouble(_shrubBox?.Text, 0.10)),
+        ((int)VegetationType.Water, ParseDouble(_waterBox?.Text, 0.04)),
+        ((int)VegetationType.Bare, ParseDouble(_bareBox?.Text, 0.04))
+    };
 
         double sum = values.Sum(x => Math.Max(0.0, x.Probability));
         if (sum <= 0.0001)
@@ -1241,17 +1098,28 @@ public partial class CreateGraphSimulationDialog : Window
 
     private void WriteVegetationDistributionToInputs()
     {
-        var map = VegetationDistributions.ToDictionary(x => x.VegetationType, x => x.Probability * 100.0);
+        var map = VegetationDistributions.ToDictionary(
+            x => x.VegetationType,
+            x => x.Probability);
 
-        SetText(_coniferousBox, GetVegetationPercentText(map, VegetationType.Coniferous, 24));
-        SetText(_deciduousBox, GetVegetationPercentText(map, VegetationType.Deciduous, 18));
-        SetText(_mixedBox, GetVegetationPercentText(map, VegetationType.Mixed, 28));
-        SetText(_grassBox, GetVegetationPercentText(map, VegetationType.Grass, 12));
-        SetText(_shrubBox, GetVegetationPercentText(map, VegetationType.Shrub, 10));
-        SetText(_waterBox, GetVegetationPercentText(map, VegetationType.Water, 4));
-        SetText(_bareBox, GetVegetationPercentText(map, VegetationType.Bare, 4));
+        SetText(_coniferousBox, GetVegetationProbabilityText(map, VegetationType.Coniferous, 0.24));
+        SetText(_deciduousBox, GetVegetationProbabilityText(map, VegetationType.Deciduous, 0.18));
+        SetText(_mixedBox, GetVegetationProbabilityText(map, VegetationType.Mixed, 0.28));
+        SetText(_grassBox, GetVegetationProbabilityText(map, VegetationType.Grass, 0.12));
+        SetText(_shrubBox, GetVegetationProbabilityText(map, VegetationType.Shrub, 0.10));
+        SetText(_waterBox, GetVegetationProbabilityText(map, VegetationType.Water, 0.04));
+        SetText(_bareBox, GetVegetationProbabilityText(map, VegetationType.Bare, 0.04));
     }
 
+    private string GetVegetationProbabilityText(
+        Dictionary<int, double> map,
+        VegetationType vegetationType,
+        double fallback)
+    {
+        return map.TryGetValue((int)vegetationType, out var value)
+            ? value.ToString("0.##", CultureInfo.InvariantCulture)
+            : fallback.ToString("0.##", CultureInfo.InvariantCulture);
+    }
     private string GetVegetationPercentText(
         Dictionary<int, double> map,
         VegetationType vegetationType,
@@ -1262,90 +1130,90 @@ public partial class CreateGraphSimulationDialog : Window
             : fallback.ToString("0.##", CultureInfo.InvariantCulture);
     }
 
-   private bool TryCollectValues(out string error)
-{
-    error = string.Empty;
+    private bool TryCollectValues(out string error)
+    {
+        error = string.Empty;
 
-    SimulationName = string.IsNullOrWhiteSpace(_nameBox?.Text)
-        ? _mode switch
+        SimulationName = string.IsNullOrWhiteSpace(_nameBox?.Text)
+            ? _mode switch
+            {
+                GraphCreationMode.Small => "Малый граф",
+                GraphCreationMode.Medium => "Средний граф",
+                GraphCreationMode.Large => "Большой граф",
+                _ => "Графовая симуляция"
+            }
+            : _nameBox.Text.Trim();
+
+        GridWidth = Math.Max(8, ParseInt(_widthBox?.Text, GridWidth));
+        GridHeight = Math.Max(8, ParseInt(_heightBox?.Text, GridHeight));
+        InitialFireCells = Math.Max(1, ParseInt(_fireCellsBox?.Text, InitialFireCells));
+
+        MoistureMin = ParseDouble(_moistureMinBox?.Text, MoistureMin);
+        MoistureMax = ParseDouble(_moistureMaxBox?.Text, MoistureMax);
+
+        if (MoistureMin < 0.0 || MoistureMax > 1.0 || MoistureMin > MoistureMax)
         {
-            GraphCreationMode.Small => "Малый граф",
-            GraphCreationMode.Medium => "Средний граф",
-            GraphCreationMode.Large => "Большой граф",
-            _ => "Графовая симуляция"
+            error = "Влажность должна быть в диапазоне 0..1, минимум не должен быть больше максимума.";
+            return false;
         }
-        : _nameBox.Text.Trim();
 
-    GridWidth = Math.Max(8, ParseInt(_widthBox?.Text, GridWidth));
-    GridHeight = Math.Max(8, ParseInt(_heightBox?.Text, GridHeight));
-    InitialFireCells = Math.Max(1, ParseInt(_fireCellsBox?.Text, InitialFireCells));
+        ElevationVariation = Math.Max(0.0, ParseDouble(_elevationBox?.Text, ElevationVariation));
 
-    MoistureMin = ParseDouble(_moistureMinBox?.Text, MoistureMin);
-    MoistureMax = ParseDouble(_moistureMaxBox?.Text, MoistureMax);
+        SimulationSteps = Math.Max(1, ParseInt(_stepsBox?.Text, SimulationSteps));
+        StepDurationSeconds = Math.Clamp(ParseInt(_stepDurationBox?.Text, StepDurationSeconds), 1, 7200);
 
-    if (MoistureMin < 0.0 || MoistureMax > 1.0 || MoistureMin > MoistureMax)
-    {
-        error = "Влажность должна быть в диапазоне 0..1, минимум не должен быть больше максимума.";
-        return false;
-    }
+        Temperature = ParseDouble(_tempBox?.Text, Temperature);
+        Humidity = Math.Clamp(ParseDouble(_humidityBox?.Text, Humidity), 0.0, 100.0);
+        WindSpeed = Math.Max(0.0, ParseDouble(_windSpeedBox?.Text, WindSpeed));
+        Precipitation = Math.Max(0.0, ParseDouble(_precipitationBox?.Text, Precipitation));
 
-    ElevationVariation = Math.Max(0.0, ParseDouble(_elevationBox?.Text, ElevationVariation));
+        MapNoiseStrength = Math.Clamp(ParseDouble(_mapNoiseBox?.Text, MapNoiseStrength), 0.0, 1.0);
+        MapDrynessFactor = Math.Max(0.1, ParseDouble(_mapDrynessBox?.Text, MapDrynessFactor));
+        ReliefStrengthFactor = Math.Max(0.1, ParseDouble(_reliefStrengthBox?.Text, ReliefStrengthFactor));
+        FuelDensityFactor = Math.Max(0.1, ParseDouble(_fuelDensityBox?.Text, FuelDensityFactor));
 
-    SimulationSteps = Math.Max(1, ParseInt(_stepsBox?.Text, SimulationSteps));
-    StepDurationSeconds = Math.Clamp(ParseInt(_stepDurationBox?.Text, StepDurationSeconds), 1, 7200);
+        RandomSeed = string.IsNullOrWhiteSpace(_randomSeedBox?.Text)
+            ? null
+            : ParseInt(_randomSeedBox?.Text, 0);
 
-    Temperature = ParseDouble(_tempBox?.Text, Temperature);
-    Humidity = Math.Clamp(ParseDouble(_humidityBox?.Text, Humidity), 0.0, 100.0);
-    WindSpeed = Math.Max(0.0, ParseDouble(_windSpeedBox?.Text, WindSpeed));
-    Precipitation = Math.Max(0.0, ParseDouble(_precipitationBox?.Text, Precipitation));
-
-    MapNoiseStrength = Math.Clamp(ParseDouble(_mapNoiseBox?.Text, MapNoiseStrength), 0.0, 1.0);
-    MapDrynessFactor = Math.Max(0.1, ParseDouble(_mapDrynessBox?.Text, MapDrynessFactor));
-    ReliefStrengthFactor = Math.Max(0.1, ParseDouble(_reliefStrengthBox?.Text, ReliefStrengthFactor));
-    FuelDensityFactor = Math.Max(0.1, ParseDouble(_fuelDensityBox?.Text, FuelDensityFactor));
-
-    RandomSeed = string.IsNullOrWhiteSpace(_randomSeedBox?.Text)
-        ? null
-        : ParseInt(_randomSeedBox?.Text, 0);
-
-    WindDirection = _windDirBox?.SelectedIndex switch
-    {
-        0 => 0.0,
-        1 => 45.0,
-        2 => 90.0,
-        3 => 135.0,
-        4 => 180.0,
-        5 => 225.0,
-        6 => 270.0,
-        7 => 315.0,
-        _ => 45.0
-    };
-
-    bool hasBlueprint = ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any();
-
-    if (hasBlueprint)
-    {
-        SelectedMapCreationMode = MapCreationMode.SemiManual;
-        SelectedClusteredScenarioType = null;
-    }
-    else if (_mode == GraphCreationMode.Large)
-    {
-        if (SelectedMapCreationMode == MapCreationMode.Scenario &&
-            SelectedClusteredScenarioType == null)
+        WindDirection = _windDirBox?.SelectedIndex switch
         {
-            SelectedClusteredScenarioType = ClusteredScenarioType.MixedForest;
+            0 => 0.0,
+            1 => 45.0,
+            2 => 90.0,
+            3 => 135.0,
+            4 => 180.0,
+            5 => 225.0,
+            6 => 270.0,
+            7 => 315.0,
+            _ => 45.0
+        };
+
+        bool hasBlueprint = ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any();
+
+        if (hasBlueprint)
+        {
+            SelectedMapCreationMode = MapCreationMode.SemiManual;
+            SelectedClusteredScenarioType = null;
         }
-    }
-    else
-    {
-        SelectedMapCreationMode = MapCreationMode.Random;
-        SelectedClusteredScenarioType = null;
-    }
+        else if (_mode == GraphCreationMode.Large)
+        {
+            if (SelectedMapCreationMode == MapCreationMode.Scenario &&
+                SelectedClusteredScenarioType == null)
+            {
+                SelectedClusteredScenarioType = ClusteredScenarioType.MixedForest;
+            }
+        }
+        else
+        {
+            SelectedMapCreationMode = MapCreationMode.Random;
+            SelectedClusteredScenarioType = null;
+        }
 
-    UpdateVegetationDistributionFromInputs();
+        UpdateVegetationDistributionFromInputs();
 
-    return true;
-}
+        return true;
+    }
     private void CollectBasicValuesForGraphEditor()
     {
         SimulationName = string.IsNullOrWhiteSpace(_nameBox?.Text)
