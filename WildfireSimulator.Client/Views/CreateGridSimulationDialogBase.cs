@@ -420,20 +420,19 @@ public partial class CreateGridSimulationDialogBase : Window
                 : $"демо «{GetPresetDisplayName(SelectedDemoPreset)}»";
 
             _mapEditorSummaryTextBlock.Text =
-                $"Итоговая карта сохранена. Размер: {PreparedMap.Width}×{PreparedMap.Height}, клеток: {PreparedMap.Cells.Count}. Основа: {sourceText}. " +
-                "Если изменить демо, размеры, распределение растительности или параметры генерации карты, итоговая карта будет сброшена и её нужно будет подготовить заново.";
+                $"Итоговая карта подготовлена: {PreparedMap.Width}×{PreparedMap.Height}, клеток: {PreparedMap.Cells.Count}. Основа: {sourceText}.";
             return;
         }
 
         if (!string.IsNullOrWhiteSpace(SelectedDemoPreset))
         {
             _mapEditorSummaryTextBlock.Text =
-                $"Выбрано демо «{GetPresetDisplayName(SelectedDemoPreset)}». При необходимости откройте редактор и подготовьте итоговую карту.";
+                $"Выбрано демо «{GetPresetDisplayName(SelectedDemoPreset)}». Редактор можно открыть для ручной доработки клеток.";
             return;
         }
 
         _mapEditorSummaryTextBlock.Text =
-            "Сейчас используется случайная карта. При необходимости откройте редактор и подготовьте итоговую карту.";
+            "Выбрана случайная карта. Редактор можно открыть для ручной доработки клеток.";
     }
     private void UpdateScenarioDescription()
     {
@@ -517,12 +516,6 @@ public partial class CreateGridSimulationDialogBase : Window
 
     private void ApplyModeTexts()
     {
-        if (_typeInfoTextBlock != null)
-            _typeInfoTextBlock.Text = "Сеточная симуляция";
-
-        if (_typeHintTextBlock != null)
-            _typeHintTextBlock.Text = "Выберите демо, случайную карту или откройте редактор.";
-
         if (_widthLabelTextBlock != null)
             _widthLabelTextBlock.Text = "Ширина";
 
@@ -530,13 +523,13 @@ public partial class CreateGridSimulationDialogBase : Window
             _heightLabelTextBlock.Text = "Высота";
 
         if (_widthHintTextBlock != null)
-            _widthHintTextBlock.Text = "Количество клеток по X";
+            _widthHintTextBlock.Text = "Диапазон: 5..200";
 
         if (_heightHintTextBlock != null)
-            _heightHintTextBlock.Text = "Количество клеток по Y";
+            _heightHintTextBlock.Text = "Диапазон: 5..200";
 
         if (_fireCellsHintTextBlock != null)
-            _fireCellsHintTextBlock.Text = "Число очагов при случайном старте";
+            _fireCellsHintTextBlock.Text = "Диапазон: 1..50";
     }
 
     private void OnGridSizeChanged()
@@ -736,17 +729,22 @@ public partial class CreateGridSimulationDialogBase : Window
 
     private void UpdateMapModeUi()
     {
-        if (_mapModeDescriptionTextBlock == null)
-            return;
+        if (_mapModeDescriptionTextBlock != null)
+        {
+            _mapModeDescriptionTextBlock.Text = PreparedMap != null
+                ? "Будет создана подготовленная итоговая карта из редактора."
+                : !string.IsNullOrWhiteSpace(SelectedDemoPreset)
+                    ? $"Будет создана карта на основе демо «{GetPresetDisplayName(SelectedDemoPreset)}»."
+                    : "Будет создана случайная карта по выбранным параметрам.";
+        }
 
-        _mapModeDescriptionTextBlock.Text = PreparedMap != null
-            ? "Будет использована подготовленная итоговая карта из редактора."
-            : !string.IsNullOrWhiteSpace(SelectedDemoPreset)
-                ? $"Будет использовано демо «{GetPresetDisplayName(SelectedDemoPreset)}». При желании его можно доработать в редакторе."
-                : "Будет использована случайная карта. При желании её можно сначала открыть в редакторе и доработать.";
+        if (_semiManualDescriptionTextBlock != null)
+        {
+            _semiManualDescriptionTextBlock.Text = PreparedMap != null
+                ? "Итоговая карта подготовлена. Можно создать симуляцию или снова открыть редактор."
+                : "При необходимости откройте редактор и измените отдельные клетки перед созданием симуляции.";
+        }
     }
-
-
     private string GetPresetDisplayName(string preset)
     {
         return preset switch
