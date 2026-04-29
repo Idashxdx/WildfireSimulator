@@ -174,6 +174,15 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                 double heatFlow = _calculator.CalculateHeatFlow(source, target, weather, stepDurationSeconds);
                 heatFlow = ApplyEdgeAwareTransferAdjustment(graph, source, target, edge, heatFlow);
 
+                double bridgePressureHeat = CalculateBridgePressureHeat(
+                    graph,
+                    source,
+                    target,
+                    edge,
+                    weather,
+                    stepDurationSeconds);
+
+                heatFlow += bridgePressureHeat;
                 if (heatFlow <= 0.0)
                     continue;
 
@@ -223,6 +232,80 @@ public class FireSpreadSimulator : IFireSpreadSimulator
             weather,
             stepDurationSeconds);
     }
+    private double CalculateBridgePressureHeat(
+      ForestGraph graph,
+      ForestCell source,
+      ForestCell target,
+      ForestEdge edge,
+      WeatherCondition weather,
+      double stepDurationSeconds)
+    {
+        if (source.State != CellState.Burning || target.State != CellState.Normal)
+            return 0.0;
+
+        if (string.Equals(source.ClusterId, target.ClusterId, StringComparison.Ordinal))
+            return 0.0;
+
+        if (target.Vegetation == VegetationType.Water || target.Vegetation == VegetationType.Bare)
+            return 0.0;
+
+        var sourceNeighbors = graph.GetNeighbors(source);
+
+        int burningNearSource = sourceNeighbors.Count(n =>
+            n.ClusterId == source.ClusterId &&
+            n.State == CellState.Burning);
+
+        int affectedNearSource = sourceNeighbors.Count(n =>
+            n.ClusterId == source.ClusterId &&
+            (n.State == CellState.Burning || n.State == CellState.Burned));
+
+        if (burningNearSource < 1 || affectedNearSource < 3)
+            return 0.0;
+
+        double threshold = _calculator.CalculateIgnitionThreshold(target, weather);
+        if (double.IsInfinity(threshold) || threshold <= 0.0)
+            return 0.0;
+
+        double sourceBurnDuration = FireModelCatalog.Get(source.Vegetation).BaseBurnDurationSeconds;
+        double sourceBurnProgress =
+            sourceBurnDuration > 0.0 && !double.IsInfinity(sourceBurnDuration)
+                ? Math.Clamp(source.BurningElapsedSeconds / sourceBurnDuration, 0.0, 1.0)
+                : 0.0;
+
+        if (sourceBurnProgress < 0.15)
+            return 0.0;
+
+        double pressure =
+            0.010 +
+            burningNearSource * 0.008 +
+            affectedNearSource * 0.004;
+
+        if (edge.IsCorridor)
+            pressure *= 1.18;
+
+        pressure = Math.Clamp(pressure, 0.0, 0.055);
+
+        double distanceFactor = edge.Distance switch
+        {
+            <= 3.0 => 1.00,
+            <= 5.0 => 0.72,
+            <= 7.5 => 0.52,
+            <= 10.0 => 0.38,
+            _ => 0.28
+        };
+
+        double durationFactor = Math.Clamp(stepDurationSeconds / 900.0, 0.25, 1.0);
+
+        double maturityFactor = sourceBurnProgress switch
+        {
+            < 0.25 => 0.65,
+            < 0.45 => 0.85,
+            < 0.65 => 1.00,
+            _ => 0.90
+        };
+
+        return threshold * pressure * distanceFactor * durationFactor * maturityFactor;
+    }
     private void CoolDownEdgeHeat(ForestGraph graph, double stepDurationSeconds)
     {
         double retentionFactor = Math.Exp(-stepDurationSeconds / 300.0);
@@ -232,10 +315,10 @@ public class FireSpreadSimulator : IFireSpreadSimulator
             edge.CoolDownHeat(retentionFactor);
     }
     private List<(ForestCell Cell, double Probability, double AccumulatedHeat, double Threshold, double Ratio)> BuildCandidates(
-     ForestGraph graph,
-     WeatherCondition weather,
-     Dictionary<Guid, double> totalIncomingHeat,
-     Dictionary<Guid, List<Guid>> heatSources)
+      ForestGraph graph,
+      WeatherCondition weather,
+      Dictionary<Guid, double> totalIncomingHeat,
+      Dictionary<Guid, List<Guid>> heatSources)
     {
         var candidates = new List<(ForestCell Cell, double Probability, double AccumulatedHeat, double Threshold, double Ratio)>();
 
@@ -253,17 +336,27 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
             double accumulatedHeat = target.AccumulatedHeatJ + transientHeat + residualEdgeHeat;
 
+            int sourceCount = heatSources.TryGetValue(target.Id, out var sources)
+                ? sources.Distinct().Count()
+                : 0;
+
+            if (sourceCount >= 2)
+            {
+                double multiSourceFactor = 1.0 + Math.Min(0.42, (sourceCount - 1) * 0.14);
+                accumulatedHeat *= multiSourceFactor;
+            }
+
             double threshold = _calculator.CalculateIgnitionThreshold(target, weather);
             double ratio = threshold > 0.0 ? accumulatedHeat / threshold : 0.0;
 
-            if (ratio >= 0.60 && ratio < 1.0)
+            if (ratio >= 0.55 && ratio < 1.0)
             {
                 double boost = ratio switch
                 {
-                    >= 0.90 => 1.20,
-                    >= 0.80 => 1.15,
-                    >= 0.70 => 1.10,
-                    _ => 1.05
+                    >= 0.90 => 1.25,
+                    >= 0.80 => 1.18,
+                    >= 0.70 => 1.12,
+                    _ => 1.07
                 };
 
                 accumulatedHeat *= boost;
@@ -274,26 +367,31 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
             double probability = _calculator.CalculateIgnitionProbability(accumulatedHeat, threshold);
 
+            if (sourceCount >= 2)
+                probability = Math.Max(probability, 0.035 + sourceCount * 0.015);
+
             if (ratio >= 0.85)
-                probability = Math.Max(probability, 0.18);
+                probability = Math.Max(probability, 0.20);
             else if (ratio >= 0.75)
-                probability = Math.Max(probability, 0.11);
+                probability = Math.Max(probability, 0.13);
             else if (ratio >= 0.65)
-                probability = Math.Max(probability, 0.055);
+                probability = Math.Max(probability, 0.070);
             else if (ratio >= 0.55)
-                probability = Math.Max(probability, 0.020);
+                probability = Math.Max(probability, 0.030);
 
             target.SetBurnProbability(probability);
 
-            bool hasMeaningfulTransientHeat = transientHeat >= 40_000.0;
-            bool hasMeaningfulResidualHeat = residualEdgeHeat >= 90_000.0;
-            bool hasStoredCellHeat = target.AccumulatedHeatJ >= 120_000.0;
+            bool hasMeaningfulTransientHeat = transientHeat >= 35_000.0;
+            bool hasMeaningfulResidualHeat = residualEdgeHeat >= 80_000.0;
+            bool hasStoredCellHeat = target.AccumulatedHeatJ >= 100_000.0;
+            bool hasMultipleSources = sourceCount >= 2;
 
             if (probability < 0.002 &&
-                ratio < 0.55 &&
+                ratio < 0.52 &&
                 !hasMeaningfulTransientHeat &&
                 !hasMeaningfulResidualHeat &&
-                !hasStoredCellHeat)
+                !hasStoredCellHeat &&
+                !hasMultipleSources)
             {
                 continue;
             }
@@ -303,6 +401,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
         return candidates;
     }
+
     private double GetResidualEdgeHeatForTarget(ForestGraph graph, ForestCell target)
     {
         var orderedEdgeHeat = graph.GetIncidentEdges(target)
@@ -322,34 +421,44 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         return Math.Clamp(coupledHeat, 0.0, 2_500_000.0);
     }
     private double ConvertToEdgeMemoryHeat(
-        double heatFlow,
-        ForestEdge edge,
-        double stepDurationSeconds)
+     double heatFlow,
+     ForestEdge edge,
+     double stepDurationSeconds)
     {
         if (heatFlow <= 0.0)
             return 0.0;
 
+        bool isBridge = edge.FromCell != null &&
+                        edge.ToCell != null &&
+                        !string.Equals(edge.FromCell.ClusterId, edge.ToCell.ClusterId, StringComparison.Ordinal);
+
         double distanceFactor = edge.Distance switch
         {
             <= 1.45 => 1.00,
-            <= 2.10 => 0.78,
-            <= 2.80 => 0.58,
-            <= 3.60 => 0.40,
-            _ => 0.28
+            <= 2.10 => 0.82,
+            <= 2.80 => 0.64,
+            <= 3.60 => 0.48,
+            <= 5.50 => isBridge ? 0.46 : 0.32,
+            <= 8.00 => isBridge ? 0.40 : 0.24,
+            _ => isBridge ? 0.34 : 0.18
         };
 
-        double modifierFactor = Math.Clamp(edge.FireSpreadModifier, 0.05, 1.35);
+        double modifierFactor = Math.Clamp(edge.FireSpreadModifier, 0.05, 1.60);
         double durationFactor = Math.Clamp(stepDurationSeconds / 300.0, 0.10, 1.00);
 
+        double bridgeMemoryBonus = isBridge
+            ? edge.IsCorridor ? 2.60 : 2.10
+            : 1.00;
+
         double memoryFraction =
-            0.018 *
+            0.022 *
             distanceFactor *
-            (0.82 + 0.18 * modifierFactor) *
-            durationFactor;
+            (0.78 + 0.22 * modifierFactor) *
+            durationFactor *
+            bridgeMemoryBonus;
 
         return heatFlow * memoryFraction;
     }
-
     private double ApplyEdgeAwareTransferAdjustment(
      ForestGraph graph,
      ForestCell source,
@@ -360,7 +469,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         if (baseHeatFlow <= 0.0)
             return 0.0;
 
-        double edgeModifier = Math.Clamp(edge.FireSpreadModifier, 0.02, 1.35);
+        double edgeModifier = Math.Clamp(edge.FireSpreadModifier, 0.02, 1.60);
         var topology = DetectTopology(graph);
 
         if (topology == SpreadTopology.Grid)
@@ -374,7 +483,6 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         int minDegree = Math.Max(1, Math.Min(sourceDegree, targetDegree));
 
         double directionalFactor = GetDirectionalEdgeFactor(source, target, edge, graph, topology);
-        bool isCorridor = edge.IsCorridor;
 
         if (topology == SpreadTopology.ClusteredArea)
         {
@@ -390,15 +498,14 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
                 double intraClusterSupport = edge.Distance switch
                 {
-                    <= 1.05 => 1.95,
-                    <= 1.45 => 2.45,
-                    <= 2.20 => 3.05,
-                    <= 3.00 => 3.30,
-                    _ => 3.35
+                    <= 1.05 => 2.25,
+                    <= 1.45 => 2.85,
+                    <= 2.20 => 3.55,
+                    <= 3.00 => 3.95,
+                    _ => 4.15
                 };
-
-                double sparseConnectivityFactor = 1.0 + 0.24 / Math.Sqrt(minDegree);
-                sparseConnectivityFactor = Math.Clamp(sparseConnectivityFactor, 1.0, 1.24);
+                double sparseConnectivityFactor = 1.0 + 0.26 / Math.Sqrt(minDegree);
+                sparseConnectivityFactor = Math.Clamp(sparseConnectivityFactor, 1.0, 1.26);
 
                 double similarityFactor = 1.0;
 
@@ -406,6 +513,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                     similarityFactor += 0.10;
 
                 double moistureGap = Math.Abs(source.Moisture - target.Moisture);
+
                 if (moistureGap <= 0.08)
                     similarityFactor += 0.05;
                 else if (moistureGap <= 0.16)
@@ -415,9 +523,9 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
                 double neighborhoodSupport =
                     1.0 +
-                    Math.Max(0, Math.Min(sameClusterNeighborsSource, sameClusterNeighborsTarget) - 2) * 0.08;
+                    Math.Max(0, Math.Min(sameClusterNeighborsSource, sameClusterNeighborsTarget) - 2) * 0.09;
 
-                neighborhoodSupport = Math.Clamp(neighborhoodSupport, 1.0, 1.28);
+                neighborhoodSupport = Math.Clamp(neighborhoodSupport, 1.0, 1.32);
 
                 double interiorBonus = 1.0;
 
@@ -434,12 +542,6 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
                 interiorBonus = Math.Clamp(interiorBonus, 1.0, 1.34);
 
-                double clusterResistanceFactor = 1.08;
-
-                double corridorFactor = isCorridor
-                    ? (edge.Distance >= 5.0 ? 1.08 : 1.05)
-                    : 1.0;
-
                 double adjusted =
                     baseHeatFlow *
                     edgeModifier *
@@ -449,129 +551,131 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                     neighborhoodSupport *
                     interiorBonus *
                     directionalFactor *
-                    clusterResistanceFactor *
-                    corridorFactor;
+                    1.10;
 
-                return Math.Min(adjusted, baseHeatFlow * 7.45);
+                return Math.Min(adjusted, baseHeatFlow * 9.20);
             }
-            else
+
+            var sourceNeighbors = graph.GetNeighbors(source);
+
+            int sameClusterBurningNeighbors = sourceNeighbors.Count(n =>
+                n.ClusterId == source.ClusterId &&
+                n.State == CellState.Burning);
+
+            int sameClusterAffectedNeighbors = sourceNeighbors.Count(n =>
+                n.ClusterId == source.ClusterId &&
+                (n.State == CellState.Burning || n.State == CellState.Burned));
+
+            int sameClusterNormalNeighbors = sourceNeighbors.Count(n =>
+                n.ClusterId == source.ClusterId &&
+                n.State == CellState.Normal);
+
+            int bridgeNeighborCount = sourceNeighbors.Count(n =>
+                n.ClusterId != source.ClusterId);
+
+            double sourceBurnDuration = FireModelCatalog.Get(source.Vegetation).BaseBurnDurationSeconds;
+            double sourceBurnProgress =
+                sourceBurnDuration > 0.0 && !double.IsInfinity(sourceBurnDuration)
+                    ? Math.Clamp(source.BurningElapsedSeconds / sourceBurnDuration, 0.0, 1.0)
+                    : 0.0;
+
+            double maturityFactor = sourceBurnProgress switch
             {
-                double sourceBurnDuration = FireModelCatalog.Get(source.Vegetation).BaseBurnDurationSeconds;
-                double sourceBurnProgress =
-                    sourceBurnDuration > 0.0 && !double.IsInfinity(sourceBurnDuration)
-                        ? Math.Clamp(source.BurningElapsedSeconds / sourceBurnDuration, 0.0, 1.0)
-                        : 0.0;
+                < 0.08 => 0.85,
+                < 0.15 => 1.05,
+                < 0.25 => 1.25,
+                < 0.40 => 1.45,
+                < 0.60 => 1.65,
+                _ => 1.80
+            };
 
-                var sourceNeighbors = graph.GetNeighbors(source);
+            double bridgeDistanceFactor = edge.Distance switch
+            {
+                <= 2.00 => 1.65,
+                <= 3.00 => 1.55,
+                <= 4.50 => 1.42,
+                <= 6.50 => 1.30,
+                <= 8.50 => 1.18,
+                _ => 1.05
+            };
 
-                int sameClusterAffectedNeighbors = sourceNeighbors.Count(n =>
-                    n.ClusterId == source.ClusterId &&
-                    (n.State == CellState.Burning || n.State == CellState.Burned));
+            double localFirePressure = 1.0;
 
-                int sameClusterBurningNeighbors = sourceNeighbors.Count(n =>
-                    n.ClusterId == source.ClusterId &&
-                    n.State == CellState.Burning);
+            if (sameClusterBurningNeighbors >= 1)
+                localFirePressure += 0.35;
 
-                int sameClusterSupportNeighbors = sourceNeighbors.Count(n =>
-                    n.ClusterId == source.ClusterId);
+            if (sameClusterBurningNeighbors >= 2)
+                localFirePressure += 0.45;
 
-                double maturityFactor = sourceBurnProgress switch
+            if (sameClusterBurningNeighbors >= 3)
+                localFirePressure += 0.45;
+
+            if (sameClusterAffectedNeighbors >= 3)
+                localFirePressure += 0.35;
+
+            if (sameClusterAffectedNeighbors >= 5)
+                localFirePressure += 0.35;
+
+            if (sameClusterNormalNeighbors <= 2)
+                localFirePressure += 0.20;
+
+            localFirePressure = Math.Clamp(localFirePressure, 1.0, 3.20);
+
+            double bridgeNodePressure = bridgeNeighborCount > 0
+                ? 1.35
+                : 1.0;
+
+            double corridorFactor = edge.IsCorridor
+                ? edge.Distance switch
                 {
-                    < 0.08 => 0.62,
-                    < 0.15 => 0.78,
-                    < 0.25 => 0.94,
-                    < 0.40 => 1.08,
-                    < 0.60 => 1.24,
-                    _ => 1.34
-                };
+                    >= 7.0 => 2.20,
+                    >= 5.0 => 2.00,
+                    >= 3.5 => 1.80,
+                    _ => 1.60
+                }
+                : 1.45;
 
-                double bridgeDistanceFactor = edge.Distance switch
-                {
-                    <= 1.60 => 1.20,
-                    <= 2.00 => 1.10,
-                    <= 2.40 => 1.00,
-                    <= 2.80 => 0.92,
-                    <= 3.20 => 0.86,
-                    _ => 0.78
-                };
+            double bridgeMoistureGap = Math.Abs(source.Moisture - target.Moisture);
+            double bridgeSimilarityFactor = bridgeMoistureGap switch
+            {
+                <= 0.08 => 1.12,
+                <= 0.16 => 1.06,
+                <= 0.28 => 1.00,
+                _ => 0.92
+            };
 
-                double bridgeQualityFactor = 1.0 + 0.16 / Math.Sqrt(minDegree);
-                bridgeQualityFactor = Math.Clamp(bridgeQualityFactor, 1.0, 1.14);
+            if (source.Vegetation == target.Vegetation)
+                bridgeSimilarityFactor += 0.06;
 
-                double similarityFactor = 1.0;
+            bridgeSimilarityFactor = Math.Clamp(bridgeSimilarityFactor, 0.85, 1.18);
 
-                if (source.Vegetation == target.Vegetation)
-                    similarityFactor += 0.04;
+            double bridgeSupport = edge.Distance switch
+            {
+                <= 3.0 => 1.80,
+                <= 5.0 => 2.20,
+                <= 7.5 => 2.70,
+                <= 10.0 => 3.10,
+                _ => 3.40
+            };
 
-                double moistureGap = Math.Abs(source.Moisture - target.Moisture);
-                if (moistureGap <= 0.10)
-                    similarityFactor += 0.03;
-                else if (moistureGap <= 0.18)
-                    similarityFactor += 0.01;
+            double adjustedBridgeHeat =
+                baseHeatFlow *
+                edgeModifier *
+                bridgeDistanceFactor *
+                bridgeSimilarityFactor *
+                maturityFactor *
+                localFirePressure *
+                bridgeNodePressure *
+                corridorFactor *
+                bridgeSupport *
+                directionalFactor;
 
-                similarityFactor = Math.Clamp(similarityFactor, 1.0, 1.08);
-
-                double sourceBridgeExposureFactor =
-                    sourceDegree <= 3 ? 1.05 :
-                    sourceDegree <= 4 ? 1.03 :
-                    sourceDegree <= 5 ? 1.01 : 1.00;
-
-                double frontierPressureFactor = 1.0;
-
-                if (sameClusterAffectedNeighbors >= 2)
-                    frontierPressureFactor += 0.10;
-
-                if (sameClusterAffectedNeighbors >= 3)
-                    frontierPressureFactor += 0.10;
-
-                if (sameClusterAffectedNeighbors >= 4)
-                    frontierPressureFactor += 0.08;
-
-                if (sameClusterBurningNeighbors >= 2)
-                    frontierPressureFactor += 0.08;
-
-                if (sameClusterSupportNeighbors >= 4)
-                    frontierPressureFactor += 0.04;
-
-                if (sourceBurnProgress >= 0.35 && sameClusterAffectedNeighbors >= 2)
-                    frontierPressureFactor += 0.10;
-
-                if (sourceBurnProgress >= 0.50 && sameClusterAffectedNeighbors >= 3)
-                    frontierPressureFactor += 0.08;
-
-                frontierPressureFactor = Math.Clamp(frontierPressureFactor, 1.0, 1.42);
-
-                double clusterResistanceFactor = 0.65;
-
-                double corridorFactor = isCorridor
-                    ? edge.Distance switch
-                    {
-                        >= 6.0 => 1.20,
-                        >= 5.0 => 1.16,
-                        >= 4.0 => 1.12,
-                        _ => 1.08
-                    }
-                    : 1.0;
-
-                double adjusted =
-                    baseHeatFlow *
-                    edgeModifier *
-                    bridgeDistanceFactor *
-                    bridgeQualityFactor *
-                    similarityFactor *
-                    maturityFactor *
-                    sourceBridgeExposureFactor *
-                    frontierPressureFactor *
-                    directionalFactor *
-                    clusterResistanceFactor *
-                    corridorFactor;
-
-                return Math.Min(adjusted, baseHeatFlow * 3.15);
-            }
+            return Math.Min(adjustedBridgeHeat, baseHeatFlow * 9.50);
         }
 
         return baseHeatFlow * edgeModifier;
     }
+
     private double GetDirectionalEdgeFactor(
      ForestCell source,
      ForestCell target,

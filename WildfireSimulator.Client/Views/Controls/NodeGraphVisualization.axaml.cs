@@ -239,26 +239,22 @@ public partial class NodeGraphVisualization : UserControl
 
     private double CalculateFitZoom(double logicalWidth, double logicalHeight)
     {
-        if (_scrollHost == null)
+        if (_scrollHost == null || logicalWidth <= 0)
             return 1.0;
 
-        double viewportWidth = Math.Max(1.0, _scrollHost.Bounds.Width - 18);
-        double viewportHeight = Math.Max(1.0, _scrollHost.Bounds.Height - 18);
+        double availableWidth = _scrollHost.Bounds.Width;
 
-        if (logicalWidth <= 1.0 || logicalHeight <= 1.0)
-            return 1.0;
+        if (availableWidth <= 0)
+            availableWidth = 680;
 
-        double zoomByWidth = viewportWidth / logicalWidth;
-        double zoomByHeight = viewportHeight / logicalHeight;
+        double zoomByWidth = (availableWidth - 24) / logicalWidth;
 
-        return Math.Clamp(Math.Min(zoomByWidth, zoomByHeight) * 0.96, MinZoom, MaxZoom);
+        return Math.Clamp(zoomByWidth, MinZoom, MaxZoom);
     }
-
     private void OnGraphPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
         if (e.Property == NodesProperty)
         {
-            _hasManualZoom = false;
             RebindNodesCollection();
             ScheduleDraw();
             return;
@@ -266,7 +262,6 @@ public partial class NodeGraphVisualization : UserControl
 
         if (e.Property == EdgesProperty)
         {
-            _hasManualZoom = false;
             RebindEdgesCollection();
             ScheduleDraw();
             return;
@@ -280,7 +275,7 @@ public partial class NodeGraphVisualization : UserControl
         }
 
         if (e.Property == SelectedNodeProperty ||
-     e.Property == SelectedEdgeProperty)
+            e.Property == SelectedEdgeProperty)
         {
             ScheduleDraw();
         }
@@ -318,7 +313,6 @@ public partial class NodeGraphVisualization : UserControl
 
     private void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        _hasManualZoom = false;
         ScheduleDraw();
     }
 

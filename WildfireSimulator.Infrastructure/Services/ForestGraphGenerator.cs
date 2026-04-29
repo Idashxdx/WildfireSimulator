@@ -111,67 +111,85 @@ public class ForestGraphGenerator : IForestGraphGenerator
         return await Task.FromResult(graph);
     }
 
-   public async Task<ForestGraph> GenerateClusteredGraphAsync(int nodeCount, SimulationParameters parameters)
-{
-    var random = CreateRandom(parameters);
-    var scaleProfile = GetClusteredScaleProfile(parameters, nodeCount);
-
-    int effectiveWidth = scaleProfile.Scale switch
+    public async Task<ForestGraph> GenerateClusteredGraphAsync(int nodeCount, SimulationParameters parameters)
     {
-        GraphScaleType.Small => 24,
-        GraphScaleType.Medium => 44,
-        GraphScaleType.Large => 64,
-        _ => 44
-    };
+        var random = CreateRandom(parameters);
+        var scaleProfile = GetClusteredScaleProfile(parameters, nodeCount);
 
-    int effectiveHeight = scaleProfile.Scale switch
-    {
-        GraphScaleType.Small => 18,
-        GraphScaleType.Medium => 34,
-        GraphScaleType.Large => 46,
-        _ => 34
-    };
+        int effectiveWidth = scaleProfile.Scale switch
+        {
+            GraphScaleType.Small => 24,
+            GraphScaleType.Medium => 44,
+            GraphScaleType.Large => 64,
+            _ => 44
+        };
 
-    var graph = new ForestGraph
-    {
-        Width = effectiveWidth,
-        Height = effectiveHeight,
-        StepDurationSeconds = parameters.StepDurationSeconds
-    };
+        int effectiveHeight = scaleProfile.Scale switch
+        {
+            GraphScaleType.Small => 18,
+            GraphScaleType.Medium => 34,
+            GraphScaleType.Large => 46,
+            _ => 34
+        };
 
-    _logger.LogInformation(
-        "Генерация графа. Масштаб={Scale}, Узлов={NodeCount}, Размер={Width}x{Height}, Режим={Mode}, Сценарий={Scenario}, ЕстьРедактор={HasBlueprint}",
-        scaleProfile.Scale,
-        nodeCount,
-        graph.Width,
-        graph.Height,
-        parameters.MapCreationMode,
-        parameters.ClusteredScenarioType,
-        parameters.ClusteredBlueprint != null && parameters.ClusteredBlueprint.Nodes.Any());
-
-    if (parameters.ClusteredBlueprint != null &&
-        parameters.ClusteredBlueprint.Nodes.Any())
-    {
-        var blueprintGraph = BuildClusteredGraphFromBlueprint(parameters.ClusteredBlueprint, parameters);
-        blueprintGraph.StepDurationSeconds = parameters.StepDurationSeconds;
+        var graph = new ForestGraph
+        {
+            Width = effectiveWidth,
+            Height = effectiveHeight,
+            StepDurationSeconds = parameters.StepDurationSeconds
+        };
 
         _logger.LogInformation(
-            "Граф построен из редактора: Масштаб={Scale}, Узлов={Cells}, Рёбер={Edges}",
+            "Генерация графа. Масштаб={Scale}, Узлов={NodeCount}, Размер={Width}x{Height}, Режим={Mode}, Сценарий={Scenario}, ЕстьРедактор={HasBlueprint}",
             scaleProfile.Scale,
-            blueprintGraph.Cells.Count,
-            blueprintGraph.Edges.Count);
+            nodeCount,
+            graph.Width,
+            graph.Height,
+            parameters.MapCreationMode,
+            parameters.ClusteredScenarioType,
+            parameters.ClusteredBlueprint != null && parameters.ClusteredBlueprint.Nodes.Any());
 
-        return await Task.FromResult(blueprintGraph);
-    }
+        if (parameters.ClusteredBlueprint != null &&
+            parameters.ClusteredBlueprint.Nodes.Any())
+        {
+            var blueprintGraph = BuildClusteredGraphFromBlueprint(parameters.ClusteredBlueprint, parameters);
+            blueprintGraph.StepDurationSeconds = parameters.StepDurationSeconds;
 
-    bool canUseDemoScenario =
-        scaleProfile.Scale == GraphScaleType.Large &&
-        (parameters.MapCreationMode == MapCreationMode.Scenario ||
-         parameters.ClusteredScenarioType.HasValue);
+            _logger.LogInformation(
+                "Граф построен из редактора: Масштаб={Scale}, Узлов={Cells}, Рёбер={Edges}",
+                scaleProfile.Scale,
+                blueprintGraph.Cells.Count,
+                blueprintGraph.Edges.Count);
 
-    if (canUseDemoScenario)
-    {
-        BuildClusteredScenarioGraph(
+            return await Task.FromResult(blueprintGraph);
+        }
+
+        bool canUseDemoScenario =
+            scaleProfile.Scale == GraphScaleType.Large &&
+            (parameters.MapCreationMode == MapCreationMode.Scenario ||
+             parameters.ClusteredScenarioType.HasValue);
+
+        if (canUseDemoScenario)
+        {
+            BuildClusteredScenarioGraph(
+                graph,
+                nodeCount,
+                parameters,
+                random,
+                scaleProfile.MaxDegree);
+
+            graph.StepDurationSeconds = parameters.StepDurationSeconds;
+
+            _logger.LogInformation(
+                "Демо-граф сгенерирован: Масштаб={Scale}, Узлов={Cells}, Рёбер={Edges}",
+                scaleProfile.Scale,
+                graph.Cells.Count,
+                graph.Edges.Count);
+
+            return await Task.FromResult(graph);
+        }
+
+        BuildClusteredRandomGraph(
             graph,
             nodeCount,
             parameters,
@@ -181,31 +199,13 @@ public class ForestGraphGenerator : IForestGraphGenerator
         graph.StepDurationSeconds = parameters.StepDurationSeconds;
 
         _logger.LogInformation(
-            "Демо-граф сгенерирован: Масштаб={Scale}, Узлов={Cells}, Рёбер={Edges}",
+            "Случайный граф сгенерирован: Масштаб={Scale}, Узлов={Cells}, Рёбер={Edges}",
             scaleProfile.Scale,
             graph.Cells.Count,
             graph.Edges.Count);
 
         return await Task.FromResult(graph);
     }
-
-    BuildClusteredRandomGraph(
-        graph,
-        nodeCount,
-        parameters,
-        random,
-        scaleProfile.MaxDegree);
-
-    graph.StepDurationSeconds = parameters.StepDurationSeconds;
-
-    _logger.LogInformation(
-        "Случайный граф сгенерирован: Масштаб={Scale}, Узлов={Cells}, Рёбер={Edges}",
-        scaleProfile.Scale,
-        graph.Cells.Count,
-        graph.Edges.Count);
-
-    return await Task.FromResult(graph);
-}
     private TerritoryDraft BuildTerritoryDraft(
         int width,
         int height,
@@ -2994,9 +2994,26 @@ public class ForestGraphGenerator : IForestGraphGenerator
             if (string.Equals(fromCluster, toCluster, StringComparison.Ordinal))
                 continue;
 
+            double distanceCompensation = edge.Distance switch
+            {
+                <= 3.0 => 1.10,
+                <= 5.0 => 1.25,
+                <= 7.5 => 1.45,
+                <= 10.0 => 1.65,
+                _ => 1.80
+            };
+
+            double corridorCompensation = edge.IsCorridor ? 1.18 : 1.08;
+
+            double newModifier =
+                edge.FireSpreadModifier *
+                bridgeFactor *
+                distanceCompensation *
+                corridorCompensation;
+
             SetEdgeFireSpreadModifier(
                 edge,
-                Math.Clamp(edge.FireSpreadModifier * bridgeFactor, 0.02, 1.10));
+                Math.Clamp(newModifier, 0.04, 1.45));
         }
     }
 

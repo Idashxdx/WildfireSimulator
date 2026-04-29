@@ -281,6 +281,43 @@ public partial class CreateGridSimulationDialogBase : Window
         UpdateStructurePreview();
         ClearErrors();
     }
+
+    private void ApplyMapFactors(
+    double noise,
+    double dryness,
+    double relief,
+    double fuel)
+    {
+        if (_mapNoiseBox != null)
+            _mapNoiseBox.Text = noise.ToString("0.00", CultureInfo.InvariantCulture);
+
+        if (_mapDrynessBox != null)
+            _mapDrynessBox.Text = dryness.ToString("0.00", CultureInfo.InvariantCulture);
+
+        if (_reliefStrengthBox != null)
+            _reliefStrengthBox.Text = relief.ToString("0.00", CultureInfo.InvariantCulture);
+
+        if (_fuelDensityBox != null)
+            _fuelDensityBox.Text = fuel.ToString("0.00", CultureInfo.InvariantCulture);
+    }
+
+    private void ApplyVegetation(
+        double coniferous,
+        double deciduous,
+        double mixed,
+        double grass,
+        double shrub,
+        double water,
+        double bare)
+    {
+        if (_coniferousBox != null) _coniferousBox.Text = coniferous.ToString("0.00", CultureInfo.InvariantCulture);
+        if (_deciduousBox != null) _deciduousBox.Text = deciduous.ToString("0.00", CultureInfo.InvariantCulture);
+        if (_mixedBox != null) _mixedBox.Text = mixed.ToString("0.00", CultureInfo.InvariantCulture);
+        if (_grassBox != null) _grassBox.Text = grass.ToString("0.00", CultureInfo.InvariantCulture);
+        if (_shrubBox != null) _shrubBox.Text = shrub.ToString("0.00", CultureInfo.InvariantCulture);
+        if (_waterBox != null) _waterBox.Text = water.ToString("0.00", CultureInfo.InvariantCulture);
+        if (_bareBox != null) _bareBox.Text = bare.ToString("0.00", CultureInfo.InvariantCulture);
+    }
     private void OnPresetClicked(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button button)
@@ -307,18 +344,23 @@ public partial class CreateGridSimulationDialogBase : Window
                 if (_moistureMinBox != null) _moistureMinBox.Text = "0.28";
                 if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.55";
                 if (_elevationBox != null) _elevationBox.Text = "55";
+                ApplyMapFactors(0.08, 1.00, 1.00, 1.00);
+                ApplyVegetation(0.22, 0.22, 0.34, 0.10, 0.08, 0.02, 0.02);
                 break;
 
             case "dry-coniferous":
                 SelectedDemoPreset = "dry-coniferous";
                 if (_nameBox != null) _nameBox.Text = "Сухой хвойный + ветер";
-                if (_tempBox != null) _tempBox.Text = "30";
-                if (_humidityBox != null) _humidityBox.Text = "24";
+                if (_tempBox != null) _tempBox.Text = "31";
+                if (_humidityBox != null) _humidityBox.Text = "22";
                 if (_windSpeedBox != null) _windSpeedBox.Text = "8";
                 if (_precipitationBox != null) _precipitationBox.Text = "0";
-                if (_moistureMinBox != null) _moistureMinBox.Text = "0.10";
-                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.22";
+                if (_moistureMinBox != null) _moistureMinBox.Text = "0.08";
+                if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.24";
                 if (_elevationBox != null) _elevationBox.Text = "70";
+
+                ApplyMapFactors(0.10, 1.20, 1.05, 1.15);
+                ApplyVegetation(0.72, 0.04, 0.12, 0.04, 0.06, 0.01, 0.01);
                 break;
 
             case "river":
@@ -331,6 +373,8 @@ public partial class CreateGridSimulationDialogBase : Window
                 if (_moistureMinBox != null) _moistureMinBox.Text = "0.32";
                 if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.58";
                 if (_elevationBox != null) _elevationBox.Text = "35";
+                ApplyMapFactors(0.07, 0.90, 0.85, 0.95);
+                ApplyVegetation(0.14, 0.30, 0.34, 0.07, 0.08, 0.06, 0.01);
                 break;
 
             case "lake":
@@ -343,6 +387,8 @@ public partial class CreateGridSimulationDialogBase : Window
                 if (_moistureMinBox != null) _moistureMinBox.Text = "0.38";
                 if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.68";
                 if (_elevationBox != null) _elevationBox.Text = "30";
+                ApplyMapFactors(0.06, 0.85, 0.80, 0.95);
+                ApplyVegetation(0.12, 0.30, 0.34, 0.08, 0.08, 0.07, 0.01);
                 break;
 
             case "wet":
@@ -355,6 +401,8 @@ public partial class CreateGridSimulationDialogBase : Window
                 if (_moistureMinBox != null) _moistureMinBox.Text = "0.72";
                 if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.95";
                 if (_elevationBox != null) _elevationBox.Text = "30";
+                ApplyMapFactors(0.06, 0.65, 0.80, 0.85);
+                ApplyVegetation(0.08, 0.34, 0.36, 0.08, 0.10, 0.03, 0.01);
                 break;
 
             case "firebreak":
@@ -367,6 +415,8 @@ public partial class CreateGridSimulationDialogBase : Window
                 if (_moistureMinBox != null) _moistureMinBox.Text = "0.16";
                 if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.30";
                 if (_elevationBox != null) _elevationBox.Text = "25";
+                ApplyMapFactors(0.08, 1.08, 0.90, 1.05);
+                ApplyVegetation(0.28, 0.16, 0.32, 0.08, 0.08, 0.02, 0.06);
                 break;
 
             case "hills":
@@ -379,8 +429,9 @@ public partial class CreateGridSimulationDialogBase : Window
                 if (_moistureMinBox != null) _moistureMinBox.Text = "0.20";
                 if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.40";
                 if (_elevationBox != null) _elevationBox.Text = "170";
+                ApplyMapFactors(0.09, 1.05, 1.35, 1.00);
+                ApplyVegetation(0.26, 0.18, 0.30, 0.10, 0.12, 0.02, 0.02);
                 break;
-
             case "random":
             default:
                 SelectedDemoPreset = null;
@@ -392,6 +443,8 @@ public partial class CreateGridSimulationDialogBase : Window
                 if (_moistureMinBox != null) _moistureMinBox.Text = "0.30";
                 if (_moistureMaxBox != null) _moistureMaxBox.Text = "0.70";
                 if (_elevationBox != null) _elevationBox.Text = "50";
+                ApplyMapFactors(0.08, 1.00, 1.00, 1.00);
+                ApplyVegetation(0.25, 0.20, 0.25, 0.15, 0.10, 0.03, 0.02);
                 break;
         }
 
