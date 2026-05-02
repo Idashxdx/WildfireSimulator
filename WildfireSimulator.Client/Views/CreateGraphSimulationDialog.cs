@@ -1228,11 +1228,21 @@ public partial class CreateGraphSimulationDialog : Window
 
         SimulationName = _nameBox?.Text?.Trim() ?? string.Empty;
 
-        if (!TryReadInt(_widthBox, "Ширина", 5, 200, errors, out var width))
-            width = GridWidth;
+       int width = _mode switch
+{
+    GraphCreationMode.Small => 20,
+    GraphCreationMode.Medium => 34,
+    GraphCreationMode.Large => 56,
+    _ => GridWidth
+};
 
-        if (!TryReadInt(_heightBox, "Высота", 5, 200, errors, out var height))
-            height = GridHeight;
+int height = _mode switch
+{
+    GraphCreationMode.Small => 18,
+    GraphCreationMode.Medium => 30,
+    GraphCreationMode.Large => 46,
+    _ => GridHeight
+};
 
         if (!TryReadInt(_fireCellsBox, "Количество очагов", 1, 50, errors, out var fireCells))
             fireCells = InitialFireCells;
@@ -1841,6 +1851,9 @@ public partial class CreateGraphSimulationDialog : Window
 
         _errorTextBlock.Text = error;
         _errorTextBlock.IsVisible = true;
+
+        if (_errorTextBlock.Parent is Border border)
+            border.IsVisible = true;
     }
 
     private void ClearErrors()
@@ -1850,7 +1863,12 @@ public partial class CreateGraphSimulationDialog : Window
 
         _errorTextBlock.Text = string.Empty;
         _errorTextBlock.IsVisible = false;
+
+        if (_errorTextBlock.Parent is Border border)
+            border.IsVisible = false;
     }
+
+
 
     private static void SetText(TextBox? textBox, string text)
     {

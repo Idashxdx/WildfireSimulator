@@ -265,7 +265,6 @@ public partial class NodeGraphVisualization : UserControl
         var neighborIds = GetNeighborIds(edges, selectedNodeId);
 
         DrawClusterPatchBackgrounds(nodes, points, _zoom);
-        DrawMovingPrecipitationFront(nodes, points, _zoom);
 
         foreach (var edge in edges.OrderBy(e => IsBridgeEdge(e, nodeMap) ? 1 : 0))
             DrawEdge(edge, points, nodeMap, selectedNodeId, selectedEdgeId, selectedEdgeIds, _zoom);
@@ -694,6 +693,7 @@ public partial class NodeGraphVisualization : UserControl
         Canvas.SetLeft(ellipse, point.X - radius);
         Canvas.SetTop(ellipse, point.Y - radius);
         _graphCanvas.Children.Add(ellipse);
+        DrawPrecipitationOverlay(node, point, radius, zoom);
 
         if (isIgnition)
         {
@@ -716,6 +716,40 @@ public partial class NodeGraphVisualization : UserControl
             _graphCanvas.Children.Add(ignitionRing);
         }
     }
+    private void DrawPrecipitationOverlay(
+    SimulationGraphNodeDto node,
+    Point point,
+    double radius,
+    double zoom)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        if (node.PrecipitationIntensity <= 0.001)
+            return;
+
+        double rainLevel = Math.Clamp(node.PrecipitationIntensity / 100.0, 0.0, 1.0);
+        double overlayRadius = radius + (4.0 + rainLevel * 7.0) * zoom;
+
+        byte alpha = (byte)Math.Clamp(45 + rainLevel * 135, 45, 180);
+
+        var rainCircle = new Ellipse
+        {
+            Width = overlayRadius * 2,
+            Height = overlayRadius * 2,
+            Fill = new SolidColorBrush(Color.FromArgb(alpha, 70, 170, 255)),
+            Stroke = new SolidColorBrush(Color.FromArgb(190, 35, 120, 220)),
+            StrokeThickness = Math.Max(0.8, (0.9 + rainLevel * 1.2) * zoom),
+            ZIndex = 13,
+            IsHitTestVisible = false
+        };
+
+        Canvas.SetLeft(rainCircle, point.X - overlayRadius);
+        Canvas.SetTop(rainCircle, point.Y - overlayRadius);
+
+        _graphCanvas.Children.Add(rainCircle);
+    }
+
     private string BuildTooltip(
       SimulationGraphNodeDto node,
       List<SimulationGraphEdgeDto> edges)

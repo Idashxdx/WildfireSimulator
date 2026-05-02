@@ -192,9 +192,12 @@ public class SimulationManagerController : ControllerBase
 
             var activeSimulation = await _simulationManager.GetSimulation(simulationId);
             var cells = activeSimulation?.Graph.Cells
-                .Select(BuildStepCellDto)
-                .ToList() ?? new List<object>();
-
+     .Select(c => BuildStepCellDto(
+         c,
+         activeSimulation.Graph,
+         activeSimulation.CurrentWeather,
+         activeSimulation.CurrentStep))
+     .ToList() ?? new List<object>();
             return Ok(new
             {
                 success = true,
@@ -425,8 +428,18 @@ public class SimulationManagerController : ControllerBase
         };
     }
 
-    private object BuildStepCellDto(ForestCell c)
+    private object BuildStepCellDto(
+    ForestCell c,
+    ForestGraph graph,
+    WeatherCondition weather,
+    int currentStep)
     {
+        double precipitationIntensity = CalculatePrecipitationFrontIntensity(
+            graph,
+            weather,
+            c,
+            currentStep);
+
         return new
         {
             id = c.Id,
@@ -436,10 +449,119 @@ public class SimulationManagerController : ControllerBase
             moisture = Math.Round(c.Moisture, 2),
             elevation = Math.Round(c.Elevation, 1),
             state = c.State.ToString(),
-            burnProbability = Math.Round(c.BurnProbability, 3)
+            burnProbability = Math.Round(c.BurnProbability, 3),
+            ignitionTime = c.IgnitionTime,
+            burnoutTime = c.BurnoutTime,
+            fireStage = c.FireStage.ToString(),
+            fireIntensity = Math.Round(c.FireIntensity, 3),
+            currentFuelLoad = Math.Round(c.CurrentFuelLoad, 6),
+            fuelLoad = Math.Round(c.FuelLoad, 6),
+            burningElapsedSeconds = Math.Round(c.BurningElapsedSeconds, 3),
+            accumulatedHeatJ = Math.Round(c.AccumulatedHeatJ, 3),
+            isIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != VegetationType.Bare,
+            precipitationIntensity = Math.Round(precipitationIntensity, 3),
+            isInPrecipitationFront = precipitationIntensity > 0.001
         };
     }
+    private double CalculatePrecipitationFrontIntensity(
+        ForestGraph graph,
+        WeatherCondition weather,
+        ForestCell cell,
+        int currentStep)
+    {
+        double precipitationPercent = Math.Clamp(weather.Precipitation, 0.0, 100.0);
+        if (precipitationPercent <= 0.0)
+            return 0.0;
 
+        if (cell.Vegetation == VegetationType.Water ||
+            cell.Vegetation == VegetationType.Bare)
+        {
+            return 0.0;
+        }
+
+        double width = Math.Max(1.0, graph.Width);
+        double height = Math.Max(1.0, graph.Height);
+
+        double centerX = width / 2.0;
+        double centerY = height / 2.0;
+
+        double diagonal = Math.Sqrt(width * width + height * height);
+
+        double frontLength = Math.Max(12.0, diagonal * 1.35);
+        double frontThickness = Math.Max(5.0, diagonal * 0.24);
+
+        var moveDirection = GetPrecipitationFlowDirection(weather.WindDirectionDegrees);
+
+        double bandX = -moveDirection.Y;
+        double bandY = moveDirection.X;
+
+        double stepDurationSeconds = graph.StepDurationSeconds > 0
+            ? graph.StepDurationSeconds
+            : 900.0;
+
+        double modelTimeSeconds = Math.Max(0, currentStep - 1) * stepDurationSeconds;
+
+        double speedCellsPerSecond = CalculatePrecipitationFrontSpeedCellsPerSecond(weather.WindSpeedMps);
+
+        double travelDistance = diagonal + frontThickness * 2.0;
+
+        double position =
+            (modelTimeSeconds * speedCellsPerSecond) % travelDistance
+            - diagonal / 2.0
+            - frontThickness;
+
+        double frontCenterX = centerX + moveDirection.X * position;
+        double frontCenterY = centerY + moveDirection.Y * position;
+
+        double dx = cell.X - frontCenterX;
+        double dy = cell.Y - frontCenterY;
+
+        double distanceAlongMove = dx * moveDirection.X + dy * moveDirection.Y;
+        double distanceAlongBand = dx * bandX + dy * bandY;
+
+        if (Math.Abs(distanceAlongMove) > frontThickness / 2.0)
+            return 0.0;
+
+        if (Math.Abs(distanceAlongBand) > frontLength / 2.0)
+            return 0.0;
+
+        double moveFade =
+            1.0 - Math.Abs(distanceAlongMove) / (frontThickness / 2.0);
+
+        double bandFade =
+            1.0 - Math.Abs(distanceAlongBand) / (frontLength / 2.0);
+
+        double coverage = moveFade * 0.85 + bandFade * 0.15;
+        coverage = Math.Clamp(coverage, 0.0, 1.0);
+
+        return precipitationPercent * coverage;
+    }
+
+    private static double CalculatePrecipitationFrontSpeedCellsPerSecond(double windSpeedMps)
+    {
+        double safeWindSpeed = Math.Max(0.0, windSpeedMps);
+
+        double speedCellsPerSecond =
+            0.00120 + safeWindSpeed * 0.00018;
+
+        return Math.Clamp(speedCellsPerSecond, 0.00120, 0.00420);
+    }
+
+    private static (double X, double Y) GetPrecipitationFlowDirection(double windDirectionDegrees)
+    {
+        double flowDirectionDegrees = (windDirectionDegrees + 180.0) % 360.0;
+        double radians = flowDirectionDegrees * Math.PI / 180.0;
+
+        double x = Math.Sin(radians);
+        double y = -Math.Cos(radians);
+
+        double length = Math.Sqrt(x * x + y * y);
+
+        if (length < 0.0001)
+            return (0.0, 1.0);
+
+        return (x / length, y / length);
+    }
     private object BuildRichCellDto(ForestCell c)
     {
         return new
@@ -548,7 +670,10 @@ public class SimulationManagerController : ControllerBase
                 });
             }
 
-            var dto = BuildGraphDto(simulation, graph);
+            WeatherCondition? weather = activeSimulation?.CurrentWeather ?? simulation.WeatherCondition;
+            int currentStep = activeSimulation?.CurrentStep ?? 0;
+
+            var dto = BuildGraphDto(simulation, graph, weather, currentStep);
 
             return Ok(new
             {
@@ -1157,9 +1282,13 @@ public class SimulationManagerController : ControllerBase
             _ => 70
         };
     }
-    private SimulationGraphDto BuildGraphDto(Simulation simulation, ForestGraph graph)
+    private SimulationGraphDto BuildGraphDto(
+      Simulation simulation,
+      ForestGraph graph,
+      WeatherCondition? weather = null,
+      int currentStep = 0)
     {
-        var nodeDtos = BuildNodeDtos(simulation, graph);
+        var nodeDtos = BuildNodeDtos(simulation, graph, weather, currentStep);
         var nodeMap = nodeDtos.ToDictionary(n => n.Id);
         var domainNodeMap = graph.Cells.ToDictionary(c => c.Id);
 
@@ -1201,71 +1330,99 @@ public class SimulationManagerController : ControllerBase
                 .ToList()
         };
     }
-    private List<SimulationGraphNodeDto> BuildNodeDtos(Simulation simulation, ForestGraph graph)
+    private List<SimulationGraphNodeDto> BuildNodeDtos(
+     Simulation simulation,
+     ForestGraph graph,
+     WeatherCondition? weather = null,
+     int currentStep = 0)
     {
         return simulation.Parameters.GraphType switch
         {
-            GraphType.ClusteredGraph => BuildClusteredGraphNodeDtos(graph),
-            _ => BuildGridNodeDtos(graph)
+            GraphType.ClusteredGraph => BuildClusteredGraphNodeDtos(graph, weather, currentStep),
+            _ => BuildGridNodeDtos(graph, weather, currentStep)
         };
     }
 
-    private List<SimulationGraphNodeDto> BuildGridNodeDtos(ForestGraph graph)
+    private List<SimulationGraphNodeDto> BuildGridNodeDtos(
+    ForestGraph graph,
+    WeatherCondition? weather = null,
+    int currentStep = 0)
     {
         return graph.Cells
-            .Select(c => new SimulationGraphNodeDto
+            .Select(c =>
             {
-                Id = c.Id,
-                X = c.X,
-                Y = c.Y,
-                RenderX = c.X,
-                RenderY = c.Y,
-                GroupKey = $"row-{c.Y}",
-                Vegetation = c.Vegetation.ToString(),
-                Moisture = Math.Round(c.Moisture, 3),
-                Elevation = Math.Round(c.Elevation, 3),
-                State = c.State.ToString(),
-                BurnProbability = Math.Round(c.BurnProbability, 6),
-                IgnitionTime = c.IgnitionTime,
-                BurnoutTime = c.BurnoutTime,
-                FireStage = c.FireStage.ToString(),
-                FireIntensity = Math.Round(c.FireIntensity, 3),
-                CurrentFuelLoad = Math.Round(c.CurrentFuelLoad, 6),
-                FuelLoad = Math.Round(c.FuelLoad, 6),
-                BurningElapsedSeconds = Math.Round(c.BurningElapsedSeconds, 3),
-                AccumulatedHeatJ = Math.Round(c.AccumulatedHeatJ, 3),
-                IsIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != VegetationType.Bare
+                double precipitationIntensity = weather == null
+                    ? 0.0
+                    : CalculatePrecipitationFrontIntensity(graph, weather, c, currentStep);
+
+                return new SimulationGraphNodeDto
+                {
+                    Id = c.Id,
+                    X = c.X,
+                    Y = c.Y,
+                    RenderX = c.X,
+                    RenderY = c.Y,
+                    GroupKey = $"row-{c.Y}",
+                    Vegetation = c.Vegetation.ToString(),
+                    Moisture = Math.Round(c.Moisture, 3),
+                    Elevation = Math.Round(c.Elevation, 3),
+                    State = c.State.ToString(),
+                    BurnProbability = Math.Round(c.BurnProbability, 6),
+                    IgnitionTime = c.IgnitionTime,
+                    BurnoutTime = c.BurnoutTime,
+                    FireStage = c.FireStage.ToString(),
+                    FireIntensity = Math.Round(c.FireIntensity, 3),
+                    CurrentFuelLoad = Math.Round(c.CurrentFuelLoad, 6),
+                    FuelLoad = Math.Round(c.FuelLoad, 6),
+                    BurningElapsedSeconds = Math.Round(c.BurningElapsedSeconds, 3),
+                    AccumulatedHeatJ = Math.Round(c.AccumulatedHeatJ, 3),
+                    IsIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != VegetationType.Bare,
+                    PrecipitationIntensity = Math.Round(precipitationIntensity, 3),
+                    IsInPrecipitationFront = precipitationIntensity > 0.001
+                };
             })
             .ToList();
     }
 
-    private List<SimulationGraphNodeDto> BuildClusteredGraphNodeDtos(ForestGraph graph)
+    private List<SimulationGraphNodeDto> BuildClusteredGraphNodeDtos(
+     ForestGraph graph,
+     WeatherCondition? weather = null,
+     int currentStep = 0)
     {
         return graph.Cells
-            .Select(c => new SimulationGraphNodeDto
+            .Select(c =>
             {
-                Id = c.Id,
-                X = c.X,
-                Y = c.Y,
-                RenderX = c.X,
-                RenderY = c.Y,
-                GroupKey = !string.IsNullOrWhiteSpace(c.ClusterId)
-                    ? c.ClusterId
-                    : GetVegetationGroupKey(c),
-                Vegetation = c.Vegetation.ToString(),
-                Moisture = Math.Round(c.Moisture, 3),
-                Elevation = Math.Round(c.Elevation, 3),
-                State = c.State.ToString(),
-                BurnProbability = Math.Round(c.BurnProbability, 6),
-                IgnitionTime = c.IgnitionTime,
-                BurnoutTime = c.BurnoutTime,
-                FireStage = c.FireStage.ToString(),
-                FireIntensity = Math.Round(c.FireIntensity, 3),
-                CurrentFuelLoad = Math.Round(c.CurrentFuelLoad, 6),
-                FuelLoad = Math.Round(c.FuelLoad, 6),
-                BurningElapsedSeconds = Math.Round(c.BurningElapsedSeconds, 3),
-                AccumulatedHeatJ = Math.Round(c.AccumulatedHeatJ, 3),
-                IsIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != VegetationType.Bare
+                double precipitationIntensity = weather == null
+                    ? 0.0
+                    : CalculatePrecipitationFrontIntensity(graph, weather, c, currentStep);
+
+                return new SimulationGraphNodeDto
+                {
+                    Id = c.Id,
+                    X = c.X,
+                    Y = c.Y,
+                    RenderX = c.X,
+                    RenderY = c.Y,
+                    GroupKey = !string.IsNullOrWhiteSpace(c.ClusterId)
+                        ? c.ClusterId
+                        : GetVegetationGroupKey(c),
+                    Vegetation = c.Vegetation.ToString(),
+                    Moisture = Math.Round(c.Moisture, 3),
+                    Elevation = Math.Round(c.Elevation, 3),
+                    State = c.State.ToString(),
+                    BurnProbability = Math.Round(c.BurnProbability, 6),
+                    IgnitionTime = c.IgnitionTime,
+                    BurnoutTime = c.BurnoutTime,
+                    FireStage = c.FireStage.ToString(),
+                    FireIntensity = Math.Round(c.FireIntensity, 3),
+                    CurrentFuelLoad = Math.Round(c.CurrentFuelLoad, 6),
+                    FuelLoad = Math.Round(c.FuelLoad, 6),
+                    BurningElapsedSeconds = Math.Round(c.BurningElapsedSeconds, 3),
+                    AccumulatedHeatJ = Math.Round(c.AccumulatedHeatJ, 3),
+                    IsIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != VegetationType.Bare,
+                    PrecipitationIntensity = Math.Round(precipitationIntensity, 3),
+                    IsInPrecipitationFront = precipitationIntensity > 0.001
+                };
             })
             .ToList();
     }

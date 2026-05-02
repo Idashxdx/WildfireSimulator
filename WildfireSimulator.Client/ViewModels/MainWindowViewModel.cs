@@ -1333,6 +1333,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void StopAutoSimulationInternal(string? message = null)
     {
+        var wasRunning = IsAutoSimulationRunning || IsAutoSimulationPaused;
+
         try
         {
             _autoSimulationCts?.Cancel();
@@ -1340,11 +1342,6 @@ public partial class MainWindowViewModel : ObservableObject
         catch
         {
         }
-
-        _autoSimulationCts?.Dispose();
-        _autoSimulationCts = null;
-
-        var wasRunning = IsAutoSimulationRunning || IsAutoSimulationPaused;
 
         IsAutoSimulationRunning = false;
         IsAutoSimulationPaused = false;
@@ -2638,7 +2635,9 @@ public partial class MainWindowViewModel : ObservableObject
 
         StopAutoSimulationInternal();
 
-        _autoSimulationCts = new System.Threading.CancellationTokenSource();
+        var autoCts = new System.Threading.CancellationTokenSource();
+        _autoSimulationCts = autoCts;
+        var token = autoCts.Token;
 
         IsAutoSimulationRunning = true;
         IsAutoSimulationPaused = false;
@@ -2650,31 +2649,32 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanPauseAutoSimulation));
         OnPropertyChanged(nameof(CanResumeAutoSimulation));
         OnPropertyChanged(nameof(CanStopAutoSimulation));
+        OnPropertyChanged(nameof(CanManageSimulationActions));
 
         EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Запущен авто-режим");
         RefreshWorkflowStatus();
 
         try
         {
-            while (!_autoSimulationCts.IsCancellationRequested)
+            while (!token.IsCancellationRequested)
             {
                 if (SelectedSimulation == null || !IsSimulationRunning || SelectedSimulationStatus != 1)
                     break;
 
                 if (IsAutoSimulationPaused)
                 {
-                    await Task.Delay(150, _autoSimulationCts.Token);
+                    await Task.Delay(150, token);
                     continue;
                 }
 
-                var executed = await ExecuteSingleStepAsync(startedByAutoMode: true, _autoSimulationCts.Token);
+                var executed = await ExecuteSingleStepAsync(startedByAutoMode: true, token);
                 if (!executed)
                     break;
 
                 if (!IsSimulationRunning || SelectedSimulationStatus != 1)
                     break;
 
-                await Task.Delay(AutoStepDelayMs, _autoSimulationCts.Token);
+                await Task.Delay(AutoStepDelayMs, token);
             }
         }
         catch (OperationCanceledException)
@@ -2682,10 +2682,28 @@ public partial class MainWindowViewModel : ObservableObject
         }
         finally
         {
-            StopAutoSimulationInternal("Авто-режим завершён");
+            if (ReferenceEquals(_autoSimulationCts, autoCts))
+            {
+                _autoSimulationCts = null;
+                autoCts.Dispose();
+
+                IsAutoSimulationRunning = false;
+                IsAutoSimulationPaused = false;
+                AutoSimulationStatusText = "Авто-режим выключен";
+
+                OnPropertyChanged(nameof(CanStartSelectedSimulation));
+                OnPropertyChanged(nameof(CanExecuteStepSimulation));
+                OnPropertyChanged(nameof(CanStartAutoSimulation));
+                OnPropertyChanged(nameof(CanPauseAutoSimulation));
+                OnPropertyChanged(nameof(CanResumeAutoSimulation));
+                OnPropertyChanged(nameof(CanStopAutoSimulation));
+                OnPropertyChanged(nameof(CanManageSimulationActions));
+
+                EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Авто-режим завершён");
+                RefreshWorkflowStatus();
+            }
         }
     }
-
     [RelayCommand]
     private void PauseAutoSimulation()
     {

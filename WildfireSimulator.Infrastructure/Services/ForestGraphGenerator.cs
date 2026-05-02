@@ -3454,8 +3454,8 @@ public class ForestGraphGenerator : IForestGraphGenerator
         return normalized;
     }
     private void SoftCompleteBlueprintConnectivity(
-      ForestGraph graph,
-      SimulationParameters parameters)
+     ForestGraph graph,
+     SimulationParameters parameters)
     {
         if (graph.Cells.Count <= 1)
             return;
@@ -3476,9 +3476,13 @@ public class ForestGraphGenerator : IForestGraphGenerator
 
         foreach (var isolated in isolatedCells)
         {
-            var allCandidates = graph.Cells
+            var sameClusterCandidates = graph.Cells
                 .Where(other => other.Id != isolated.Id)
                 .Where(other => graph.GetIncidentEdges(other).Count < maxDegree)
+                .Where(other => string.Equals(
+                    other.ClusterId,
+                    isolated.ClusterId,
+                    StringComparison.Ordinal))
                 .Select(other => new
                 {
                     Cell = other,
@@ -3489,13 +3493,31 @@ public class ForestGraphGenerator : IForestGraphGenerator
                 .OrderBy(x => x.Distance)
                 .ToList();
 
-            if (allCandidates.Count == 0)
+            var candidates = sameClusterCandidates;
+
+            if (candidates.Count == 0)
+            {
+                candidates = graph.Cells
+                    .Where(other => other.Id != isolated.Id)
+                    .Where(other => graph.GetIncidentEdges(other).Count < maxDegree)
+                    .Select(other => new
+                    {
+                        Cell = other,
+                        Distance = Math.Sqrt(
+                            Math.Pow(other.X - isolated.X, 2) +
+                            Math.Pow(other.Y - isolated.Y, 2))
+                    })
+                    .OrderBy(x => x.Distance)
+                    .ToList();
+            }
+
+            if (candidates.Count == 0)
                 continue;
 
-            var preferredCandidate = allCandidates
+            var preferredCandidate = candidates
                 .FirstOrDefault(x => x.Distance <= preferredCompletionDistance);
 
-            var candidate = preferredCandidate ?? allCandidates.First();
+            var candidate = preferredCandidate ?? candidates.First();
 
             double effectiveDistance = Math.Max(0.25, candidate.Distance);
             double slope = (candidate.Cell.Elevation - isolated.Elevation) / effectiveDistance;
@@ -3509,28 +3531,29 @@ public class ForestGraphGenerator : IForestGraphGenerator
 
             double completionModifier;
 
-            if (preferredCandidate != null)
+            if (sameCluster)
             {
-                completionModifier = sameCluster ? 0.92 : 0.72;
+                completionModifier = preferredCandidate != null ? 0.92 : 0.62;
             }
             else
             {
-                completionModifier = sameCluster ? 0.62 : 0.48;
+                completionModifier = preferredCandidate != null ? 0.18 : 0.08;
             }
 
             SetEdgeFireSpreadModifier(
                 edge,
-                Math.Clamp(edge.FireSpreadModifier * completionModifier, 0.02, 1.20));
+                Math.Clamp(edge.FireSpreadModifier * completionModifier, 0.02, 0.95));
 
             graph.Edges.Add(edge);
 
             _logger.LogInformation(
-                "Blueprint soft-completion: connected isolated node ({X},{Y}) to ({NX},{NY}), distance={Distance:F2}, preferred={Preferred}",
+                "Blueprint soft-completion: connected isolated node ({X},{Y}) to ({NX},{NY}), distance={Distance:F2}, sameCluster={SameCluster}, preferred={Preferred}",
                 isolated.X,
                 isolated.Y,
                 candidate.Cell.X,
                 candidate.Cell.Y,
                 candidate.Distance,
+                sameCluster,
                 preferredCandidate != null);
         }
     }

@@ -354,13 +354,6 @@ public partial class GraphVisualization : UserControl
 
         DrawGridBackground(originX, originY, (int)Math.Round(contentWidth), (int)Math.Round(contentHeight));
 
-        DrawMovingPrecipitationFront(
-    originX,
-    originY,
-    cellSize,
-    safeGridWidth,
-    safeGridHeight);
-
         if (cells.Count == 0)
         {
             DrawEmptyState(canvasWidth, canvasHeight);
@@ -603,6 +596,8 @@ public partial class GraphVisualization : UserControl
         Canvas.SetTop(rect, y + 1);
         _graphCanvas.Children.Add(rect);
 
+        DrawPrecipitationOverlay(cell, x, y, cellSize);
+
         if (isSelectedCell)
             DrawSelectedCellFrame(x, y, cellSize);
 
@@ -612,6 +607,35 @@ public partial class GraphVisualization : UserControl
             DrawIgnitionMarker(x, y, cellSize);
         }
     }
+    private void DrawPrecipitationOverlay(GraphCellDto cell, double x, double y, int cellSize)
+    {
+        if (_graphCanvas == null)
+            return;
+
+        if (cell.PrecipitationIntensity <= 0.001)
+            return;
+
+        double rainLevel = Math.Clamp(cell.PrecipitationIntensity / 100.0, 0.0, 1.0);
+
+        byte alpha = (byte)Math.Clamp(45 + rainLevel * 130, 45, 175);
+
+        var overlay = new Rectangle
+        {
+            Width = Math.Max(2, cellSize - 2),
+            Height = Math.Max(2, cellSize - 2),
+            Fill = new SolidColorBrush(Color.FromArgb(alpha, 70, 170, 255)),
+            Stroke = new SolidColorBrush(Color.FromArgb(180, 35, 120, 220)),
+            StrokeThickness = rainLevel >= 0.65 ? 1.5 : 0.8,
+            RadiusX = 3,
+            RadiusY = 3,
+            IsHitTestVisible = false
+        };
+
+        Canvas.SetLeft(overlay, x + 1);
+        Canvas.SetTop(overlay, y + 1);
+        _graphCanvas.Children.Add(overlay);
+    }
+
     private void DrawSelectedCellFrame(double x, double y, int cellSize)
     {
         if (_graphCanvas == null)

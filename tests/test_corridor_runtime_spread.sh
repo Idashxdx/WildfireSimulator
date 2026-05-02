@@ -148,28 +148,24 @@ run_steps() {
 
   echo "✅ Запущена симуляция $prefix: $sim_id" >&2
 
-  local last_step_json=""
-
   for step in $(seq 1 "$STEP_COUNT"); do
-    last_step_json="$OUT_DIR/${prefix}_step_${step}.json"
+    local step_json="$OUT_DIR/${prefix}_step_${step}.json"
 
-    curl -s -X POST "$API_URL/api/SimulationManager/$sim_id/step" > "$last_step_json"
+    curl -s -X POST "$API_URL/api/SimulationManager/$sim_id/step" > "$step_json"
 
-    if [[ ! -s "$last_step_json" ]]; then
+    if [[ ! -s "$step_json" ]]; then
       echo "❌ Step endpoint вернул пустой ответ для $prefix step=$step" >&2
       exit 1
     fi
 
     local step_success
-    step_success=$(jq -r '.success // false' "$last_step_json" 2>/dev/null || echo "false")
+    step_success=$(jq -r '.success // false' "$step_json" 2>/dev/null || echo "false")
     if [[ "$step_success" != "true" ]]; then
       echo "❌ Не удалось выполнить шаг для $prefix step=$step" >&2
-      cat "$last_step_json" >&2
+      cat "$step_json" >&2
       exit 1
     fi
   done
-
-  echo "$last_step_json"
 }
 
 WITH_CREATE_JSON="$OUT_DIR/with_corridor_create.json"
@@ -246,65 +242,87 @@ if corridor.get("isCorridor") is not True:
 print("✅ Structural corridor pipeline корректен")
 PY
 
-WITH_LAST_STEP_JSON=$(run_steps "$SIM_WITH" "with_corridor")
-WITHOUT_LAST_STEP_JSON=$(run_steps "$SIM_WITHOUT" "without_corridor")
+run_steps "$SIM_WITH" "with_corridor"
+run_steps "$SIM_WITHOUT" "without_corridor"
 
-python3 - "$WITH_LAST_STEP_JSON" "$WITHOUT_LAST_STEP_JSON" "$NODE_C" "$NODE_D" <<'PY'
+WITH_FINAL_GRAPH_JSON="$OUT_DIR/with_corridor_final_graph.json"
+WITHOUT_FINAL_GRAPH_JSON="$OUT_DIR/without_corridor_final_graph.json"
+
+curl -s "$API_URL/api/SimulationManager/$SIM_WITH/graph" > "$WITH_FINAL_GRAPH_JSON"
+curl -s "$API_URL/api/SimulationManager/$SIM_WITHOUT/graph" > "$WITHOUT_FINAL_GRAPH_JSON"
+
+python3 - "$WITH_FINAL_GRAPH_JSON" "$WITHOUT_FINAL_GRAPH_JSON" "$NODE_C" "$NODE_D" <<'PY'
 import json
 import sys
 
-with_step = sys.argv[1]
-without_step = sys.argv[2]
+with_graph_path = sys.argv[1]
+without_graph_path = sys.argv[2]
 node_c = sys.argv[3]
 node_d = sys.argv[4]
 
-def read_cells(path):
+def read_nodes(path):
     with open(path, "r", encoding="utf-8") as f:
         root = json.load(f)
-    cells = root.get("cells", [])
-    return {c["id"]: c for c in cells}
+    nodes = root.get("graph", {}).get("nodes", [])
+    return {n["id"]: n for n in nodes}
 
-def east_signal(cell_by_id):
-    c = cell_by_id[node_c]
-    d = cell_by_id[node_d]
+def east_signal(node_by_id):
+    c = node_by_id[node_c]
+    d = node_by_id[node_d]
 
-    probs = [
-        float(c.get("burnProbability") or 0.0),
-        float(d.get("burnProbability") or 0.0),
-    ]
+    c_heat = float(c.get("accumulatedHeatJ") or 0.0)
+    d_heat = float(d.get("accumulatedHeatJ") or 0.0)
 
     affected = 0
-    for cell in (c, d):
-        if cell.get("state") != "Normal" or float(cell.get("burnProbability") or 0.0) > 0.0:
+    for node in (c, d):
+        heat = float(node.get("accumulatedHeatJ") or 0.0)
+        if node.get("state") != "Normal" or heat > 0.0:
             affected += 1
 
     return {
-        "c_prob": probs[0],
-        "d_prob": probs[1],
-        "sum_prob": sum(probs),
+        "c_prob": float(c.get("burnProbability") or 0.0),
+        "d_prob": float(d.get("burnProbability") or 0.0),
+        "c_heat": c_heat,
+        "d_heat": d_heat,
+        "sum_heat": c_heat + d_heat,
         "affected": affected,
         "c_state": c.get("state"),
         "d_state": d.get("state"),
     }
 
-with_cells = read_cells(with_step)
-without_cells = read_cells(without_step)
+with_nodes = read_nodes(with_graph_path)
+without_nodes = read_nodes(without_graph_path)
 
 for required in [node_c, node_d]:
-    if required not in with_cells:
-        print(f"❌ with_corridor: отсутствует узел {required} в step response")
+    if required not in with_nodes:
+        print(f"❌ with_corridor: отсутствует узел {required} в graph response")
         sys.exit(1)
-    if required not in without_cells:
-        print(f"❌ without_corridor: отсутствует узел {required} в step response")
+    if required not in without_nodes:
+        print(f"❌ without_corridor: отсутствует узел {required} в graph response")
         sys.exit(1)
 
-with_sig = east_signal(with_cells)
-without_sig = east_signal(without_cells)
+with_sig = east_signal(with_nodes)
+without_sig = east_signal(without_nodes)
 
-print(f"with_corridor: c_prob={with_sig['c_prob']:.6f}, d_prob={with_sig['d_prob']:.6f}, affected={with_sig['affected']}, states=({with_sig['c_state']},{with_sig['d_state']})")
-print(f"without_corridor: c_prob={without_sig['c_prob']:.6f}, d_prob={without_sig['d_prob']:.6f}, affected={without_sig['affected']}, states=({without_sig['c_state']},{without_sig['d_state']})")
+print(
+    f"with_corridor: c_prob={with_sig['c_prob']:.6f}, "
+    f"d_prob={with_sig['d_prob']:.6f}, "
+    f"c_heat={with_sig['c_heat']:.3f}, "
+    f"d_heat={with_sig['d_heat']:.3f}, "
+    f"affected={with_sig['affected']}, "
+    f"states=({with_sig['c_state']},{with_sig['d_state']})"
+)
 
-if with_sig["sum_prob"] <= without_sig["sum_prob"] and with_sig["affected"] <= without_sig["affected"]:
+print(
+    f"without_corridor: c_prob={without_sig['c_prob']:.6f}, "
+    f"d_prob={without_sig['d_prob']:.6f}, "
+    f"c_heat={without_sig['c_heat']:.3f}, "
+    f"d_heat={without_sig['d_heat']:.3f}, "
+    f"affected={without_sig['affected']}, "
+    f"states=({without_sig['c_state']},{without_sig['d_state']})"
+)
+
+if with_sig["sum_heat"] <= without_sig["sum_heat"] and with_sig["affected"] <= without_sig["affected"]:
     print("❌ Corridor не усилил runtime spread по сравнению с графом без corridor")
     sys.exit(1)
 

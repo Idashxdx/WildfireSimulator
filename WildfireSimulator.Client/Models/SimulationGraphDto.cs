@@ -110,6 +110,13 @@ public class SimulationGraphNodeDto
     public bool IsBurning => State == "Burning";
     public bool IsBurned => State == "Burned";
     public bool IsNormal => State == "Normal";
+
+    [JsonPropertyName("precipitationIntensity")]
+    public double PrecipitationIntensity { get; set; }
+
+    [JsonPropertyName("isInPrecipitationFront")]
+    public bool IsInPrecipitationFront { get; set; }
+    
 }
 
 public class SimulationGraphEdgeDto

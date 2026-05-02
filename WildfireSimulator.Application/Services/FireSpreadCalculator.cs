@@ -268,17 +268,19 @@ namespace WildfireSimulator.Application.Services
             double windY = -Math.Cos(radians);
 
             double dot = dx * windX + dy * windY;
+            dot = Math.Clamp(dot, -1.0, 1.0);
 
-            double directionEffect = dot * weather.WindSpeedMps * 0.105;
-            double factor = 1.0 + directionEffect;
+            double windStrength = Math.Clamp(weather.WindSpeedMps / 15.0, 0.0, 1.0);
 
-            if (dot > 0.35)
-                factor += 0.08;
+            double factor = Math.Exp(dot * windStrength * 1.05);
 
-            if (dot < -0.35)
-                factor -= 0.08;
+            if (dot > 0.25)
+                factor *= 1.0 + dot * 0.18;
 
-            return Math.Clamp(factor, 0.36, 2.65);
+            if (dot < -0.25)
+                factor *= 1.0 + dot * 0.28;
+
+            return Math.Clamp(factor, 0.32, 2.85);
         }
         private double CalculateSlopeFactor(ForestCell source, ForestCell target)
         {

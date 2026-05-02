@@ -39,6 +39,12 @@ TESTS=(
     "test_baseline_not_dying_too_fast.sh"
     "test_humidity_runtime_effect.sh"
     "test_temperature_runtime_effect.sh"
+    "test_moving_precipitation_front.sh"
+    "test_precipitation_front_locality.sh"
+    "test_precipitation_strength_gradient.sh"
+    "test_precipitation_residual_moisture.sh"
+    "test_precipitation_reduces_burning_time.sh"
+
 
 )
 

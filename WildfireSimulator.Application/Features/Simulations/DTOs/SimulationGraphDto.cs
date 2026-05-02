@@ -44,6 +44,8 @@ public class SimulationGraphNodeDto
     public double BurningElapsedSeconds { get; set; }
     public double AccumulatedHeatJ { get; set; }
     public bool IsIgnitable { get; set; } = true;
+    public double PrecipitationIntensity { get; set; }
+    public bool IsInPrecipitationFront { get; set; }
 }
 
 public class SimulationGraphEdgeDto
