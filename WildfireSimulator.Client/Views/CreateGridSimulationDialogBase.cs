@@ -606,70 +606,85 @@ public partial class CreateGridSimulationDialogBase : Window
     {
         ClearErrors();
 
+        var errors = new List<string>();
+
         SimulationName = _nameBox?.Text?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(SimulationName))
-            SimulationName = "Сеточная симуляция";
 
-        GridWidth = ParseInt(_widthBox?.Text, 20);
-        GridHeight = ParseInt(_heightBox?.Text, 20);
-        InitialFireCells = ParseInt(_fireCellsBox?.Text, 3);
+        if (!TryReadInt(_widthBox, "Ширина", 5, 200, errors, out var width))
+            width = GridWidth;
 
-        MoistureMin = ParseDouble(_moistureMinBox?.Text, 0.30);
-        MoistureMax = ParseDouble(_moistureMaxBox?.Text, 0.70);
-        ElevationVariation = ParseDouble(_elevationBox?.Text, 50.0);
+        if (!TryReadInt(_heightBox, "Высота", 5, 200, errors, out var height))
+            height = GridHeight;
 
-        SimulationSteps = ParseInt(_stepsBox?.Text, 100);
-        StepDurationSeconds = ParseInt(_stepDurationBox?.Text, 900);
+        if (!TryReadInt(_fireCellsBox, "Количество очагов", 1, 50, errors, out var fireCells))
+            fireCells = InitialFireCells;
 
-        Temperature = ParseDouble(_tempBox?.Text, 25.0);
-        Humidity = ParseDouble(_humidityBox?.Text, 40.0);
-        WindSpeed = ParseDouble(_windSpeedBox?.Text, 5.0);
+        if (!TryReadDouble(_moistureMinBox, "Минимальная влажность", 0.0, 1.0, errors, out var moistureMin))
+            moistureMin = MoistureMin;
+
+        if (!TryReadDouble(_moistureMaxBox, "Максимальная влажность", 0.0, 1.0, errors, out var moistureMax))
+            moistureMax = MoistureMax;
+
+        if (!TryReadDouble(_elevationBox, "Перепад высот", 0.0, 500.0, errors, out var elevation))
+            elevation = ElevationVariation;
+
+        if (!TryReadInt(_stepsBox, "Количество шагов", 1, 10000, errors, out var steps))
+            steps = SimulationSteps;
+
+        if (!TryReadInt(_stepDurationBox, "Длительность шага", 1, 7200, errors, out var stepDuration))
+            stepDuration = StepDurationSeconds;
+
+        if (!TryReadDouble(_tempBox, "Температура", -50.0, 60.0, errors, out var temperature))
+            temperature = Temperature;
+
+        if (!TryReadDouble(_humidityBox, "Влажность воздуха", 0.0, 100.0, errors, out var humidity))
+            humidity = Humidity;
+
+        if (!TryReadDouble(_windSpeedBox, "Скорость ветра", 0.0, 60.0, errors, out var windSpeed))
+            windSpeed = WindSpeed;
+
+        if (!TryReadDouble(_precipitationBox, "Осадки", 0.0, 100.0, errors, out var precipitation))
+            precipitation = Precipitation;
+
+        if (!TryReadNullableInt(_randomSeedBox, "RandomSeed", errors, out var randomSeed))
+            randomSeed = RandomSeed;
+
+        if (moistureMin > moistureMax)
+            errors.Add("Минимальная влажность не может быть больше максимальной.");
+
+        int maxInitialFireCells = width * height;
+        if (fireCells > maxInitialFireCells)
+            errors.Add($"Количество очагов не может быть больше количества клеток карты ({maxInitialFireCells}).");
+
+        var vegetation = TryBuildVegetationDistributions(errors);
+
+        if (errors.Count > 0)
+        {
+            ShowError("Исправьте параметры:\n• " + string.Join("\n• ", errors));
+            return false;
+        }
+
+        GridWidth = width;
+        GridHeight = height;
+        InitialFireCells = fireCells;
+        MoistureMin = moistureMin;
+        MoistureMax = moistureMax;
+        ElevationVariation = elevation;
+        SimulationSteps = steps;
+        StepDurationSeconds = stepDuration;
+        Temperature = temperature;
+        Humidity = humidity;
+        WindSpeed = windSpeed;
         WindDirection = ParseWindDirection(_windDirBox?.SelectedIndex ?? 1);
-        Precipitation = ParseDouble(_precipitationBox?.Text, 0.0);
+        Precipitation = precipitation;
+        RandomSeed = randomSeed;
 
-        RandomSeed = ParseNullableInt(_randomSeedBox?.Text);
+        MapNoiseStrength = ReadOptionalDouble(_mapNoiseBox, 0.08, 0.0, 1.0);
+        MapDrynessFactor = ReadOptionalDouble(_mapDrynessBox, 1.0, 0.5, 2.0);
+        ReliefStrengthFactor = ReadOptionalDouble(_reliefStrengthBox, 1.0, 0.5, 2.0);
+        FuelDensityFactor = ReadOptionalDouble(_fuelDensityBox, 1.0, 0.5, 2.0);
 
-        VegetationDistributions = BuildVegetationDistributions();
-        MapNoiseStrength = ParseDouble(_mapNoiseBox?.Text, 0.08);
-        MapDrynessFactor = ParseDouble(_mapDrynessBox?.Text, 1.0);
-        ReliefStrengthFactor = ParseDouble(_reliefStrengthBox?.Text, 1.0);
-        FuelDensityFactor = ParseDouble(_fuelDensityBox?.Text, 1.0);
-
-        if (GridWidth < 5 || GridWidth > 200)
-        {
-            ShowError("Ширина карты должна быть в диапазоне 5..200.");
-            return false;
-        }
-
-        if (GridHeight < 5 || GridHeight > 200)
-        {
-            ShowError("Высота карты должна быть в диапазоне 5..200.");
-            return false;
-        }
-
-        if (InitialFireCells < 1 || InitialFireCells > 50)
-        {
-            ShowError("Количество начальных очагов должно быть в диапазоне 1..50.");
-            return false;
-        }
-
-        if (MoistureMin < 0.0 || MoistureMin > 1.0 || MoistureMax < 0.0 || MoistureMax > 1.0 || MoistureMin > MoistureMax)
-        {
-            ShowError("Диапазон влажности должен быть в пределах 0..1, причём минимум не больше максимума.");
-            return false;
-        }
-
-        if (SimulationSteps < 1 || SimulationSteps > 10000)
-        {
-            ShowError("Количество шагов должно быть в диапазоне 1..10000.");
-            return false;
-        }
-
-        if (StepDurationSeconds < 1 || StepDurationSeconds > 7200)
-        {
-            ShowError("Длительность шага должна быть в диапазоне 1..7200 секунд.");
-            return false;
-        }
+        VegetationDistributions = vegetation;
 
         if (PreparedMap != null &&
             (PreparedMap.Width != GridWidth || PreparedMap.Height != GridHeight))
@@ -684,6 +699,138 @@ public partial class CreateGridSimulationDialogBase : Window
         SelectedScenarioType = ParseDemoPresetToScenarioType(SelectedDemoPreset);
 
         return true;
+    }
+    private bool TryReadInt(
+        TextBox? box,
+        string fieldName,
+        int min,
+        int max,
+        List<string> errors,
+        out int value)
+    {
+        value = 0;
+        string text = box?.Text?.Trim() ?? string.Empty;
+
+        if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+        {
+            errors.Add($"{fieldName}: введите целое число.");
+            return false;
+        }
+
+        if (value < min || value > max)
+        {
+            errors.Add($"{fieldName}: допустимый диапазон {min}..{max}.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool TryReadNullableInt(
+        TextBox? box,
+        string fieldName,
+        List<string> errors,
+        out int? value)
+    {
+        value = null;
+        string text = box?.Text?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(text))
+            return true;
+
+        if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            errors.Add($"{fieldName}: введите целое число или оставьте поле пустым.");
+            return false;
+        }
+
+        value = parsed;
+        return true;
+    }
+
+    private bool TryReadDouble(
+        TextBox? box,
+        string fieldName,
+        double min,
+        double max,
+        List<string> errors,
+        out double value)
+    {
+        value = 0.0;
+        string text = box?.Text?.Trim() ?? string.Empty;
+
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+        {
+            errors.Add($"{fieldName}: введите число через точку, например 0.35.");
+            return false;
+        }
+
+        if (double.IsNaN(value) || double.IsInfinity(value) || value < min || value > max)
+        {
+            errors.Add($"{fieldName}: допустимый диапазон {min}..{max}.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private double ReadOptionalDouble(TextBox? box, double fallback, double min, double max)
+    {
+        string text = box?.Text?.Trim() ?? string.Empty;
+
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            return fallback;
+
+        return Math.Clamp(value, min, max);
+    }
+
+    private List<(int VegetationType, double Probability)> TryBuildVegetationDistributions(List<string> errors)
+    {
+        var values = new List<(VegetationType Type, double Value)>();
+
+        AddVegetationValue(values, _coniferousBox, VegetationType.Coniferous, "Хвойный лес", errors);
+        AddVegetationValue(values, _deciduousBox, VegetationType.Deciduous, "Лиственный лес", errors);
+        AddVegetationValue(values, _mixedBox, VegetationType.Mixed, "Смешанный лес", errors);
+        AddVegetationValue(values, _grassBox, VegetationType.Grass, "Трава", errors);
+        AddVegetationValue(values, _shrubBox, VegetationType.Shrub, "Кустарник", errors);
+        AddVegetationValue(values, _waterBox, VegetationType.Water, "Вода", errors);
+        AddVegetationValue(values, _bareBox, VegetationType.Bare, "Пустая поверхность", errors);
+
+        double total = values.Sum(x => Math.Max(0.0, x.Value));
+
+        if (total <= 0.000001)
+        {
+            errors.Add("Вероятности растительности: сумма должна быть больше 0.");
+            total = 1.0;
+        }
+
+        return values
+            .Select(x => ((int)x.Type, Math.Max(0.0, x.Value) / total))
+            .ToList();
+    }
+
+    private void AddVegetationValue(
+        List<(VegetationType Type, double Value)> values,
+        TextBox? box,
+        VegetationType type,
+        string fieldName,
+        List<string> errors)
+    {
+        string text = box?.Text?.Trim() ?? string.Empty;
+
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        {
+            errors.Add($"{fieldName}: введите число от 0 до 1.");
+            value = 0.0;
+        }
+
+        if (value < 0.0 || value > 1.0)
+        {
+            errors.Add($"{fieldName}: допустимый диапазон 0..1.");
+            value = Math.Clamp(value, 0.0, 1.0);
+        }
+
+        values.Add((type, value));
     }
 
     protected MapScenarioType? ParseDemoPresetToScenarioType(string? preset)

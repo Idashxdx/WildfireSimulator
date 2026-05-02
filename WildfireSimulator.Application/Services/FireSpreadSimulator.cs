@@ -136,17 +136,24 @@ public class FireSpreadSimulator : IFireSpreadSimulator
     }
 
     private void ExecuteInternalSubstep(
-     ForestGraph graph,
-     WeatherCondition weather,
-     int currentStep,
-     Guid simulationId,
-     double stepDurationSeconds,
-     int internalSubstepIndex,
-     List<SimulationEvent> events,
-     ref int totalNewlyIgnited)
+      ForestGraph graph,
+      WeatherCondition weather,
+      int currentStep,
+      Guid simulationId,
+      double stepDurationSeconds,
+      int internalSubstepIndex,
+      List<SimulationEvent> events,
+      ref int totalNewlyIgnited)
     {
         CoolDownEdgeHeat(graph, stepDurationSeconds);
         CoolDownNormalCells(graph, stepDurationSeconds);
+
+        ApplyMovingPrecipitationFront(
+            graph,
+            weather,
+            currentStep,
+            stepDurationSeconds,
+            internalSubstepIndex);
 
         var burningCellsAtStepStart = graph.Cells
             .Where(c => c.State == CellState.Burning)
@@ -171,8 +178,18 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                 if (target.State != CellState.Normal)
                     continue;
 
-                double heatFlow = _calculator.CalculateHeatFlow(source, target, weather, stepDurationSeconds);
-                heatFlow = ApplyEdgeAwareTransferAdjustment(graph, source, target, edge, heatFlow);
+                double heatFlow = _calculator.CalculateHeatFlow(
+                    source,
+                    target,
+                    weather,
+                    stepDurationSeconds);
+
+                heatFlow = ApplyEdgeAwareTransferAdjustment(
+                    graph,
+                    source,
+                    target,
+                    edge,
+                    heatFlow);
 
                 double bridgePressureHeat = CalculateBridgePressureHeat(
                     graph,
@@ -183,12 +200,27 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                     stepDurationSeconds);
 
                 heatFlow += bridgePressureHeat;
+
+                heatFlow = ApplyLocalPrecipitationHeatFactor(
+                    graph,
+                    source,
+                    target,
+                    weather,
+                    currentStep,
+                    internalSubstepIndex,
+                    heatFlow);
+
                 if (heatFlow <= 0.0)
                     continue;
 
-                totalIncomingHeat[target.Id] = totalIncomingHeat.GetValueOrDefault(target.Id) + heatFlow;
+                totalIncomingHeat[target.Id] =
+                    totalIncomingHeat.GetValueOrDefault(target.Id) + heatFlow;
 
-                double edgeMemoryHeat = ConvertToEdgeMemoryHeat(heatFlow, edge, stepDurationSeconds);
+                double edgeMemoryHeat = ConvertToEdgeMemoryHeat(
+                    heatFlow,
+                    edge,
+                    stepDurationSeconds);
+
                 if (edgeMemoryHeat > 0.0)
                     edge.AddAccumulatedHeat(edgeMemoryHeat);
 
@@ -232,34 +264,339 @@ public class FireSpreadSimulator : IFireSpreadSimulator
             weather,
             stepDurationSeconds);
     }
-    private double CalculateBridgePressureHeat(
+    private void ApplyMovingPrecipitationFront(
+      ForestGraph graph,
+      WeatherCondition weather,
+      int currentStep,
+      double stepDurationSeconds,
+      int internalSubstepIndex)
+    {
+        double precipitationPercent = GetPrecipitationPercent(weather);
+        if (precipitationPercent <= 0.0)
+            return;
+
+        foreach (var cell in graph.Cells)
+        {
+            if (cell.State == CellState.Burned)
+                continue;
+
+            if (cell.Vegetation == VegetationType.Water ||
+                cell.Vegetation == VegetationType.Bare)
+            {
+                continue;
+            }
+
+            double frontRainPercent = GetMovingPrecipitationFrontIntensity(
+                graph,
+                weather,
+                cell,
+                currentStep,
+                internalSubstepIndex);
+
+            double trailRainPercent = GetMovingPrecipitationTrailIntensity(
+                graph,
+                weather,
+                cell,
+                currentStep,
+                internalSubstepIndex);
+
+            double localMoistureRainPercent =
+                frontRainPercent + trailRainPercent * 0.45;
+
+            if (localMoistureRainPercent > 0.0)
+            {
+                double rainLevel = localMoistureRainPercent / 100.0;
+
+                double moistureIncrease =
+                    rainLevel *
+                    stepDurationSeconds *
+                    0.00016;
+
+                double maxMoisture = cell.State == CellState.Burning ? 0.84 : 0.96;
+
+                double newMoisture = Math.Clamp(
+                    cell.Moisture + moistureIncrease,
+                    0.0,
+                    maxMoisture);
+
+                cell.UpdateMoisture(newMoisture);
+                continue;
+            }
+
+            if (cell.State == CellState.Normal)
+            {
+                double evaporation =
+                    weather.CalculateMoistureEvaporation() *
+                    stepDurationSeconds *
+                    0.0000025;
+
+                if (evaporation > 0.0)
+                {
+                    double newMoisture = Math.Clamp(
+                        cell.Moisture - evaporation,
+                        0.0,
+                        1.0);
+
+                    cell.UpdateMoisture(newMoisture);
+                }
+            }
+        }
+    }
+
+    private double GetPrecipitationPercent(WeatherCondition weather)
+    {
+        return Math.Clamp(weather.Precipitation, 0.0, 100.0);
+    }
+
+    private double GetMovingPrecipitationFrontIntensity(
+      ForestGraph graph,
+      WeatherCondition weather,
+      ForestCell cell,
+      int currentStep,
+      int internalSubstepIndex)
+    {
+        double precipitationPercent = GetPrecipitationPercent(weather);
+        if (precipitationPercent <= 0.0)
+            return 0.0;
+
+        double width = Math.Max(1.0, graph.Width);
+        double height = Math.Max(1.0, graph.Height);
+
+        double centerX = width / 2.0;
+        double centerY = height / 2.0;
+
+        double diagonal = Math.Sqrt(width * width + height * height);
+
+        double frontLength = Math.Max(12.0, diagonal * 1.35);
+        double frontThickness = Math.Max(5.0, diagonal * 0.24);
+
+        var moveDirection = GetPrecipitationFlowDirection(weather);
+
+        double bandX = -moveDirection.Y;
+        double bandY = moveDirection.X;
+
+        double externalStepSeconds = graph.StepDurationSeconds > 0
+            ? graph.StepDurationSeconds
+            : 900.0;
+
+        double modelTimeSeconds =
+            Math.Max(0, currentStep - 1) * externalStepSeconds +
+            Math.Max(0, internalSubstepIndex - 1) * InternalPhysicsStepSeconds;
+
+        double speedCellsPerSecond =
+            0.00120 + weather.WindSpeedMps * 0.00018;
+
+        speedCellsPerSecond = Math.Clamp(speedCellsPerSecond, 0.00120, 0.00420);
+
+        double travelDistance = diagonal + frontThickness * 2.0;
+
+        double position =
+            (modelTimeSeconds * speedCellsPerSecond) % travelDistance
+            - diagonal / 2.0
+            - frontThickness;
+
+        double frontCenterX = centerX + moveDirection.X * position;
+        double frontCenterY = centerY + moveDirection.Y * position;
+
+        double dx = cell.X - frontCenterX;
+        double dy = cell.Y - frontCenterY;
+
+        double distanceAlongMove = dx * moveDirection.X + dy * moveDirection.Y;
+        double distanceAlongBand = dx * bandX + dy * bandY;
+
+        if (Math.Abs(distanceAlongMove) > frontThickness / 2.0)
+            return 0.0;
+
+        if (Math.Abs(distanceAlongBand) > frontLength / 2.0)
+            return 0.0;
+
+        double moveFade =
+            1.0 - Math.Abs(distanceAlongMove) / (frontThickness / 2.0);
+
+        double bandFade =
+            1.0 - Math.Abs(distanceAlongBand) / (frontLength / 2.0);
+
+        double coverage = moveFade * 0.85 + bandFade * 0.15;
+        coverage = Math.Clamp(coverage, 0.0, 1.0);
+
+        return precipitationPercent * coverage;
+    }
+    private double GetMovingPrecipitationTrailIntensity(
+        ForestGraph graph,
+        WeatherCondition weather,
+        ForestCell cell,
+        int currentStep,
+        int internalSubstepIndex)
+    {
+        double precipitationPercent = GetPrecipitationPercent(weather);
+        if (precipitationPercent <= 0.0)
+            return 0.0;
+
+        double width = Math.Max(1.0, graph.Width);
+        double height = Math.Max(1.0, graph.Height);
+
+        double centerX = width / 2.0;
+        double centerY = height / 2.0;
+
+        double diagonal = Math.Sqrt(width * width + height * height);
+
+        double frontLength = Math.Max(12.0, diagonal * 1.35);
+        double frontThickness = Math.Max(5.0, diagonal * 0.24);
+        double trailLength = Math.Max(8.0, diagonal * 0.42);
+
+        var moveDirection = GetPrecipitationFlowDirection(weather);
+
+        double bandX = -moveDirection.Y;
+        double bandY = moveDirection.X;
+
+        double externalStepSeconds = graph.StepDurationSeconds > 0
+            ? graph.StepDurationSeconds
+            : 900.0;
+
+        double modelTimeSeconds =
+            Math.Max(0, currentStep - 1) * externalStepSeconds +
+            Math.Max(0, internalSubstepIndex - 1) * InternalPhysicsStepSeconds;
+
+        double speedCellsPerSecond =
+            0.00120 + weather.WindSpeedMps * 0.00018;
+
+        speedCellsPerSecond = Math.Clamp(speedCellsPerSecond, 0.00120, 0.00420);
+
+        double travelDistance = diagonal + frontThickness * 2.0;
+
+        double position =
+            (modelTimeSeconds * speedCellsPerSecond) % travelDistance
+            - diagonal / 2.0
+            - frontThickness;
+
+        double frontCenterX = centerX + moveDirection.X * position;
+        double frontCenterY = centerY + moveDirection.Y * position;
+
+        double dx = cell.X - frontCenterX;
+        double dy = cell.Y - frontCenterY;
+
+        double distanceAlongMove = dx * moveDirection.X + dy * moveDirection.Y;
+        double distanceAlongBand = dx * bandX + dy * bandY;
+
+        double frontBack = -frontThickness / 2.0;
+
+        if (distanceAlongMove >= frontBack)
+            return 0.0;
+
+        double trailDistance = Math.Abs(distanceAlongMove - frontBack);
+
+        if (trailDistance > trailLength)
+            return 0.0;
+
+        if (Math.Abs(distanceAlongBand) > frontLength / 2.0)
+            return 0.0;
+
+        double trailFade = 1.0 - trailDistance / trailLength;
+        double bandFade = 1.0 - Math.Abs(distanceAlongBand) / (frontLength / 2.0);
+
+        double coverage = trailFade * 0.75 + bandFade * 0.25;
+        coverage = Math.Clamp(coverage, 0.0, 1.0);
+
+        return precipitationPercent * coverage;
+    }
+    private double ApplyLocalPrecipitationHeatFactor(
       ForestGraph graph,
       ForestCell source,
       ForestCell target,
-      ForestEdge edge,
       WeatherCondition weather,
-      double stepDurationSeconds)
+      int currentStep,
+      int internalSubstepIndex,
+      double heatFlow)
+    {
+        if (heatFlow <= 0.0)
+            return heatFlow;
+
+        double precipitationPercent = GetPrecipitationPercent(weather);
+        if (precipitationPercent <= 0.0)
+            return heatFlow;
+
+        double sourceRainPercent = GetMovingPrecipitationFrontIntensity(
+            graph,
+            weather,
+            source,
+            currentStep,
+            internalSubstepIndex);
+
+        double targetRainPercent = GetMovingPrecipitationFrontIntensity(
+            graph,
+            weather,
+            target,
+            currentStep,
+            internalSubstepIndex);
+
+        double localRainPercent = Math.Max(sourceRainPercent, targetRainPercent);
+
+        if (localRainPercent <= 0.0)
+            return heatFlow;
+
+        double rainLevel = localRainPercent / 100.0;
+
+        double precipitationFactor = 1.0 / (1.0 + rainLevel * 3.2);
+        precipitationFactor = Math.Clamp(precipitationFactor, 0.28, 1.0);
+
+        return heatFlow * precipitationFactor;
+    }
+    private (double X, double Y) GetPrecipitationFlowDirection(WeatherCondition weather)
+    {
+        double flowDirectionDegrees =
+            (weather.WindDirectionDegrees + 180.0) % 360.0;
+
+        double radians = flowDirectionDegrees * Math.PI / 180.0;
+
+        double x = Math.Sin(radians);
+        double y = -Math.Cos(radians);
+
+        double length = Math.Sqrt(x * x + y * y);
+
+        if (length < 0.0001)
+            return (0.0, 1.0);
+
+        return (x / length, y / length);
+    }
+
+    private double CalculateBridgePressureHeat(
+       ForestGraph graph,
+       ForestCell source,
+       ForestCell target,
+       ForestEdge edge,
+       WeatherCondition weather,
+       double stepDurationSeconds)
     {
         if (source.State != CellState.Burning || target.State != CellState.Normal)
             return 0.0;
 
-        if (string.Equals(source.ClusterId, target.ClusterId, StringComparison.Ordinal))
+        if (!edge.IsCorridor)
             return 0.0;
 
-        if (target.Vegetation == VegetationType.Water || target.Vegetation == VegetationType.Bare)
+        if (string.IsNullOrWhiteSpace(source.ClusterId) ||
+            string.IsNullOrWhiteSpace(target.ClusterId) ||
+            string.Equals(source.ClusterId, target.ClusterId, StringComparison.Ordinal))
+        {
             return 0.0;
+        }
 
-        var sourceNeighbors = graph.GetNeighbors(source);
+        if (target.Vegetation == VegetationType.Water ||
+            target.Vegetation == VegetationType.Bare)
+        {
+            return 0.0;
+        }
 
-        int burningNearSource = sourceNeighbors.Count(n =>
-            n.ClusterId == source.ClusterId &&
-            n.State == CellState.Burning);
+        int burningPressureCells = graph.Cells.Count(c =>
+            c.ClusterId == source.ClusterId &&
+            c.State == CellState.Burning &&
+            CalculateDistance(source.X, source.Y, c.X, c.Y) <= 2.6);
 
-        int affectedNearSource = sourceNeighbors.Count(n =>
-            n.ClusterId == source.ClusterId &&
-            (n.State == CellState.Burning || n.State == CellState.Burned));
+        int affectedPressureCells = graph.Cells.Count(c =>
+            c.ClusterId == source.ClusterId &&
+            (c.State == CellState.Burning || c.State == CellState.Burned) &&
+            CalculateDistance(source.X, source.Y, c.X, c.Y) <= 2.8);
 
-        if (burningNearSource < 1 || affectedNearSource < 3)
+        if (burningPressureCells < 3 || affectedPressureCells < 3)
             return 0.0;
 
         double threshold = _calculator.CalculateIgnitionThreshold(target, weather);
@@ -272,39 +609,40 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                 ? Math.Clamp(source.BurningElapsedSeconds / sourceBurnDuration, 0.0, 1.0)
                 : 0.0;
 
-        if (sourceBurnProgress < 0.15)
+        if (sourceBurnProgress < 0.20)
             return 0.0;
 
         double pressure =
-            0.010 +
-            burningNearSource * 0.008 +
-            affectedNearSource * 0.004;
+            0.006 +
+            (burningPressureCells - 3) * 0.004 +
+            Math.Min(affectedPressureCells - 3, 4) * 0.002;
 
-        if (edge.IsCorridor)
-            pressure *= 1.18;
-
-        pressure = Math.Clamp(pressure, 0.0, 0.055);
+        pressure = Math.Clamp(pressure, 0.0, 0.030);
 
         double distanceFactor = edge.Distance switch
         {
-            <= 3.0 => 1.00,
-            <= 5.0 => 0.72,
-            <= 7.5 => 0.52,
-            <= 10.0 => 0.38,
-            _ => 0.28
+            <= 3.0 => 0.85,
+            <= 5.0 => 0.62,
+            <= 7.5 => 0.44,
+            <= 10.0 => 0.30,
+            _ => 0.20
         };
 
-        double durationFactor = Math.Clamp(stepDurationSeconds / 900.0, 0.25, 1.0);
+        double durationFactor = Math.Clamp(stepDurationSeconds / 900.0, 0.20, 0.85);
 
         double maturityFactor = sourceBurnProgress switch
         {
-            < 0.25 => 0.65,
-            < 0.45 => 0.85,
-            < 0.65 => 1.00,
-            _ => 0.90
+            < 0.30 => 0.55,
+            < 0.55 => 0.80,
+            < 0.75 => 1.00,
+            _ => 0.75
         };
 
-        return threshold * pressure * distanceFactor * durationFactor * maturityFactor;
+        return threshold *
+               pressure *
+               distanceFactor *
+               durationFactor *
+               maturityFactor;
     }
     private void CoolDownEdgeHeat(ForestGraph graph, double stepDurationSeconds)
     {
@@ -321,6 +659,8 @@ public class FireSpreadSimulator : IFireSpreadSimulator
       Dictionary<Guid, List<Guid>> heatSources)
     {
         var candidates = new List<(ForestCell Cell, double Probability, double AccumulatedHeat, double Threshold, double Ratio)>();
+        var topology = DetectTopology(graph);
+        bool isGrid = topology == SpreadTopology.Grid;
 
         foreach (var target in graph.Cells.Where(c => c.State == CellState.Normal))
         {
@@ -334,20 +674,108 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                 continue;
             }
 
-            double accumulatedHeat = target.AccumulatedHeatJ + transientHeat + residualEdgeHeat;
-
             int sourceCount = heatSources.TryGetValue(target.Id, out var sources)
                 ? sources.Distinct().Count()
                 : 0;
+
+            double threshold = _calculator.CalculateIgnitionThreshold(target, weather);
+            if (threshold <= 0.0 || double.IsInfinity(threshold))
+            {
+                target.SetBurnProbability(0.0);
+                continue;
+            }
+
+            double accumulatedHeat = target.AccumulatedHeatJ + transientHeat + residualEdgeHeat;
+            double ratio = accumulatedHeat / threshold;
+
+            if (isGrid)
+            {
+                if (sourceCount >= 2 && ratio >= 0.50)
+                {
+                    double multiSourceFactor = 1.0 + Math.Min(0.26, (sourceCount - 1) * 0.09);
+                    accumulatedHeat *= multiSourceFactor;
+                    ratio = accumulatedHeat / threshold;
+                }
+
+                if (ratio >= 0.56 && ratio < 1.0)
+                {
+                    double boost = ratio switch
+                    {
+                        >= 0.92 => 1.13,
+                        >= 0.82 => 1.09,
+                        >= 0.72 => 1.05,
+                        _ => 1.02
+                    };
+
+                    accumulatedHeat *= boost;
+                    ratio = accumulatedHeat / threshold;
+                }
+
+                target.SetAccumulatedHeatJ(accumulatedHeat);
+
+                double probability = _calculator.CalculateIgnitionProbability(accumulatedHeat, threshold);
+
+                if (transientHeat > 0.0)
+                {
+                    double diagnosticProbability = Math.Clamp(ratio * 0.012, 0.001, 0.030);
+
+                    if (sourceCount >= 1)
+                        probability = Math.Max(probability, diagnosticProbability);
+                }
+
+                if (ratio < 0.56)
+                {
+                    probability = Math.Min(probability, 0.020);
+                    target.SetBurnProbability(probability);
+                    continue;
+                }
+
+                if (ratio < 0.66)
+                {
+                    probability = Math.Min(probability * 0.30, 0.035);
+                }
+                else if (ratio < 0.76)
+                {
+                    probability = Math.Min(probability * 0.42, 0.065);
+                }
+                else if (ratio < 0.86)
+                {
+                    probability = Math.Min(probability * 0.56, 0.105);
+                }
+                else if (ratio < 0.96)
+                {
+                    probability = Math.Min(probability * 0.70, 0.155);
+                }
+                else if (ratio < 1.0)
+                {
+                    probability = Math.Min(probability * 0.82, 0.210);
+                }
+                else
+                {
+                    probability = Math.Max(probability, 0.38);
+                }
+
+                if (sourceCount >= 2 && ratio >= 0.70)
+                    probability = Math.Max(probability, 0.060);
+
+                if (sourceCount >= 3 && ratio >= 0.64)
+                    probability = Math.Max(probability, 0.085);
+
+                target.SetBurnProbability(probability);
+
+                if (probability < 0.004 && ratio < 0.68)
+                    continue;
+
+                candidates.Add((target, probability, accumulatedHeat, threshold, ratio));
+                continue;
+            }
 
             if (sourceCount >= 2)
             {
                 double multiSourceFactor = 1.0 + Math.Min(0.42, (sourceCount - 1) * 0.14);
                 accumulatedHeat *= multiSourceFactor;
+                ratio = accumulatedHeat / threshold;
             }
-
-            double threshold = _calculator.CalculateIgnitionThreshold(target, weather);
-            double ratio = threshold > 0.0 ? accumulatedHeat / threshold : 0.0;
 
             if (ratio >= 0.55 && ratio < 1.0)
             {
@@ -360,33 +788,36 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                 };
 
                 accumulatedHeat *= boost;
-                ratio = threshold > 0.0 ? accumulatedHeat / threshold : ratio;
+                ratio = accumulatedHeat / threshold;
             }
 
             target.SetAccumulatedHeatJ(accumulatedHeat);
 
-            double probability = _calculator.CalculateIgnitionProbability(accumulatedHeat, threshold);
+            double graphProbability = _calculator.CalculateIgnitionProbability(accumulatedHeat, threshold);
+
+            if (transientHeat > 0.0)
+                graphProbability = Math.Max(graphProbability, Math.Clamp(ratio * 0.010, 0.001, 0.025));
 
             if (sourceCount >= 2)
-                probability = Math.Max(probability, 0.035 + sourceCount * 0.015);
+                graphProbability = Math.Max(graphProbability, 0.035 + sourceCount * 0.015);
 
             if (ratio >= 0.85)
-                probability = Math.Max(probability, 0.20);
+                graphProbability = Math.Max(graphProbability, 0.20);
             else if (ratio >= 0.75)
-                probability = Math.Max(probability, 0.13);
+                graphProbability = Math.Max(graphProbability, 0.13);
             else if (ratio >= 0.65)
-                probability = Math.Max(probability, 0.070);
+                graphProbability = Math.Max(graphProbability, 0.070);
             else if (ratio >= 0.55)
-                probability = Math.Max(probability, 0.030);
+                graphProbability = Math.Max(graphProbability, 0.030);
 
-            target.SetBurnProbability(probability);
+            target.SetBurnProbability(graphProbability);
 
             bool hasMeaningfulTransientHeat = transientHeat >= 35_000.0;
             bool hasMeaningfulResidualHeat = residualEdgeHeat >= 80_000.0;
             bool hasStoredCellHeat = target.AccumulatedHeatJ >= 100_000.0;
             bool hasMultipleSources = sourceCount >= 2;
 
-            if (probability < 0.002 &&
+            if (graphProbability < 0.002 &&
                 ratio < 0.52 &&
                 !hasMeaningfulTransientHeat &&
                 !hasMeaningfulResidualHeat &&
@@ -396,12 +827,11 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                 continue;
             }
 
-            candidates.Add((target, probability, accumulatedHeat, threshold, ratio));
+            candidates.Add((target, graphProbability, accumulatedHeat, threshold, ratio));
         }
 
         return candidates;
     }
-
     private double GetResidualEdgeHeatForTarget(ForestGraph graph, ForestCell target)
     {
         var orderedEdgeHeat = graph.GetIncidentEdges(target)

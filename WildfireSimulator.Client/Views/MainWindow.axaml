@@ -546,8 +546,11 @@
     GridHeight="{Binding GridHeight}"
     SelectedCell="{Binding SelectedGridCell, Mode=TwoWay}"
     IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
+    Precipitation="{Binding CurrentPrecipitation}"
+    WindDirectionDegrees="{Binding CurrentWindDirectionDegrees}"
+    CurrentStep="{Binding CurrentStep}"
+    StepDurationSeconds="{Binding CurrentStepDurationSeconds}"
     IsVisible="{Binding IsGridSelected}" />
-
                         <controls:NodeGraphVisualization
     x:Name="ClusteredGraphVisualization"
     Nodes="{Binding GraphNodes}"
@@ -556,6 +559,10 @@
     SelectedEdge="{Binding SelectedGraphEdge, Mode=TwoWay}"
     LayoutHint="{Binding GraphLayoutHint}"
     IsIgnitionSelectionEnabled="{Binding IsIgnitionSelectionEnabled}"
+    Precipitation="{Binding CurrentPrecipitation}"
+    WindDirectionDegrees="{Binding CurrentWindDirectionDegrees}"
+    CurrentStep="{Binding CurrentStep}"
+    StepDurationSeconds="{Binding CurrentStepDurationSeconds}"
     IsVisible="{Binding IsClusteredGraphSelected}" />
                             </Grid>
                         </Border>
@@ -999,9 +1006,14 @@
                            Foreground="#6E6A78"
                            TextWrapping="Wrap" />
 
-                <TextBlock Text="{Binding SelectedGridCellProbabilityText, StringFormat=Вероятность горения: {0}}"
-                           Foreground="#6E6A78"
-                           TextWrapping="Wrap" />
+               <TextBlock Text="{Binding SelectedGridCellProbabilityText, StringFormat=Локальная вероятность воспламенения: {0}}"
+           Foreground="#6E6A78"
+           TextWrapping="Wrap" />
+
+<TextBlock Text="{Binding SelectedGridCellRainHintText}"
+           Foreground="#8A8793"
+           FontSize="11"
+           TextWrapping="Wrap" />
 
                 <TextBlock Text="{Binding SelectedGridCellIgnitableText, StringFormat=Может загореться: {0}}"
                            Foreground="#6E6A78"

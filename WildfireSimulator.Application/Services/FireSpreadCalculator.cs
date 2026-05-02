@@ -43,9 +43,6 @@ namespace WildfireSimulator.Application.Services
 
             double effectiveExposureSeconds = Math.Max(stepDurationSeconds, 1.0);
 
-            double precipitationFactor = 1.0 / (1.0 + weather.Precipitation * 0.35);
-            precipitationFactor = Math.Clamp(precipitationFactor, 0.30, 1.0);
-
             double heatFlow =
                 intensityKwPerM2 * 1000.0 *
                 EffectiveHeatingAreaM2 *
@@ -54,7 +51,6 @@ namespace WildfireSimulator.Application.Services
                 distanceFactor *
                 windFactor *
                 slopeFactor *
-                precipitationFactor *
                 HeatTransferEfficiency;
 
             return Math.Max(0.0, Math.Min(heatFlow, 1e10));
@@ -95,13 +91,11 @@ namespace WildfireSimulator.Application.Services
 
             double progress = GetBurningProgress(cell);
             double progressEffect = Math.Sin(progress * Math.PI);
-
             progressEffect = Math.Max(0.60, progressEffect);
 
             double rate = baseRate * windEffect * moistureEffect * progressEffect;
             return Math.Max(rate, 0.001);
         }
-
         public double CalculateIgnitionThreshold(ForestCell target, WeatherCondition weather)
         {
             if (target.Vegetation == VegetationType.Water || target.Vegetation == VegetationType.Bare)
@@ -129,12 +123,11 @@ namespace WildfireSimulator.Application.Services
             double airHumidityFactor = 1.0 + (weather.Humidity / 100.0) * 0.8;
             airHumidityFactor = Math.Clamp(airHumidityFactor, 1.0, 1.8);
 
-            double precipitationFactor = 1.0 + weather.Precipitation * 0.45;
-            precipitationFactor = Math.Clamp(precipitationFactor, 1.0, 3.0);
-
-            return baseThreshold * fuelMoistureFactor * temperatureFactor * airHumidityFactor * precipitationFactor;
+            return baseThreshold *
+                   fuelMoistureFactor *
+                   temperatureFactor *
+                   airHumidityFactor;
         }
-
         public double CalculateIgnitionProbability(double totalHeat, double threshold)
         {
             if (threshold <= 0.0 || totalHeat <= 0.0 || double.IsInfinity(threshold))
@@ -170,11 +163,11 @@ namespace WildfireSimulator.Application.Services
         }
 
         public (double Intensity, double BurningTime, double DistanceFactor, double WindFactor, double SlopeFactor, double TotalHeat)
-            GetHeatFlowDebugInfo(
-                ForestCell source,
-                ForestCell target,
-                WeatherCondition weather,
-                double stepDurationSeconds)
+        GetHeatFlowDebugInfo(
+            ForestCell source,
+            ForestCell target,
+            WeatherCondition weather,
+            double stepDurationSeconds)
         {
             double intensity = CalculateFireIntensity(source, weather);
 
@@ -190,7 +183,15 @@ namespace WildfireSimulator.Application.Services
             double windFactor = CalculateWindFactor(source, target, weather);
             double slopeFactor = CalculateSlopeFactor(source, target);
 
+            double humidityHeatFactor = 1.0 - (weather.Humidity / 100.0) * 0.32;
+            humidityHeatFactor = Math.Clamp(humidityHeatFactor, 0.62, 1.0);
+
             double effectiveExposureSeconds = Math.Max(stepDurationSeconds, 1.0);
+
+            double ambientPrecipitationFactor = 1.0 / (1.0 + weather.Precipitation * 0.018);
+            ambientPrecipitationFactor = Math.Clamp(ambientPrecipitationFactor, 0.78, 1.0);
+
+            double gridRecoveryFactor = 1.08;
 
             double totalHeat =
                 intensity * 1000.0 *
@@ -200,7 +201,10 @@ namespace WildfireSimulator.Application.Services
                 distanceFactor *
                 windFactor *
                 slopeFactor *
-                HeatTransferEfficiency;
+                humidityHeatFactor *
+                ambientPrecipitationFactor *
+                HeatTransferEfficiency *
+                gridRecoveryFactor;
 
             return (intensity, GetBurningTimeSeconds(source), distanceFactor, windFactor, slopeFactor, totalHeat);
         }
@@ -247,23 +251,35 @@ namespace WildfireSimulator.Application.Services
 
         private double CalculateWindFactor(ForestCell source, ForestCell target, WeatherCondition weather)
         {
-            double windSpeed = weather.WindSpeedMps;
-            if (windSpeed < 0.1)
+            double dx = target.X - source.X;
+            double dy = target.Y - source.Y;
+
+            double distance = Math.Sqrt(dx * dx + dy * dy);
+            if (distance < 0.0001 || weather.WindSpeedMps <= 0.0001)
                 return 1.0;
 
-            double spreadDirection = GetDirectionToTarget(source, target);
-            double windToDirection = (weather.WindDirectionDegrees + 180.0) % 360.0;
+            dx /= distance;
+            dy /= distance;
 
-            double angleDiff = Math.Abs(spreadDirection - windToDirection);
-            angleDiff = Math.Min(angleDiff, 360.0 - angleDiff);
+            double windFlowDegrees = (weather.WindDirectionDegrees + 180.0) % 360.0;
+            double radians = windFlowDegrees * Math.PI / 180.0;
 
-            double cosAngle = Math.Cos(angleDiff * Math.PI / 180.0);
-            double normalizedWind = Math.Min(windSpeed / 20.0, 1.0);
+            double windX = Math.Sin(radians);
+            double windY = -Math.Cos(radians);
 
-            double windFactor = Math.Exp(1.2 * normalizedWind * cosAngle);
-            return Math.Clamp(windFactor, MinWindFactor, MaxWindFactor);
+            double dot = dx * windX + dy * windY;
+
+            double directionEffect = dot * weather.WindSpeedMps * 0.105;
+            double factor = 1.0 + directionEffect;
+
+            if (dot > 0.35)
+                factor += 0.08;
+
+            if (dot < -0.35)
+                factor -= 0.08;
+
+            return Math.Clamp(factor, 0.36, 2.65);
         }
-
         private double CalculateSlopeFactor(ForestCell source, ForestCell target)
         {
             double distance = CalculateDistance(source.X, source.Y, target.X, target.Y);

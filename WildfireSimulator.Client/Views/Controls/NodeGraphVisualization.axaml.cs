@@ -134,6 +134,42 @@ public partial class NodeGraphVisualization : UserControl
 
     public event EventHandler<SimulationGraphEdgeDto>? EdgeClicked;
 
+    public static readonly StyledProperty<double> PrecipitationProperty =
+        AvaloniaProperty.Register<NodeGraphVisualization, double>(nameof(Precipitation), 0.0);
+
+    public static readonly StyledProperty<double> WindDirectionDegreesProperty =
+        AvaloniaProperty.Register<NodeGraphVisualization, double>(nameof(WindDirectionDegrees), 45.0);
+
+    public static readonly StyledProperty<int> CurrentStepProperty =
+        AvaloniaProperty.Register<NodeGraphVisualization, int>(nameof(CurrentStep), 0);
+
+    public static readonly StyledProperty<int> StepDurationSecondsProperty =
+        AvaloniaProperty.Register<NodeGraphVisualization, int>(nameof(StepDurationSeconds), 900);
+
+    public double Precipitation
+    {
+        get => GetValue(PrecipitationProperty);
+        set => SetValue(PrecipitationProperty, value);
+    }
+
+    public double WindDirectionDegrees
+    {
+        get => GetValue(WindDirectionDegreesProperty);
+        set => SetValue(WindDirectionDegreesProperty, value);
+    }
+
+    public int CurrentStep
+    {
+        get => GetValue(CurrentStepProperty);
+        set => SetValue(CurrentStepProperty, value);
+    }
+
+    public int StepDurationSeconds
+    {
+        get => GetValue(StepDurationSecondsProperty);
+        set => SetValue(StepDurationSecondsProperty, value);
+    }
+
     private void OnCanvasPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (_graphCanvas == null)
@@ -229,6 +265,7 @@ public partial class NodeGraphVisualization : UserControl
         var neighborIds = GetNeighborIds(edges, selectedNodeId);
 
         DrawClusterPatchBackgrounds(nodes, points, _zoom);
+        DrawMovingPrecipitationFront(nodes, points, _zoom);
 
         foreach (var edge in edges.OrderBy(e => IsBridgeEdge(e, nodeMap) ? 1 : 0))
             DrawEdge(edge, points, nodeMap, selectedNodeId, selectedEdgeId, selectedEdgeIds, _zoom);
@@ -236,6 +273,147 @@ public partial class NodeGraphVisualization : UserControl
         foreach (var node in nodes.OrderBy(n => n.IsBurning ? 1 : 0))
             DrawNode(node, edges, points, selectedNodeId, neighborIds, _zoom);
     }
+    private void OnGraphPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == NodesProperty)
+        {
+            _hasManualZoom = false;
+            RebindNodesCollection();
+            ScheduleDraw();
+            return;
+        }
+
+        if (e.Property == EdgesProperty)
+        {
+            _hasManualZoom = false;
+            RebindEdgesCollection();
+            ScheduleDraw();
+            return;
+        }
+
+        if (e.Property == LayoutHintProperty ||
+            e.Property == IsIgnitionSelectionEnabledProperty ||
+            e.Property == PrecipitationProperty ||
+            e.Property == WindDirectionDegreesProperty ||
+            e.Property == CurrentStepProperty ||
+            e.Property == StepDurationSecondsProperty)
+        {
+            ScheduleDraw();
+            return;
+        }
+
+        if (e.Property == SelectedNodeProperty ||
+            e.Property == SelectedEdgeProperty)
+        {
+            ScheduleDraw();
+        }
+    }
+    private void DrawMovingPrecipitationFront(
+        List<SimulationGraphNodeDto> nodes,
+        Dictionary<Guid, Point> points,
+        double zoom)
+    {
+        if (_graphCanvas == null || Precipitation <= 0.0 || CurrentStep <= 0 || nodes.Count == 0)
+            return;
+
+        var band = BuildGraphPrecipitationFrontPolygon(nodes, points);
+
+        if (band.Count < 4)
+            return;
+
+        double opacity = Math.Clamp(0.12 + Precipitation * 0.018, 0.14, 0.40);
+
+        var polygon = new Polygon
+        {
+            Points = new Avalonia.Collections.AvaloniaList<Point>(band),
+            Fill = new SolidColorBrush(Color.Parse("#5DADEC"), opacity),
+            Stroke = new SolidColorBrush(Color.Parse("#2F80C0"), Math.Min(0.55, opacity + 0.12)),
+            StrokeThickness = Math.Max(1.0, 1.4 * zoom),
+            IsHitTestVisible = false,
+            ZIndex = 5
+        };
+
+        _graphCanvas.Children.Add(polygon);
+    }
+
+    private List<Point> BuildGraphPrecipitationFrontPolygon(
+        List<SimulationGraphNodeDto> nodes,
+        Dictionary<Guid, Point> points)
+    {
+        double minX = points.Values.Min(p => p.X);
+        double maxX = points.Values.Max(p => p.X);
+        double minY = points.Values.Min(p => p.Y);
+        double maxY = points.Values.Max(p => p.Y);
+
+        double width = Math.Max(1.0, maxX - minX);
+        double height = Math.Max(1.0, maxY - minY);
+
+        double centerX = minX + width / 2.0;
+        double centerY = minY + height / 2.0;
+
+        double diagonal = Math.Sqrt(width * width + height * height);
+
+        double frontLength = Math.Max(160.0, diagonal * 1.35);
+        double frontThickness = Math.Max(70.0, diagonal * 0.24);
+
+        var moveDirection = GetPrecipitationFlowDirection(WindDirectionDegrees);
+
+        double bandX = -moveDirection.Y;
+        double bandY = moveDirection.X;
+
+        double modelTimeSeconds =
+            Math.Max(0, CurrentStep - 1) * Math.Max(1, StepDurationSeconds);
+
+        double speedPixelsPerSecond =
+            0.018 + 5.0 * 0.0028;
+
+        speedPixelsPerSecond = Math.Clamp(speedPixelsPerSecond, 0.018, 0.075);
+
+        double travelDistance = diagonal + frontThickness * 2.0;
+
+        double position =
+            (modelTimeSeconds * speedPixelsPerSecond) % travelDistance
+            - diagonal / 2.0
+            - frontThickness;
+
+        double frontCenterX = centerX + moveDirection.X * position;
+        double frontCenterY = centerY + moveDirection.Y * position;
+
+        var p1 = new Point(
+            frontCenterX + bandX * frontLength / 2.0 + moveDirection.X * frontThickness / 2.0,
+            frontCenterY + bandY * frontLength / 2.0 + moveDirection.Y * frontThickness / 2.0);
+
+        var p2 = new Point(
+            frontCenterX - bandX * frontLength / 2.0 + moveDirection.X * frontThickness / 2.0,
+            frontCenterY - bandY * frontLength / 2.0 + moveDirection.Y * frontThickness / 2.0);
+
+        var p3 = new Point(
+            frontCenterX - bandX * frontLength / 2.0 - moveDirection.X * frontThickness / 2.0,
+            frontCenterY - bandY * frontLength / 2.0 - moveDirection.Y * frontThickness / 2.0);
+
+        var p4 = new Point(
+            frontCenterX + bandX * frontLength / 2.0 - moveDirection.X * frontThickness / 2.0,
+            frontCenterY + bandY * frontLength / 2.0 - moveDirection.Y * frontThickness / 2.0);
+
+        return new List<Point> { p1, p2, p3, p4 };
+    }
+
+    private (double X, double Y) GetPrecipitationFlowDirection(double windDirectionDegrees)
+    {
+        double flowDirectionDegrees = (windDirectionDegrees + 180.0) % 360.0;
+        double radians = flowDirectionDegrees * Math.PI / 180.0;
+
+        double x = Math.Sin(radians);
+        double y = -Math.Cos(radians);
+
+        double length = Math.Sqrt(x * x + y * y);
+
+        if (length < 0.0001)
+            return (0.0, 1.0);
+
+        return (x / length, y / length);
+    }
+
 
     private double CalculateFitZoom(double logicalWidth, double logicalHeight)
     {
@@ -250,35 +428,6 @@ public partial class NodeGraphVisualization : UserControl
         double zoomByWidth = (availableWidth - 24) / logicalWidth;
 
         return Math.Clamp(zoomByWidth, MinZoom, MaxZoom);
-    }
-    private void OnGraphPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
-    {
-        if (e.Property == NodesProperty)
-        {
-            RebindNodesCollection();
-            ScheduleDraw();
-            return;
-        }
-
-        if (e.Property == EdgesProperty)
-        {
-            RebindEdgesCollection();
-            ScheduleDraw();
-            return;
-        }
-
-        if (e.Property == LayoutHintProperty ||
-            e.Property == IsIgnitionSelectionEnabledProperty)
-        {
-            ScheduleDraw();
-            return;
-        }
-
-        if (e.Property == SelectedNodeProperty ||
-            e.Property == SelectedEdgeProperty)
-        {
-            ScheduleDraw();
-        }
     }
 
     private void RebindNodesCollection()

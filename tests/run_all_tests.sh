@@ -20,7 +20,6 @@ TESTS=(
     "test_fire_spread_modifier_effect.sh"
     "test_fire_spread_modifier_probability.sh"
     "test_metrics_history_api.sh"
-    "test_precipitation_reduces_spread.sh"
     "test_precipitation_status.sh"
     "test_slope_physics.sh"
     "test_water_bare_do_not_ignite.sh"

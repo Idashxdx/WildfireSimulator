@@ -244,6 +244,15 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private GraphCellDto? _selectedGridCell;
 
+    [ObservableProperty]
+    private double _currentPrecipitation;
+
+    [ObservableProperty]
+    private double _currentWindDirectionDegrees = 45.0;
+
+    [ObservableProperty]
+    private int _currentStepDurationSeconds = 900;
+
 
     public bool HasSelectedGridCell => SelectedGridCell != null;
 
@@ -283,8 +292,26 @@ public partial class MainWindowViewModel : ObservableObject
         SelectedGridCell == null ? "—" : $"{SelectedGridCell.Elevation:F0} м";
 
     public string SelectedGridCellProbabilityText =>
-        SelectedGridCell == null ? "—" : $"{SelectedGridCell.BurnProbability:F3}";
+      SelectedGridCell == null
+          ? "—"
+          : $"{SelectedGridCell.BurnProbability:F3}";
 
+    public string SelectedGridCellProbabilityCaption =>
+        "Локальная вероятность воспламенения";
+
+    public string SelectedGridCellRainHintText
+    {
+        get
+        {
+            if (SelectedGridCell == null)
+                return "—";
+
+            if (CurrentPrecipitation <= 0.0)
+                return "Осадков нет";
+
+            return "Фронт осадков влияет через влажность и снижение теплопередачи";
+        }
+    }
     public string SelectedGridCellFireStageText =>
         SelectedGridCell?.FireStage switch
         {
@@ -326,6 +353,18 @@ public partial class MainWindowViewModel : ObservableObject
         NotifyGridCellSelectionChanged();
     }
 
+    private void UpdatePrecipitationFrontView(
+        double precipitation,
+        double windDirectionDegrees,
+        int? stepDurationSeconds = null)
+    {
+        CurrentPrecipitation = Math.Max(0.0, precipitation);
+        CurrentWindDirectionDegrees = windDirectionDegrees;
+
+        if (stepDurationSeconds.HasValue && stepDurationSeconds.Value > 0)
+            CurrentStepDurationSeconds = stepDurationSeconds.Value;
+    }
+
     private void NotifyGridCellSelectionChanged()
     {
         OnPropertyChanged(nameof(HasSelectedGridCell));
@@ -341,6 +380,8 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedGridCellHeatText));
         OnPropertyChanged(nameof(SelectedGridCellBurningElapsedText));
         OnPropertyChanged(nameof(SelectedGridCellIgnitableText));
+        OnPropertyChanged(nameof(SelectedGridCellProbabilityCaption));
+        OnPropertyChanged(nameof(SelectedGridCellRainHintText));
     }
     public bool HasSelectedGraphEdge => SelectedGraphEdge != null;
 
@@ -1144,6 +1185,8 @@ public partial class MainWindowViewModel : ObservableObject
             FireArea = 0;
             CurrentStep = 0;
             IsSimulationRunning = false;
+
+            UpdatePrecipitationFrontView(0.0, CurrentWindDirectionDegrees);
             return;
         }
 
@@ -1156,7 +1199,13 @@ public partial class MainWindowViewModel : ObservableObject
         TemperatureInfo = $"{status.Temperature:F1} °C";
         HumidityInfo = $"{status.Humidity:F1}%";
         WindInfo = $"{status.WindSpeed:F1} м/с, {GetWindDirectionName(status.WindDirectionDegrees)}";
-        PrecipitationInfo = $"{status.Precipitation:F1} мм/ч";
+        PrecipitationInfo = status.Precipitation <= 0.0
+            ? "Нет осадков"
+            : $"{status.Precipitation:F1} мм/ч";
+
+        UpdatePrecipitationFrontView(
+            status.Precipitation,
+            status.WindDirectionDegrees);
 
         if (SelectedSimulation != null)
         {
@@ -1406,7 +1455,7 @@ public partial class MainWindowViewModel : ObservableObject
                             EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Графовый шаг {stepResult.Step} выполнен");
                     }
                 }
-
+                await LoadSimulationStatusAsync(SelectedSimulation!.Id);
                 await LoadSimulationMetricsHistoryAsync(SelectedSimulation!.Id);
 
                 OnPropertyChanged(nameof(CanStartSelectedSimulation));
@@ -1728,6 +1777,11 @@ public partial class MainWindowViewModel : ObservableObject
                 EventLog.Insert(0, $"[{DateTime.Now:HH:mm:ss}] Ошибка: API не вернул идентификатор новой графовой симуляции");
                 return;
             }
+
+            UpdatePrecipitationFrontView(
+                creation.Precipitation,
+                creation.WindDirection,
+                creation.StepDurationSeconds);
 
             await LoadSimulationsAsync();
 
@@ -2054,6 +2108,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         var dialog = new CreateGridSimulationDialog();
         var result = await dialog.ShowDialog<bool>(mainWindow);
+
         if (!result)
             return;
 
@@ -2066,10 +2121,18 @@ public partial class MainWindowViewModel : ObservableObject
             WindInfo = $"{creation.WindSpeed} м/с, {GetWindDirectionName(creation.WindDirection)}";
             TemperatureInfo = $"{creation.Temperature} °C";
             HumidityInfo = $"{creation.Humidity}%";
-            PrecipitationInfo = $"{creation.Precipitation:F1} мм/ч";
+            PrecipitationInfo = creation.Precipitation <= 0.0
+                ? "Нет осадков"
+                : $"{creation.Precipitation:F1} мм/ч";
+
             GridWidth = creation.GridWidth;
             GridHeight = creation.GridHeight;
             InitialFireCells = creation.InitialFireCells;
+
+            UpdatePrecipitationFrontView(
+                creation.Precipitation,
+                creation.WindDirection,
+                creation.StepDurationSeconds);
         });
 
         var sourceText = creation.UsePreparedMap
@@ -2142,6 +2205,11 @@ public partial class MainWindowViewModel : ObservableObject
             SetTransientStatus("Не удалось создать симуляцию", true);
             return;
         }
+
+        UpdatePrecipitationFrontView(
+            creation.Precipitation,
+            creation.WindDirection,
+            creation.StepDurationSeconds);
 
         await LoadSimulationsAsync();
 

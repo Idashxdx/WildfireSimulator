@@ -143,6 +143,43 @@ public partial class GraphVisualization : UserControl
             };
         }
     }
+
+    public static readonly StyledProperty<double> PrecipitationProperty =
+        AvaloniaProperty.Register<GraphVisualization, double>(nameof(Precipitation), 0.0);
+
+    public static readonly StyledProperty<double> WindDirectionDegreesProperty =
+        AvaloniaProperty.Register<GraphVisualization, double>(nameof(WindDirectionDegrees), 45.0);
+
+    public static readonly StyledProperty<int> CurrentStepProperty =
+        AvaloniaProperty.Register<GraphVisualization, int>(nameof(CurrentStep), 0);
+
+    public static readonly StyledProperty<int> StepDurationSecondsProperty =
+        AvaloniaProperty.Register<GraphVisualization, int>(nameof(StepDurationSeconds), 900);
+
+    public double Precipitation
+    {
+        get => GetValue(PrecipitationProperty);
+        set => SetValue(PrecipitationProperty, value);
+    }
+
+    public double WindDirectionDegrees
+    {
+        get => GetValue(WindDirectionDegreesProperty);
+        set => SetValue(WindDirectionDegreesProperty, value);
+    }
+
+    public int CurrentStep
+    {
+        get => GetValue(CurrentStepProperty);
+        set => SetValue(CurrentStepProperty, value);
+    }
+
+    public int StepDurationSeconds
+    {
+        get => GetValue(StepDurationSecondsProperty);
+        set => SetValue(StepDurationSecondsProperty, value);
+    }
+
     private void ChangeZoom(bool zoomIn)
     {
         double factor = zoomIn ? 1.18 : 1.0 / 1.18;
@@ -211,7 +248,11 @@ public partial class GraphVisualization : UserControl
 
         if (e.Property == IsIgnitionSelectionEnabledProperty ||
             e.Property == SelectedCellProperty ||
-            e.Property == ShowElevationLabelsProperty)
+            e.Property == ShowElevationLabelsProperty ||
+            e.Property == PrecipitationProperty ||
+            e.Property == WindDirectionDegreesProperty ||
+            e.Property == CurrentStepProperty ||
+            e.Property == StepDurationSecondsProperty)
         {
             if (e.Property == ShowElevationLabelsProperty && _elevationToggle != null)
             {
@@ -311,7 +352,15 @@ public partial class GraphVisualization : UserControl
         var originX = Math.Max(PaddingSize, (canvasWidth - contentWidth) / 2.0);
         var originY = Math.Max(PaddingSize, (canvasHeight - contentHeight) / 2.0);
 
-       DrawGridBackground(originX, originY, (int)Math.Round(contentWidth), (int)Math.Round(contentHeight));
+        DrawGridBackground(originX, originY, (int)Math.Round(contentWidth), (int)Math.Round(contentHeight));
+
+        DrawMovingPrecipitationFront(
+    originX,
+    originY,
+    cellSize,
+    safeGridWidth,
+    safeGridHeight);
+
         if (cells.Count == 0)
         {
             DrawEmptyState(canvasWidth, canvasHeight);
@@ -347,6 +396,134 @@ public partial class GraphVisualization : UserControl
             return 12;
 
         return MinCellSize;
+    }
+    private void DrawMovingPrecipitationFront(
+    double originX,
+    double originY,
+    int cellSize,
+    int gridWidth,
+    int gridHeight)
+    {
+        if (_graphCanvas == null || Precipitation <= 0.0 || CurrentStep <= 0)
+            return;
+
+        var band = BuildPrecipitationFrontPolygon(
+            gridWidth,
+            gridHeight,
+            CurrentStep,
+            StepDurationSeconds,
+            WindDirectionDegrees,
+            originX,
+            originY,
+            cellSize);
+
+        if (band.Count < 4)
+            return;
+
+        double opacity = Math.Clamp(0.12 + Precipitation * 0.018, 0.14, 0.42);
+
+        var polygon = new Polygon
+        {
+            Points = new Avalonia.Collections.AvaloniaList<Point>(band),
+            Fill = new SolidColorBrush(Color.Parse("#5DADEC"), opacity),
+            Stroke = new SolidColorBrush(Color.Parse("#2F80C0"), Math.Min(0.55, opacity + 0.12)),
+            StrokeThickness = Math.Max(1.0, cellSize * 0.05),
+            IsHitTestVisible = false,
+            ZIndex = 3
+        };
+
+        _graphCanvas.Children.Add(polygon);
+    }
+
+    private List<Point> BuildPrecipitationFrontPolygon(
+        int gridWidth,
+        int gridHeight,
+        int currentStep,
+        int stepDurationSeconds,
+        double windDirectionDegrees,
+        double originX,
+        double originY,
+        int cellSize)
+    {
+        double width = Math.Max(1.0, gridWidth);
+        double height = Math.Max(1.0, gridHeight);
+
+        double centerX = width / 2.0;
+        double centerY = height / 2.0;
+
+        double diagonal = Math.Sqrt(width * width + height * height);
+
+        double frontLength = Math.Max(12.0, diagonal * 1.35);
+        double frontThickness = Math.Max(5.0, diagonal * 0.24);
+
+        var moveDirection = GetPrecipitationFlowDirection(windDirectionDegrees);
+
+        double bandX = -moveDirection.Y;
+        double bandY = moveDirection.X;
+
+        double modelTimeSeconds =
+            Math.Max(0, currentStep - 1) * Math.Max(1, stepDurationSeconds);
+
+        double speedCellsPerSecond =
+            0.00120 + 5.0 * 0.00018;
+
+        speedCellsPerSecond = Math.Clamp(speedCellsPerSecond, 0.00120, 0.00420);
+
+        double travelDistance = diagonal + frontThickness * 2.0;
+
+        double position =
+            (modelTimeSeconds * speedCellsPerSecond) % travelDistance
+            - diagonal / 2.0
+            - frontThickness;
+
+        double frontCenterX = centerX + moveDirection.X * position;
+        double frontCenterY = centerY + moveDirection.Y * position;
+
+        var p1 = ToCanvasPoint(frontCenterX + bandX * frontLength / 2.0 + moveDirection.X * frontThickness / 2.0,
+                               frontCenterY + bandY * frontLength / 2.0 + moveDirection.Y * frontThickness / 2.0,
+                               originX, originY, cellSize);
+
+        var p2 = ToCanvasPoint(frontCenterX - bandX * frontLength / 2.0 + moveDirection.X * frontThickness / 2.0,
+                               frontCenterY - bandY * frontLength / 2.0 + moveDirection.Y * frontThickness / 2.0,
+                               originX, originY, cellSize);
+
+        var p3 = ToCanvasPoint(frontCenterX - bandX * frontLength / 2.0 - moveDirection.X * frontThickness / 2.0,
+                               frontCenterY - bandY * frontLength / 2.0 - moveDirection.Y * frontThickness / 2.0,
+                               originX, originY, cellSize);
+
+        var p4 = ToCanvasPoint(frontCenterX + bandX * frontLength / 2.0 - moveDirection.X * frontThickness / 2.0,
+                               frontCenterY + bandY * frontLength / 2.0 - moveDirection.Y * frontThickness / 2.0,
+                               originX, originY, cellSize);
+
+        return new List<Point> { p1, p2, p3, p4 };
+    }
+
+    private Point ToCanvasPoint(
+        double x,
+        double y,
+        double originX,
+        double originY,
+        int cellSize)
+    {
+        return new Point(
+            originX + x * cellSize,
+            originY + y * cellSize);
+    }
+
+    private (double X, double Y) GetPrecipitationFlowDirection(double windDirectionDegrees)
+    {
+        double flowDirectionDegrees = (windDirectionDegrees + 180.0) % 360.0;
+        double radians = flowDirectionDegrees * Math.PI / 180.0;
+
+        double x = Math.Sin(radians);
+        double y = -Math.Cos(radians);
+
+        double length = Math.Sqrt(x * x + y * y);
+
+        if (length < 0.0001)
+            return (0.0, 1.0);
+
+        return (x / length, y / length);
     }
     private void CenterScrollViewerAfterDraw()
     {

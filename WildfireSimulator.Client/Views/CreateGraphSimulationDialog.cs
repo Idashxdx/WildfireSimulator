@@ -1224,88 +1224,255 @@ public partial class CreateGraphSimulationDialog : Window
 
     private bool TryCollectValues(out string error)
     {
-        error = string.Empty;
+        var errors = new List<string>();
 
-        SimulationName = string.IsNullOrWhiteSpace(_nameBox?.Text)
-            ? _mode switch
-            {
-                GraphCreationMode.Small => "Малый граф",
-                GraphCreationMode.Medium => "Средний граф",
-                GraphCreationMode.Large => "Большой граф",
-                _ => "Графовая симуляция"
-            }
-            : _nameBox.Text.Trim();
+        SimulationName = _nameBox?.Text?.Trim() ?? string.Empty;
 
-        GridWidth = Math.Max(8, ParseInt(_widthBox?.Text, GridWidth));
-        GridHeight = Math.Max(8, ParseInt(_heightBox?.Text, GridHeight));
-        InitialFireCells = Math.Max(1, ParseInt(_fireCellsBox?.Text, InitialFireCells));
+        if (!TryReadInt(_widthBox, "Ширина", 5, 200, errors, out var width))
+            width = GridWidth;
 
-        MoistureMin = ParseDouble(_moistureMinBox?.Text, MoistureMin);
-        MoistureMax = ParseDouble(_moistureMaxBox?.Text, MoistureMax);
+        if (!TryReadInt(_heightBox, "Высота", 5, 200, errors, out var height))
+            height = GridHeight;
 
-        if (MoistureMin < 0.0 || MoistureMax > 1.0 || MoistureMin > MoistureMax)
+        if (!TryReadInt(_fireCellsBox, "Количество очагов", 1, 50, errors, out var fireCells))
+            fireCells = InitialFireCells;
+
+        if (!TryReadDouble(_moistureMinBox, "Минимальная влажность", 0.0, 1.0, errors, out var moistureMin))
+            moistureMin = MoistureMin;
+
+        if (!TryReadDouble(_moistureMaxBox, "Максимальная влажность", 0.0, 1.0, errors, out var moistureMax))
+            moistureMax = MoistureMax;
+
+        if (!TryReadDouble(_elevationBox, "Перепад высот", 0.0, 500.0, errors, out var elevation))
+            elevation = ElevationVariation;
+
+        if (!TryReadInt(_stepsBox, "Количество шагов", 1, 10000, errors, out var steps))
+            steps = SimulationSteps;
+
+        if (!TryReadInt(_stepDurationBox, "Длительность шага", 1, 7200, errors, out var stepDuration))
+            stepDuration = StepDurationSeconds;
+
+        if (!TryReadDouble(_tempBox, "Температура", -50.0, 60.0, errors, out var temperature))
+            temperature = Temperature;
+
+        if (!TryReadDouble(_humidityBox, "Влажность воздуха", 0.0, 100.0, errors, out var humidity))
+            humidity = Humidity;
+
+        if (!TryReadDouble(_windSpeedBox, "Скорость ветра", 0.0, 60.0, errors, out var windSpeed))
+            windSpeed = WindSpeed;
+
+        if (!TryReadDouble(_precipitationBox, "Осадки", 0.0, 100.0, errors, out var precipitation))
+            precipitation = Precipitation;
+
+        if (!TryReadNullableInt(_randomSeedBox, "RandomSeed", errors, out var randomSeed))
+            randomSeed = RandomSeed;
+
+        if (moistureMin > moistureMax)
+            errors.Add("Минимальная влажность не может быть больше максимальной.");
+
+        var vegetation = TryBuildVegetationDistributions(errors);
+
+        if (errors.Count > 0)
         {
-            error = "Влажность должна быть в диапазоне 0..1, минимум не должен быть больше максимума.";
+            error = "Исправьте параметры:\n• " + string.Join("\n• ", errors);
             return false;
         }
 
-        ElevationVariation = Math.Max(0.0, ParseDouble(_elevationBox?.Text, ElevationVariation));
+        GridWidth = width;
+        GridHeight = height;
+        InitialFireCells = fireCells;
+        MoistureMin = moistureMin;
+        MoistureMax = moistureMax;
+        ElevationVariation = elevation;
+        SimulationSteps = steps;
+        StepDurationSeconds = stepDuration;
+        Temperature = temperature;
+        Humidity = humidity;
+        WindSpeed = windSpeed;
+        WindDirection = GetWindDirectionFromIndex(_windDirBox?.SelectedIndex ?? 1);
+        Precipitation = precipitation;
+        RandomSeed = randomSeed;
 
-        SimulationSteps = Math.Max(1, ParseInt(_stepsBox?.Text, SimulationSteps));
-        StepDurationSeconds = Math.Clamp(ParseInt(_stepDurationBox?.Text, StepDurationSeconds), 1, 7200);
+        MapNoiseStrength = ReadOptionalDouble(_mapNoiseBox, 0.08, 0.0, 1.0);
+        MapDrynessFactor = ReadOptionalDouble(_mapDrynessBox, 1.0, 0.5, 2.0);
+        ReliefStrengthFactor = ReadOptionalDouble(_reliefStrengthBox, 1.0, 0.5, 2.0);
+        FuelDensityFactor = ReadOptionalDouble(_fuelDensityBox, 1.0, 0.5, 2.0);
 
-        Temperature = ParseDouble(_tempBox?.Text, Temperature);
-        Humidity = Math.Clamp(ParseDouble(_humidityBox?.Text, Humidity), 0.0, 100.0);
-        WindSpeed = Math.Max(0.0, ParseDouble(_windSpeedBox?.Text, WindSpeed));
-        Precipitation = Math.Max(0.0, ParseDouble(_precipitationBox?.Text, Precipitation));
+        VegetationDistributions = vegetation;
 
-        MapNoiseStrength = Math.Clamp(ParseDouble(_mapNoiseBox?.Text, MapNoiseStrength), 0.0, 1.0);
-        MapDrynessFactor = Math.Max(0.1, ParseDouble(_mapDrynessBox?.Text, MapDrynessFactor));
-        ReliefStrengthFactor = Math.Max(0.1, ParseDouble(_reliefStrengthBox?.Text, ReliefStrengthFactor));
-        FuelDensityFactor = Math.Max(0.1, ParseDouble(_fuelDensityBox?.Text, FuelDensityFactor));
-
-        RandomSeed = string.IsNullOrWhiteSpace(_randomSeedBox?.Text)
-            ? null
-            : ParseInt(_randomSeedBox?.Text, 0);
-
-        WindDirection = _windDirBox?.SelectedIndex switch
+        error = string.Empty;
+        return true;
+    }
+    private int GetWindDirectionFromIndex(int index)
+    {
+        return index switch
         {
-            0 => 0.0,
-            1 => 45.0,
-            2 => 90.0,
-            3 => 135.0,
-            4 => 180.0,
-            5 => 225.0,
-            6 => 270.0,
-            7 => 315.0,
-            _ => 45.0
+            0 => 0,
+            1 => 45,
+            2 => 90,
+            3 => 135,
+            4 => 180,
+            5 => 225,
+            6 => 270,
+            7 => 315,
+            _ => 45
         };
+    }
+    private int ParseWindDirection(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return 0;
 
-        bool hasBlueprint = ClusteredBlueprint != null && ClusteredBlueprint.Nodes.Any();
+        value = value.Trim().ToLower();
 
-        if (hasBlueprint)
+        return value switch
         {
-            SelectedMapCreationMode = MapCreationMode.SemiManual;
-            SelectedClusteredScenarioType = null;
-        }
-        else if (_mode == GraphCreationMode.Large)
+            "север" or "north" => 0,
+            "северо-восток" or "northeast" => 45,
+            "восток" or "east" => 90,
+            "юго-восток" or "southeast" => 135,
+            "юг" or "south" => 180,
+            "юго-запад" or "southwest" => 225,
+            "запад" or "west" => 270,
+            "северо-запад" or "northwest" => 315,
+
+            _ => int.TryParse(value, out var deg) ? deg : 0
+        };
+    }
+
+    private bool TryReadInt(
+        TextBox? box,
+        string fieldName,
+        int min,
+        int max,
+        List<string> errors,
+        out int value)
+    {
+        value = 0;
+        string text = box?.Text?.Trim() ?? string.Empty;
+
+        if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
         {
-            if (SelectedMapCreationMode == MapCreationMode.Scenario &&
-                SelectedClusteredScenarioType == null)
-            {
-                SelectedClusteredScenarioType = ClusteredScenarioType.MixedForest;
-            }
-        }
-        else
-        {
-            SelectedMapCreationMode = MapCreationMode.Random;
-            SelectedClusteredScenarioType = null;
+            errors.Add($"{fieldName}: введите целое число.");
+            return false;
         }
 
-        UpdateVegetationDistributionFromInputs();
+        if (value < min || value > max)
+        {
+            errors.Add($"{fieldName}: допустимый диапазон {min}..{max}.");
+            return false;
+        }
 
         return true;
     }
+
+    private bool TryReadNullableInt(
+        TextBox? box,
+        string fieldName,
+        List<string> errors,
+        out int? value)
+    {
+        value = null;
+        string text = box?.Text?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(text))
+            return true;
+
+        if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            errors.Add($"{fieldName}: введите целое число или оставьте поле пустым.");
+            return false;
+        }
+
+        value = parsed;
+        return true;
+    }
+
+    private bool TryReadDouble(
+        TextBox? box,
+        string fieldName,
+        double min,
+        double max,
+        List<string> errors,
+        out double value)
+    {
+        value = 0.0;
+        string text = box?.Text?.Trim() ?? string.Empty;
+
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+        {
+            errors.Add($"{fieldName}: введите число через точку, например 0.35.");
+            return false;
+        }
+
+        if (double.IsNaN(value) || double.IsInfinity(value) || value < min || value > max)
+        {
+            errors.Add($"{fieldName}: допустимый диапазон {min}..{max}.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private double ReadOptionalDouble(TextBox? box, double fallback, double min, double max)
+    {
+        string text = box?.Text?.Trim() ?? string.Empty;
+
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+            return fallback;
+
+        return Math.Clamp(value, min, max);
+    }
+
+    private List<(int VegetationType, double Probability)> TryBuildVegetationDistributions(List<string> errors)
+    {
+        var values = new List<(VegetationType Type, double Value)>();
+
+        AddVegetationValue(values, _coniferousBox, VegetationType.Coniferous, "Хвойный лес", errors);
+        AddVegetationValue(values, _deciduousBox, VegetationType.Deciduous, "Лиственный лес", errors);
+        AddVegetationValue(values, _mixedBox, VegetationType.Mixed, "Смешанный лес", errors);
+        AddVegetationValue(values, _grassBox, VegetationType.Grass, "Трава", errors);
+        AddVegetationValue(values, _shrubBox, VegetationType.Shrub, "Кустарник", errors);
+        AddVegetationValue(values, _waterBox, VegetationType.Water, "Вода", errors);
+        AddVegetationValue(values, _bareBox, VegetationType.Bare, "Пустая поверхность", errors);
+
+        double total = values.Sum(x => Math.Max(0.0, x.Value));
+
+        if (total <= 0.000001)
+        {
+            errors.Add("Вероятности растительности: сумма должна быть больше 0.");
+            total = 1.0;
+        }
+
+        return values
+            .Select(x => ((int)x.Type, Math.Max(0.0, x.Value) / total))
+            .ToList();
+    }
+
+    private void AddVegetationValue(
+        List<(VegetationType Type, double Value)> values,
+        TextBox? box,
+        VegetationType type,
+        string fieldName,
+        List<string> errors)
+    {
+        string text = box?.Text?.Trim() ?? string.Empty;
+
+        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        {
+            errors.Add($"{fieldName}: введите число от 0 до 1.");
+            value = 0.0;
+        }
+
+        if (value < 0.0 || value > 1.0)
+        {
+            errors.Add($"{fieldName}: допустимый диапазон 0..1.");
+            value = Math.Clamp(value, 0.0, 1.0);
+        }
+
+        values.Add((type, value));
+    }
+
     private void CollectBasicValuesForGraphEditor()
     {
         SimulationName = string.IsNullOrWhiteSpace(_nameBox?.Text)
