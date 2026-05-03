@@ -291,13 +291,23 @@ public partial class MainWindowViewModel : ObservableObject
     public string SelectedGridCellElevationText =>
         SelectedGridCell == null ? "—" : $"{SelectedGridCell.Elevation:F0} м";
 
+    public string SelectedGridCellBaseProbabilityText =>
+     SelectedGridCell == null
+         ? "—"
+         : $"{SelectedGridCell.BaseBurnProbability:F3}";
+
+    public string SelectedGridCellStepProbabilityText =>
+        SelectedGridCell == null
+            ? "—"
+            : $"{SelectedGridCell.FinalIgnitionProbability:F3}";
+
+
     public string SelectedGridCellProbabilityText =>
-      SelectedGridCell == null
-          ? "—"
-          : $"{SelectedGridCell.BurnProbability:F3}";
+        SelectedGridCellStepProbabilityText;
 
     public string SelectedGridCellProbabilityCaption =>
-        "Локальная вероятность воспламенения";
+        "Вероятность воспламенения на текущем шаге";
+
 
     public string SelectedGridCellRainHintText
     {
@@ -324,6 +334,33 @@ public partial class MainWindowViewModel : ObservableObject
             null or "" => "—",
             _ => SelectedGridCell!.FireStage
         };
+
+    public string SelectedGraphNodeFireStageText =>
+        SelectedGraphNode?.FireStage switch
+        {
+            "Unburned" => "Не горела",
+            "Ignition" => "Воспламенение",
+            "Active" => "Активное горение",
+            "Intense" => "Интенсивное горение",
+            "Smoldering" => "Тление",
+            "BurnedOut" => "Полностью выгорела",
+            null or "" => "—",
+            _ => SelectedGraphNode!.FireStage
+        };
+
+    public string SelectedGraphNodeFireIntensityText =>
+        SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.FireIntensity:F2}";
+
+    public string SelectedGraphNodeFuelText =>
+        SelectedGraphNode == null
+            ? "—"
+            : $"{SelectedGraphNode.CurrentFuelLoad:F2} / {SelectedGraphNode.FuelLoad:F2}";
+
+    public string SelectedGraphNodeHeatText =>
+        SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.AccumulatedHeatJ:F2} Дж";
+
+    public string SelectedGraphNodeBurningElapsedText =>
+        SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.BurningElapsedSeconds:F0} с";
 
     public string SelectedGridCellFireIntensityText =>
         SelectedGridCell == null ? "—" : $"{SelectedGridCell.FireIntensity:F2}";
@@ -382,6 +419,8 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedGridCellIgnitableText));
         OnPropertyChanged(nameof(SelectedGridCellProbabilityCaption));
         OnPropertyChanged(nameof(SelectedGridCellRainHintText));
+        OnPropertyChanged(nameof(SelectedGridCellBaseProbabilityText));
+        OnPropertyChanged(nameof(SelectedGridCellStepProbabilityText));
     }
     public bool HasSelectedGraphEdge => SelectedGraphEdge != null;
 
@@ -453,6 +492,12 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedGraphEdgeSlopeText));
         OnPropertyChanged(nameof(SelectedGraphEdgeSpreadText));
         OnPropertyChanged(nameof(SelectedGraphEdgeHeatText));
+        OnPropertyChanged(nameof(SelectedGraphNodeProbabilityText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFireStageText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFireIntensityText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFuelText));
+        OnPropertyChanged(nameof(SelectedGraphNodeHeatText));
+        OnPropertyChanged(nameof(SelectedGraphNodeBurningElapsedText));
     }
     public string SelectedGraphEdgeDistanceText =>
         SelectedGraphEdge == null ? "—" : $"{SelectedGraphEdge.Distance:F2}";
@@ -601,18 +646,9 @@ public partial class MainWindowViewModel : ObservableObject
     public bool IsClusteredGraphSelected => SelectedSimulationGraphType == GraphType.ClusteredGraph;
 
     public string SelectedGraphNodeTitle =>
-        SelectedGraphNode == null
-            ? "Вершина не выбрана"
-            : $"Вершина ({SelectedGraphNode.X}, {SelectedGraphNode.Y})";
-
-    public string SelectedGraphNodeStateText =>
-        SelectedGraphNode?.State switch
-        {
-            "Burning" => "Горит",
-            "Burned" => "Сгорела",
-            "Normal" => "Нормальная",
-            _ => "Нет данных"
-        };
+     SelectedGraphNode == null
+         ? "Вершина не выбрана"
+         : $"Вершина ({SelectedGraphNode.X}, {SelectedGraphNode.Y})";
 
     public string SelectedGraphNodeVegetationText =>
         SelectedGraphNode?.Vegetation switch
@@ -627,27 +663,23 @@ public partial class MainWindowViewModel : ObservableObject
             null => "Нет данных",
             _ => SelectedGraphNode?.Vegetation ?? "Нет данных"
         };
-    public string SelectedGraphNodeGroupCaption => "Кластер";
 
-    public string SelectedGraphNodeDegreeSummaryText =>
+    public string SelectedGraphNodeStateText =>
+        SelectedGraphNode?.State switch
+        {
+            "Burning" => "Горит",
+            "Burned" => "Сгорела",
+            "Normal" => "Нормальная",
+            null => "Нет данных",
+            _ => SelectedGraphNode?.State ?? "Нет данных"
+        };
+
+    public string SelectedGraphNodeGroupText =>
         SelectedGraphNode == null
             ? "—"
-            : $"{SelectedGraphNodeNeighborCountText} • сильных: {SelectedGraphNodeStrongEdgesText} • средних: {SelectedGraphNodeMediumEdgesText} • слабых: {SelectedGraphNodeWeakEdgesText}";
-
-    public string SelectedGraphNodeFireSummaryText =>
-        SelectedGraphNode == null
-            ? "—"
-            : $"{SelectedGraphNodeFireStageText} • интенсивность {SelectedGraphNodeFireIntensityText}";
-
-    public string SelectedGraphNodeFuelSummaryText =>
-        SelectedGraphNode == null
-            ? "—"
-            : $"{SelectedGraphNodeCurrentFuelLoadText} / {SelectedGraphNodeFuelLoadText} • остаток {SelectedGraphNodeFuelRatioText}";
-
-    public string SelectedGraphNodeThermalSummaryText =>
-        SelectedGraphNode == null
-            ? "—"
-            : $"{SelectedGraphNodeAccumulatedHeatText} • горение {SelectedGraphNodeBurningElapsedText}";
+            : string.IsNullOrWhiteSpace(SelectedGraphNode.GroupKey)
+                ? "Без области"
+                : SelectedGraphNode.GroupKey;
 
     public string SelectedGraphNodeMoistureText =>
         SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.Moisture:F2}";
@@ -655,13 +687,63 @@ public partial class MainWindowViewModel : ObservableObject
     public string SelectedGraphNodeElevationText =>
         SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.Elevation:F0} м";
 
-    public string SelectedGraphNodeProbabilityText =>
-        SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.BurnProbability:F3}";
+    public string SelectedGraphNodeDegreeSummaryText
+    {
+        get
+        {
+            if (SelectedGraphNode == null)
+                return "—";
 
-    public string SelectedGraphNodeGroupText =>
-    string.IsNullOrWhiteSpace(SelectedGraphNode?.GroupKey)
-        ? "—"
-        : $"Кластер {SelectedGraphNode!.GroupKey}";
+            var incidentEdges = GraphEdges
+                .Where(e => e.FromCellId == SelectedGraphNode.Id || e.ToCellId == SelectedGraphNode.Id)
+                .ToList();
+
+            int bridgeCount = incidentEdges.Count(e => e.IsCorridor);
+
+            return $"{incidentEdges.Count} связей, мостов: {bridgeCount}";
+        }
+    }
+
+    public string SelectedGraphNodeFireSummaryText
+    {
+        get
+        {
+            if (SelectedGraphNode == null)
+                return "—";
+
+            string stage = SelectedGraphNode.FireStage switch
+            {
+                "Unburned" => "Не горела",
+                "Ignition" => "Воспламенение",
+                "Active" => "Активное горение",
+                "Intense" => "Интенсивное горение",
+                "Smoldering" => "Тление",
+                "BurnedOut" => "Полностью выгорела",
+                null or "" => "—",
+                _ => SelectedGraphNode.FireStage
+            };
+
+            return $"{stage} • интенсивность {SelectedGraphNode.FireIntensity:F2}";
+        }
+    }
+
+    public string SelectedGraphNodeFuelSummaryText =>
+        SelectedGraphNode == null
+            ? "—"
+            : $"{SelectedGraphNode.CurrentFuelLoad:F2} / {SelectedGraphNode.FuelLoad:F2}";
+
+    public string SelectedGraphNodeThermalSummaryText =>
+        SelectedGraphNode == null
+            ? "—"
+            : $"{SelectedGraphNode.AccumulatedHeatJ:F2} Дж • горение {SelectedGraphNode.BurningElapsedSeconds:F0} с";
+
+    public string SelectedGraphNodeProbabilityText =>
+        SelectedGraphNode == null
+            ? "—"
+            : $"{SelectedGraphNode.BurnProbability:F3}";
+
+    public string SelectedGraphNodeGroupCaption => "Кластер";
+
 
     public string SelectedGraphNodeRenderPositionText =>
         SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.RenderX:F2}, {SelectedGraphNode.RenderY:F2}";
@@ -678,21 +760,6 @@ public partial class MainWindowViewModel : ObservableObject
     public string SelectedGraphNodeWeakEdgesText =>
         SelectedGraphNode == null ? "0" : GetSelectedEdgeCount(edge => edge.FireSpreadModifier < 0.35).ToString();
 
-    public string SelectedGraphNodeFireStageText =>
-        SelectedGraphNode?.FireStage switch
-        {
-            "Unburned" => "Не горела",
-            "Ignition" => "Воспламенение",
-            "Active" => "Активное горение",
-            "Intense" => "Интенсивное горение",
-            "Smoldering" => "Тление",
-            "BurnedOut" => "Полностью выгорела",
-            null or "" => "—",
-            _ => SelectedGraphNode!.FireStage
-        };
-
-    public string SelectedGraphNodeFireIntensityText =>
-        SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.FireIntensity:F2}";
 
     public string SelectedGraphNodeCurrentFuelLoadText =>
         SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.CurrentFuelLoad:F2}";
@@ -715,8 +782,6 @@ public partial class MainWindowViewModel : ObservableObject
     public string SelectedGraphNodeAccumulatedHeatText =>
         SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.AccumulatedHeatJ:F2} Дж";
 
-    public string SelectedGraphNodeBurningElapsedText =>
-        SelectedGraphNode == null ? "—" : $"{SelectedGraphNode.BurningElapsedSeconds:F0} с";
 
     public string VisualizationMeaningText
     {
@@ -1413,7 +1478,7 @@ public partial class MainWindowViewModel : ObservableObject
                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         Cells = new ObservableCollection<GraphCellDto>(cells);
-
+                        RefreshSelectedGridCellFromCells();
                         var burning = cells.Count(c => c.IsBurning);
                         var burned = cells.Count(c => c.IsBurned);
 
@@ -1578,6 +1643,26 @@ public partial class MainWindowViewModel : ObservableObject
 
         RefreshWorkflowStatus();
     }
+
+    private void RefreshSelectedGridCellFromCells()
+    {
+        if (SelectedGridCell == null)
+            return;
+
+        var updated = Cells.FirstOrDefault(c => c.Id == SelectedGridCell.Id);
+
+        if (updated == null)
+        {
+            SelectedGridCell = null;
+        }
+        else
+        {
+            SelectedGridCell = updated;
+        }
+
+        NotifyGridCellSelectionChanged();
+    }
+
 
     [RelayCommand]
     private async Task RefreshIgnitionSetupAsync()
@@ -3179,6 +3264,7 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedGraphNodeFireSummaryText));
         OnPropertyChanged(nameof(SelectedGraphNodeFuelSummaryText));
         OnPropertyChanged(nameof(SelectedGraphNodeThermalSummaryText));
+        OnPropertyChanged(nameof(SelectedGraphNodeFireStageText));
 
         if (!IsIgnitionSelectionEnabled ||
             !IsManualIgnitionMode ||

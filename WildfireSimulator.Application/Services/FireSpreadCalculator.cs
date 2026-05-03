@@ -135,9 +135,25 @@ namespace WildfireSimulator.Application.Services
 
             double ratio = totalHeat / threshold;
 
-            double probability = 1.0 / (1.0 + Math.Exp(-LogisticSteepness * (ratio - 1.0)));
+            if (ratio < 0.03)
+                return Math.Clamp(ratio / 0.03 * 0.12, 0.01, 0.12);
 
-            return Math.Clamp(probability, 0.0, 0.9995);
+            if (ratio < 0.10)
+                return Math.Clamp(0.12 + (ratio - 0.03) / 0.07 * 0.18, 0.12, 0.30);
+
+            if (ratio < 0.25)
+                return Math.Clamp(0.30 + (ratio - 0.10) / 0.15 * 0.25, 0.30, 0.55);
+
+            if (ratio < 0.50)
+                return Math.Clamp(0.55 + (ratio - 0.25) / 0.25 * 0.20, 0.55, 0.75);
+
+            if (ratio < 0.75)
+                return Math.Clamp(0.75 + (ratio - 0.50) / 0.25 * 0.12, 0.75, 0.87);
+
+            if (ratio < 1.00)
+                return Math.Clamp(0.87 + (ratio - 0.75) / 0.25 * 0.08, 0.87, 0.95);
+
+            return 0.98;
         }
 
         public bool ShouldIgnite(double probability)

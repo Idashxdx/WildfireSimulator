@@ -1003,10 +1003,7 @@ public partial class GraphVisualization : UserControl
 
     private string GetCellTooltip(GraphCellDto cell)
     {
-        var ignitableText = cell.IsIgnitable ? "Да" : "Нет";
-        var selectedText = cell.IsSelectedIgnition ? "\nВыбран как стартовый очаг: Да" : string.Empty;
-
-        var vegetationText = cell.Vegetation?.Trim() switch
+        string vegetation = cell.Vegetation switch
         {
             "Coniferous" => "Хвойный лес",
             "Deciduous" => "Лиственный лес",
@@ -1018,7 +1015,7 @@ public partial class GraphVisualization : UserControl
             _ => cell.Vegetation
         };
 
-        var stateText = cell.State?.Trim() switch
+        string state = cell.State switch
         {
             "Burning" => "Горит",
             "Burned" => "Сгорела",
@@ -1026,13 +1023,11 @@ public partial class GraphVisualization : UserControl
             _ => cell.State
         };
 
-        return $"Координаты: ({cell.X}, {cell.Y})\n" +
-               $"Тип поверхности: {vegetationText}\n" +
-               $"Состояние: {stateText}\n" +
-               $"Можно выбрать как очаг: {ignitableText}" +
-               selectedText + "\n" +
-               $"Влажность: {cell.Moisture:F2}\n" +
-               $"Высота: {cell.Elevation:F0} м\n" +
-               $"Вероятность возгорания: {cell.BurnProbability:F3}";
+        return
+            $"Клетка ({cell.X}, {cell.Y})\n" +
+            $"Тип поверхности: {vegetation}\n" +
+            $"Состояние: {state}\n" +
+            $"Влажность: {cell.Moisture:F2}\n" +
+            $"Высота: {cell.Elevation:F0} м";
     }
 }

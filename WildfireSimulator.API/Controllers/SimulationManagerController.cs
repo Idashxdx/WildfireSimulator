@@ -429,16 +429,44 @@ public class SimulationManagerController : ControllerBase
     }
 
     private object BuildStepCellDto(
-    ForestCell c,
-    ForestGraph graph,
-    WeatherCondition weather,
-    int currentStep)
+     ForestCell c,
+     ForestGraph graph,
+     WeatherCondition weather,
+     int currentStep)
     {
         double precipitationIntensity = CalculatePrecipitationFrontIntensity(
             graph,
             weather,
             c,
             currentStep);
+
+        double baseBurnProbability = CalculateBaseBurnProbability(c);
+
+        bool canIgnite =
+            c.State == CellState.Normal &&
+            c.Vegetation != VegetationType.Water &&
+            c.Vegetation != VegetationType.Bare &&
+            c.CurrentFuelLoad > 0.0;
+
+        double? ignitionThreshold = null;
+        double? heatRatio = null;
+
+        if (canIgnite)
+        {
+            ignitionThreshold = CalculateIgnitionThresholdForDto(c, weather);
+
+            if (ignitionThreshold > 0.0 && !double.IsInfinity(ignitionThreshold.Value))
+                heatRatio = c.AccumulatedHeatJ / ignitionThreshold.Value;
+        }
+
+        bool hasRuntimeFireInfluence =
+            canIgnite &&
+            c.AccumulatedHeatJ > 1.0 &&
+            heatRatio.HasValue;
+
+        double finalIgnitionProbability = hasRuntimeFireInfluence
+            ? c.BurnProbability
+            : 0.0;
 
         return new
         {
@@ -449,7 +477,11 @@ public class SimulationManagerController : ControllerBase
             moisture = Math.Round(c.Moisture, 2),
             elevation = Math.Round(c.Elevation, 1),
             state = c.State.ToString(),
-            burnProbability = Math.Round(c.BurnProbability, 3),
+
+            burnProbability = Math.Round(finalIgnitionProbability, 4),
+            baseBurnProbability = Math.Round(baseBurnProbability, 4),
+            finalIgnitionProbability = Math.Round(finalIgnitionProbability, 4),
+
             ignitionTime = c.IgnitionTime,
             burnoutTime = c.BurnoutTime,
             fireStage = c.FireStage.ToString(),
@@ -458,10 +490,66 @@ public class SimulationManagerController : ControllerBase
             fuelLoad = Math.Round(c.FuelLoad, 6),
             burningElapsedSeconds = Math.Round(c.BurningElapsedSeconds, 3),
             accumulatedHeatJ = Math.Round(c.AccumulatedHeatJ, 3),
-            isIgnitable = c.Vegetation != VegetationType.Water && c.Vegetation != VegetationType.Bare,
+
+            receivedHeat = hasRuntimeFireInfluence
+    ? (double?)Math.Round(c.AccumulatedHeatJ, 3)
+    : null,
+
+            ignitionThreshold = ignitionThreshold.HasValue
+    ? (double?)Math.Round(ignitionThreshold.Value, 3)
+    : null,
+
+            heatRatio = heatRatio.HasValue
+    ? (double?)Math.Round(heatRatio.Value, 4)
+    : null,
+            isIgnitable = canIgnite,
             precipitationIntensity = Math.Round(precipitationIntensity, 3),
             isInPrecipitationFront = precipitationIntensity > 0.001
         };
+    }
+    private static double CalculateIgnitionThresholdForDto(ForestCell cell, WeatherCondition weather)
+    {
+        if (cell.Vegetation == VegetationType.Water || cell.Vegetation == VegetationType.Bare)
+            return double.MaxValue;
+
+        var parameters = FireModelCatalog.Get(cell.Vegetation);
+
+        double fuelMoistureFactor = 1.0 + cell.Moisture * 0.9;
+        fuelMoistureFactor = Math.Clamp(fuelMoistureFactor, 1.0, 1.9);
+
+        double temperatureFactor = 1.0;
+
+        if (weather.Temperature > 20.0)
+        {
+            temperatureFactor = 1.0 - (weather.Temperature - 20.0) * 0.03;
+            temperatureFactor = Math.Clamp(temperatureFactor, 0.45, 1.0);
+        }
+        else if (weather.Temperature < 10.0)
+        {
+            temperatureFactor = 1.0 + (10.0 - weather.Temperature) * 0.02;
+            temperatureFactor = Math.Clamp(temperatureFactor, 1.0, 1.4);
+        }
+
+        double airHumidityFactor = 1.0 + (weather.Humidity / 100.0) * 0.8;
+        airHumidityFactor = Math.Clamp(airHumidityFactor, 1.0, 1.8);
+
+        return parameters.BaseIgnitionThresholdJ *
+               fuelMoistureFactor *
+               temperatureFactor *
+               airHumidityFactor;
+    }
+    private static double CalculateBaseBurnProbability(ForestCell cell)
+    {
+        if (cell.Vegetation == VegetationType.Water || cell.Vegetation == VegetationType.Bare)
+            return 0.0;
+
+        var parameters = FireModelCatalog.Get(cell.Vegetation);
+
+        double moistureFactor = cell.Moisture >= parameters.MoistureOfExtinction
+            ? 0.2
+            : 1.0 - (cell.Moisture / parameters.MoistureOfExtinction) * 0.8;
+
+        return Math.Clamp(parameters.BaseIgnitionCoefficient * moistureFactor, 0.0, 0.95);
     }
     private double CalculatePrecipitationFrontIntensity(
         ForestGraph graph,

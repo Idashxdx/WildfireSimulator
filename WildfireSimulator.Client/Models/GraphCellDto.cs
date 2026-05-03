@@ -29,6 +29,21 @@ public class GraphCellDto
     [JsonPropertyName("burnProbability")]
     public double BurnProbability { get; set; }
 
+    [JsonPropertyName("baseBurnProbability")]
+    public double BaseBurnProbability { get; set; }
+
+    [JsonPropertyName("finalIgnitionProbability")]
+    public double FinalIgnitionProbability { get; set; }
+
+    [JsonPropertyName("receivedHeat")]
+    public double? ReceivedHeat { get; set; }
+
+    [JsonPropertyName("ignitionThreshold")]
+    public double? IgnitionThreshold { get; set; }
+
+    [JsonPropertyName("heatRatio")]
+    public double? HeatRatio { get; set; }
+
     [JsonPropertyName("ignitionTime")]
     public DateTime? IgnitionTime { get; set; }
 

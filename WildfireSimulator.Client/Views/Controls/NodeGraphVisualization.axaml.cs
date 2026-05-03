@@ -750,45 +750,48 @@ public partial class NodeGraphVisualization : UserControl
         _graphCanvas.Children.Add(rainCircle);
     }
 
-    private string BuildTooltip(
-      SimulationGraphNodeDto node,
-      List<SimulationGraphEdgeDto> edges)
+    private string BuildTooltip(SimulationGraphNodeDto node, List<SimulationGraphEdgeDto> edges)
     {
-        int degree = edges.Count(e => e.FromCellId == node.Id || e.ToCellId == node.Id);
+        int degree = edges.Count(e =>
+            e.FromCellId == node.Id ||
+            e.ToCellId == node.Id);
 
-        int bridgeEdges = edges.Count(edge =>
+        int bridgeCount = edges.Count(e =>
+            e.IsCorridor &&
+            (e.FromCellId == node.Id || e.ToCellId == node.Id));
+
+        string vegetation = node.Vegetation switch
         {
-            if (edge.FromCellId != node.Id && edge.ToCellId != node.Id)
-                return false;
+            "Coniferous" => "Хвойный лес",
+            "Deciduous" => "Лиственный лес",
+            "Mixed" => "Смешанный лес",
+            "Grass" => "Трава",
+            "Shrub" => "Кустарник",
+            "Water" => "Вода",
+            "Bare" => "Пустая поверхность",
+            _ => node.Vegetation
+        };
 
-            var otherNodeId = edge.FromCellId == node.Id
-                ? edge.ToCellId
-                : edge.FromCellId;
+        string state = node.State switch
+        {
+            "Burning" => "Горит",
+            "Burned" => "Сгорела",
+            "Normal" => "Нормальная",
+            _ => node.State
+        };
 
-            var otherNode = Nodes?.FirstOrDefault(n => n.Id == otherNodeId);
-
-            return otherNode != null &&
-                   !string.IsNullOrWhiteSpace(node.GroupKey) &&
-                   !string.IsNullOrWhiteSpace(otherNode.GroupKey) &&
-                   !string.Equals(node.GroupKey, otherNode.GroupKey, StringComparison.Ordinal);
-        });
-
-        string groupText = string.IsNullOrWhiteSpace(node.GroupKey)
-            ? "Область: не задана"
-            : $"Область: {node.GroupKey}";
+        string group = string.IsNullOrWhiteSpace(node.GroupKey)
+            ? "Без области"
+            : node.GroupKey;
 
         return
             $"Вершина ({node.X}, {node.Y})\n" +
-            $"Состояние: {GetStateText(node.State)}\n" +
-            $"Тип поверхности: {GetVegetationText(node.Vegetation)}\n" +
-            $"{groupText}\n" +
-            $"Связей: {degree}, мостов в другие области: {bridgeEdges}\n" +
+            $"Тип поверхности: {vegetation}\n" +
+            $"Состояние: {state}\n" +
+            $"Область: {group}\n" +
             $"Влажность: {node.Moisture:F2}\n" +
-            $"Высота: {node.Elevation:F1} м\n" +
-            $"Стадия пожара: {GetFireStageText(node.FireStage)}\n" +
-            $"Интенсивность горения: {node.FireIntensity:F2}\n" +
-            $"Остаток топлива: {node.CurrentFuelLoad:F2} / {node.FuelLoad:F2}\n" +
-            $"Накопленное тепло: {node.AccumulatedHeatJ:F2} Дж";
+            $"Высота: {node.Elevation:F0} м\n" +
+            $"Связей: {degree}, мостов: {bridgeCount}";
     }
     private string BuildEdgeTooltip(
      SimulationGraphEdgeDto edge,

@@ -882,6 +882,7 @@
                 Padding="10"
                 IsVisible="{Binding HasSelectedGraphNode}">
             <StackPanel Spacing="6">
+
                 <TextBlock Text="{Binding SelectedGraphNodeTitle}"
                            Foreground="#2F2A3A"
                            FontWeight="Bold"
@@ -911,33 +912,47 @@
                            Foreground="#6E6A78"
                            TextWrapping="Wrap" />
 
-                <TextBlock Text="{Binding SelectedGraphNodeFireSummaryText, StringFormat=Пожар: {0}}"
+                <TextBlock Text="{Binding SelectedGraphNodeProbabilityText, StringFormat=Вероятность на текущем шаге: {0}}"
                            Foreground="#6E6A78"
                            TextWrapping="Wrap" />
 
-                <TextBlock Text="{Binding SelectedGraphNodeFuelSummaryText, StringFormat=Топливо: {0}}"
-                           Foreground="#6E6A78"
-                           TextWrapping="Wrap" />
+                <TextBlock Text="{Binding SelectedGraphNodeFireStageText, StringFormat=Стадия пожара: {0}}"
+           Foreground="#6E6A78"
+           TextWrapping="Wrap" />
 
-                <TextBlock Text="{Binding SelectedGraphNodeThermalSummaryText, StringFormat=Тепло: {0}}"
-                           Foreground="#6E6A78"
-                           TextWrapping="Wrap" />
+<TextBlock Text="{Binding SelectedGraphNodeFireIntensityText, StringFormat=Интенсивность: {0}}"
+           Foreground="#6E6A78"
+           TextWrapping="Wrap" />
+
+<TextBlock Text="{Binding SelectedGraphNodeFuelText, StringFormat=Топливо: {0}}"
+           Foreground="#6E6A78"
+           TextWrapping="Wrap" />
+
+<TextBlock Text="{Binding SelectedGraphNodeHeatText, StringFormat=Накопленное тепло: {0}}"
+           Foreground="#6E6A78"
+           TextWrapping="Wrap" />
+
+<TextBlock Text="{Binding SelectedGraphNodeBurningElapsedText, StringFormat=Время горения: {0}}"
+           Foreground="#6E6A78"
+           TextWrapping="Wrap" />
+
             </StackPanel>
         </Border>
 
-        <Border Background="#F5FBFF"
-                BorderBrush="#D7E6F2"
+        <Border Background="#F8F5FF"
+                BorderBrush="#E6DFF1"
                 BorderThickness="1"
                 CornerRadius="10"
                 Padding="10"
                 IsVisible="{Binding HasSelectedGraphEdge}">
             <StackPanel Spacing="6">
+
                 <TextBlock Text="{Binding SelectedGraphEdgeTitle}"
                            Foreground="#2F2A3A"
                            FontWeight="Bold"
                            TextWrapping="Wrap" />
 
-                <TextBlock Text="{Binding SelectedGraphEdgeTypeText, StringFormat=Тип: {0}}"
+                <TextBlock Text="{Binding SelectedGraphEdgeTypeText, StringFormat=Тип связи: {0}}"
                            Foreground="#6E6A78"
                            TextWrapping="Wrap" />
 
@@ -949,13 +964,14 @@
                            Foreground="#6E6A78"
                            TextWrapping="Wrap" />
 
-                <TextBlock Text="{Binding SelectedGraphEdgeSpreadText, StringFormat=Сила передачи огня: {0}}"
+                <TextBlock Text="{Binding SelectedGraphEdgeSpreadText, StringFormat=Коэффициент распространения: {0}}"
                            Foreground="#6E6A78"
                            TextWrapping="Wrap" />
 
                 <TextBlock Text="{Binding SelectedGraphEdgeHeatText, StringFormat=Накопленное тепло: {0}}"
                            Foreground="#6E6A78"
                            TextWrapping="Wrap" />
+
             </StackPanel>
         </Border>
 
@@ -1006,7 +1022,11 @@
                            Foreground="#6E6A78"
                            TextWrapping="Wrap" />
 
-               <TextBlock Text="{Binding SelectedGridCellProbabilityText, StringFormat=Локальная вероятность воспламенения: {0}}"
+            <TextBlock Text="{Binding SelectedGridCellBaseProbabilityText, StringFormat=Базовый риск клетки: {0}}"
+           Foreground="#6E6A78"
+           TextWrapping="Wrap" />
+
+<TextBlock Text="{Binding SelectedGridCellStepProbabilityText, StringFormat=Вероятность на текущем шаге: {0}}"
            Foreground="#6E6A78"
            TextWrapping="Wrap" />
 

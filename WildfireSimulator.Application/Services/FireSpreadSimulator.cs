@@ -607,80 +607,50 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
             if (isGrid)
             {
-                if (sourceCount >= 2 && ratio >= 0.50)
+                if (sourceCount >= 2 && ratio >= 0.35)
                 {
-                    double multiSourceFactor = 1.0 + Math.Min(0.26, (sourceCount - 1) * 0.09);
+                    double multiSourceFactor = 1.0 + Math.Min(0.35, (sourceCount - 1) * 0.12);
                     accumulatedHeat *= multiSourceFactor;
-                    ratio = accumulatedHeat / threshold;
-                }
-
-                if (ratio >= 0.56 && ratio < 1.0)
-                {
-                    double boost = ratio switch
-                    {
-                        >= 0.92 => 1.13,
-                        >= 0.82 => 1.09,
-                        >= 0.72 => 1.05,
-                        _ => 1.02
-                    };
-
-                    accumulatedHeat *= boost;
                     ratio = accumulatedHeat / threshold;
                 }
 
                 target.SetAccumulatedHeatJ(accumulatedHeat);
 
-                double probability = _calculator.CalculateIgnitionProbability(accumulatedHeat, threshold);
+                double baseRisk = CalculateBaseIgnitionRisk(target);
+                double heatFactor = _calculator.CalculateIgnitionProbability(accumulatedHeat, threshold);
 
-                if (transientHeat > 0.0)
+                if (heatFactor <= 0.0)
                 {
-                    double diagnosticProbability = Math.Clamp(ratio * 0.012, 0.001, 0.030);
-
-                    if (sourceCount >= 1)
-                        probability = Math.Max(probability, diagnosticProbability);
-                }
-
-                if (ratio < 0.56)
-                {
-                    probability = Math.Min(probability, 0.020);
-                    target.SetBurnProbability(probability);
+                    target.SetBurnProbability(0.0);
                     continue;
                 }
 
-                if (ratio < 0.66)
-                {
-                    probability = Math.Min(probability * 0.30, 0.035);
-                }
-                else if (ratio < 0.76)
-                {
-                    probability = Math.Min(probability * 0.42, 0.065);
-                }
-                else if (ratio < 0.86)
-                {
-                    probability = Math.Min(probability * 0.56, 0.105);
-                }
-                else if (ratio < 0.96)
-                {
-                    probability = Math.Min(probability * 0.70, 0.155);
-                }
-                else if (ratio < 1.0)
-                {
-                    probability = Math.Min(probability * 0.82, 0.210);
-                }
-                else
-                {
-                    probability = Math.Max(probability, 0.38);
-                }
+                double fuelFactor = target.FuelLoad > 0.0
+                    ? Math.Clamp(target.CurrentFuelLoad / target.FuelLoad, 0.15, 1.0)
+                    : 0.0;
 
-                if (sourceCount >= 2 && ratio >= 0.70)
-                    probability = Math.Max(probability, 0.060);
+                double sourceFactor = sourceCount switch
+                {
+                    <= 0 => 1.0,
+                    1 => 1.0,
+                    2 => 1.15,
+                    3 => 1.28,
+                    _ => 1.38
+                };
 
-                if (sourceCount >= 3 && ratio >= 0.64)
-                    probability = Math.Max(probability, 0.085);
+                double probability = baseRisk * heatFactor * fuelFactor * sourceFactor;
+
+                if (ratio >= 0.75)
+                    probability = Math.Max(probability, baseRisk * 0.85);
+
+                if (ratio >= 1.0)
+                    probability = Math.Max(probability, Math.Max(0.65, baseRisk));
+
+                probability = Math.Clamp(probability, 0.0, 0.95);
 
                 target.SetBurnProbability(probability);
 
-                if (probability < 0.004 && ratio < 0.68)
+                if (probability < 0.001)
                     continue;
 
                 candidates.Add((target, probability, accumulatedHeat, threshold, ratio));
@@ -748,6 +718,29 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         }
 
         return candidates;
+    }
+    private static double CalculateBaseIgnitionRisk(ForestCell cell)
+    {
+        if (cell.Vegetation == VegetationType.Water || cell.Vegetation == VegetationType.Bare)
+            return 0.0;
+
+        if (cell.CurrentFuelLoad <= 0.0)
+            return 0.0;
+
+        var parameters = FireModelCatalog.Get(cell.Vegetation);
+
+        double moistureFactor = cell.Moisture >= parameters.MoistureOfExtinction
+            ? 0.2
+            : 1.0 - (cell.Moisture / parameters.MoistureOfExtinction) * 0.8;
+
+        double fuelFactor = cell.FuelLoad > 0.0
+            ? Math.Clamp(cell.CurrentFuelLoad / cell.FuelLoad, 0.15, 1.0)
+            : 0.0;
+
+        return Math.Clamp(
+            parameters.BaseIgnitionCoefficient * moistureFactor * fuelFactor,
+            0.0,
+            0.95);
     }
     private double GetResidualEdgeHeatForTarget(ForestGraph graph, ForestCell target)
     {
