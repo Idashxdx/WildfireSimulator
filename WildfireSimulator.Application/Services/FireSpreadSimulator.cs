@@ -63,7 +63,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
             int totalNewlyIgnited = 0;
 
             _logger.LogInformation(
-                "🔥 ШАГ {Step}: внешний шаг={StepDuration}s, внутренний подшаг={InternalStep}s",
+                "  ШАГ {Step}: внешний шаг={StepDuration}s, внутренний подшаг={InternalStep}s",
                 currentStep,
                 stepDurationSeconds,
                 internalStepSeconds);
@@ -449,7 +449,13 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
         double rainLevel = localRainPercent / 100.0;
 
+        // Формула (12): K_prec = 1 / (1 + k_r · R_norm) · K_moist 
+        // Локальный коэффициент осадков уменьшает тепловой поток,
+        // если источник или целевой участок попали во фронт осадков.
         double directCoolingFactor = 1.0 / (1.0 + rainLevel * 4.8);
+        // Коэффициент осадков из формулы (12) применяется отдельно
+        // в FireSpreadSimulator.ApplyLocalPrecipitationHeatFactor().
+
         directCoolingFactor = Math.Clamp(directCoolingFactor, 0.18, 1.0);
 
         double moistureShieldFactor = 1.0 - Math.Clamp(target.Moisture, 0.0, 1.0) * 0.22;
@@ -476,6 +482,9 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         return (x / length, y / length);
     }
 
+    // Формула (19): Q_bridge,ij = Q_crit(j) * k_press * N_burn_src * γ(d_ij)
+    // Дополнительное тепло давления моста для межкластерных коридоров.
+    // Возникает, когда в кластере-источнике уже есть достаточно активных/затронутых вершин.
     private double CalculateBridgePressureHeat(
        ForestGraph graph,
        ForestCell source,
@@ -536,6 +545,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
         pressure = Math.Clamp(pressure, 0.0, 0.030);
 
+        // γ(d_ij) из формулы (19): ослабление давления моста с ростом расстояния.
         double distanceFactor = edge.Distance switch
         {
             <= 3.0 => 0.85,
@@ -563,7 +573,10 @@ public class FireSpreadSimulator : IFireSpreadSimulator
     }
     private void CoolDownEdgeHeat(ForestGraph graph, double stepDurationSeconds)
     {
+        // Формула (17): Q_mem,ij(t + Δt) = Q_mem,ij(t) * exp(-Δt / τ_edge)
+        // τ_edge = 300 секунд. Считаем коэффициент затухания памяти ребра.
         double retentionFactor = Math.Exp(-stepDurationSeconds / 300.0);
+
         retentionFactor = Math.Clamp(retentionFactor, 0.0, 1.0);
 
         foreach (var edge in graph.Edges)
@@ -602,11 +615,22 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                 continue;
             }
 
+            // Формулы (20)-(21):
+            // Q_total = Q_cell_acc + Q_edge_acc + сумма новых тепловых потоков.
+            // target.AccumulatedHeatJ — накопленное тепло участка,
+            // transientHeat — новое тепло от горящих источников,
+            // residualEdgeHeat — остаточное тепло инцидентных ребер.
             double accumulatedHeat = target.AccumulatedHeatJ + transientHeat + residualEdgeHeat;
+
+            // Формула (23): R = Q_total / Q_crit
+            // После суммирования теплового воздействия вычисляем отношение тепла к порогу.
             double ratio = accumulatedHeat / threshold;
 
             if (isGrid)
             {
+                // Формула (14): K_src_grid = 1.0 + 0.12 * min(N_src - 1, 3)
+                // Для сеточной модели усиливаем накопленное тепло,
+                // если на клетку воздействует несколько горящих соседей.
                 if (sourceCount >= 2 && ratio >= 0.35)
                 {
                     double multiSourceFactor = 1.0 + Math.Min(0.35, (sourceCount - 1) * 0.12);
@@ -629,6 +653,9 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                     ? Math.Clamp(target.CurrentFuelLoad / target.FuelLoad, 0.15, 1.0)
                     : 0.0;
 
+
+                // Формула (24): K_src = 1.0 + 0.12 * (N_src - 1)
+                // Дискретная реализация множителя числа источников для сетки.
                 double sourceFactor = sourceCount switch
                 {
                     <= 0 => 1.0,
@@ -638,6 +665,9 @@ public class FireSpreadSimulator : IFireSpreadSimulator
                     _ => 1.38
                 };
 
+                // Формула (25): итоговая вероятность воспламенения.
+                // Для сетки объединяем базовый риск участка, тепловой фактор,
+                // оставшееся топливо и множитель числа источников.
                 double probability = baseRisk * heatFactor * fuelFactor * sourceFactor;
 
                 if (ratio >= 0.75)
@@ -659,6 +689,9 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
             if (sourceCount >= 2)
             {
+                // Формула (24): K_src = 1.0 + 0.12 * (N_src - 1)
+                // Для графовой модели несколько источников усиливают накопленное тепло.
+                // В реализации используется близкий эмпирический коэффициент 0.14 с ограничением сверху.
                 double multiSourceFactor = 1.0 + Math.Min(0.42, (sourceCount - 1) * 0.14);
                 accumulatedHeat *= multiSourceFactor;
                 ratio = accumulatedHeat / threshold;
@@ -680,6 +713,9 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
             target.SetAccumulatedHeatJ(accumulatedHeat);
 
+            // Формула (25): итоговая вероятность воспламенения для графовой модели.
+            // Базовая вероятность берется из CalculateIgnitionProbability,
+            // затем усиливается с учетом новых тепловых потоков, числа источников и отношения R.
             double graphProbability = _calculator.CalculateIgnitionProbability(accumulatedHeat, threshold);
 
             if (transientHeat > 0.0)
@@ -719,6 +755,10 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
         return candidates;
     }
+
+    // Формула (13): P_base,i = clamp(k_ign * moistureFactor * fuelFactor, 0.0, 0.95)
+    // Расчет базового риска воспламенения для кандидата на возгорание.
+    // Учитываются тип растительности, влажность и оставшийся запас топлива.
     private static double CalculateBaseIgnitionRisk(ForestCell cell)
     {
         if (cell.Vegetation == VegetationType.Water || cell.Vegetation == VegetationType.Bare)
@@ -742,6 +782,9 @@ public class FireSpreadSimulator : IFireSpreadSimulator
             0.0,
             0.95);
     }
+    // Формула (18): Q_edge_acc(j) = sum(Q_mem,kj)
+    // Собирает остаточное тепло с ребер, инцидентных целевой вершине.
+    // В реализации используется взвешенная сумма: ближайшие/сильнейшие вклады учитываются сильнее.
     private double GetResidualEdgeHeatForTarget(ForestGraph graph, ForestCell target)
     {
         var orderedEdgeHeat = graph.GetIncidentEdges(target)
@@ -757,9 +800,15 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         double secondaryContribution = orderedEdgeHeat.Skip(1).Take(2).Sum() * 0.25;
         double tertiaryContribution = orderedEdgeHeat.Skip(3).Sum() * 0.05;
 
+        // Взвешенная реализация формулы (18): суммарное остаточное тепло от инцидентных ребер.
         double coupledHeat = primaryContribution + secondaryContribution + tertiaryContribution;
         return Math.Clamp(coupledHeat, 0.0, 2_500_000.0);
     }
+
+    // Формула (16): Q_mem,ij = Q_edge,ij * k_mem * δ_dist
+    // Переводит часть переданного теплового потока в память ребра.
+    // В реализации формула расширена: учитываются коэффициент ребра,
+    // длительность шага и бонус для межкластерных мостов/коридоров.
     private double ConvertToEdgeMemoryHeat(
      double heatFlow,
      ForestEdge edge,
@@ -790,6 +839,8 @@ public class FireSpreadSimulator : IFireSpreadSimulator
             ? edge.IsCorridor ? 2.60 : 2.10
             : 1.00;
 
+        // k_mem = 0.022 из формулы (16).
+        // distanceFactor соответствует δ_dist, остальные множители уточняют модель.
         double memoryFraction =
             0.022 *
             distanceFactor *
@@ -799,6 +850,10 @@ public class FireSpreadSimulator : IFireSpreadSimulator
 
         return heatFlow * memoryFraction;
     }
+
+    // Формула (15): Q_edge,ij = Q_base,ij * mod_ij
+    // Корректирует базовый тепловой поток с учетом параметров ребра:
+    // расстояния, уклона, типа связи и топологии графа.
     private double ApplyEdgeAwareTransferAdjustment(
      ForestGraph graph,
      ForestCell source,
@@ -809,6 +864,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         if (baseHeatFlow <= 0.0)
             return 0.0;
 
+        // mod_ij из формулы (15): коэффициент распространения, сохраненный в ребре.
         double edgeModifier = Math.Clamp(edge.FireSpreadModifier, 0.02, 1.60);
         var topology = DetectTopology(graph);
 
@@ -1100,33 +1156,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         return Math.Clamp(factor, 0.82, 1.35);
     }
 
-    private double GetGeometricAxisBias(
-        ForestCell source,
-        ForestCell target,
-        ForestGraph graph)
-    {
-        if (graph.Width <= 0 || graph.Height <= 0)
-            return 1.0;
 
-        double centerX = graph.Width / 2.0;
-        double centerY = graph.Height / 2.0;
-
-        double sourceRadius = CalculateDistance(source.X, source.Y, centerX, centerY);
-        double targetRadius = CalculateDistance(target.X, target.Y, centerX, centerY);
-
-        double radialDelta = targetRadius - sourceRadius;
-
-        if (graph.Cells.Count >= 80)
-        {
-            if (radialDelta > 0.75)
-                return 1.04;
-
-            if (radialDelta < -0.75)
-                return 0.98;
-        }
-
-        return 1.0;
-    }
     private int CountInterClusterNeighbors(ForestGraph graph, ForestCell cell)
     {
         if (string.IsNullOrWhiteSpace(cell.ClusterId))
@@ -1475,24 +1505,27 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         return newlyIgnited;
     }
 
+    // Формула (28): участок воспламеняется, если P_ignite >= r(x, y)
+    // r(x, y) — детерминированное псевдослучайное значение,
+    // зависящее от координат участка. Это делает результат воспроизводимым.
     private bool ShouldIgniteDeterministically(
-      ForestCell cell,
-      double probability,
-      double ratio)
+        ForestCell cell,
+        double probability,
+        double ratio)
     {
         if (probability <= 0.0 || ratio <= 0.0)
             return false;
 
-        if (ratio >= 1.0)
+        if (ratio >= 1.25)
             return true;
 
         if (probability >= 0.995)
             return true;
 
-        if (ratio >= 0.85 && probability >= 0.20)
+        if (ratio >= 0.95 && probability >= 0.35)
             return true;
 
-        if (ratio >= 0.70 && probability >= 0.10)
+        if (ratio >= 0.80 && probability >= 0.18)
             return true;
 
         if (ratio >= 0.58 && probability >= 0.16)
@@ -1501,10 +1534,14 @@ public class FireSpreadSimulator : IFireSpreadSimulator
         if (ratio >= 0.48 && probability >= 0.24)
             return true;
 
+        // Формула (28): сравнение итоговой вероятности с детерминированным порогом.
         double ignitionRoll = GetDeterministicRoll(cell.X, cell.Y);
 
         return probability >= ignitionRoll;
     }
+    // Формула (28): генерация r(x, y)
+    // Возвращает воспроизводимое значение в диапазоне [0, 1)
+    // на основе координат участка.
     private double GetDeterministicRoll(int x, int y)
     {
         ulong hash = 1469598103934665603UL;
@@ -1559,7 +1596,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
        WeatherCondition weather,
        List<(int X, int Y)>? fixedPositions = null)
     {
-        _logger.LogInformation("🔥 Инициализация пожара: запрошено {Count} очагов", initialFireCellsCount);
+        _logger.LogInformation("  Инициализация пожара: запрошено {Count} очагов", initialFireCellsCount);
 
         if (initialFireCellsCount <= 0)
             return await Task.FromResult(graph);
@@ -1791,57 +1828,7 @@ public class FireSpreadSimulator : IFireSpreadSimulator
             .Select(x => x.Cell)
             .ToList();
     }
-    private int FindNearestBridgeHopDistance(ForestGraph graph, ForestCell start)
-    {
-        if (string.IsNullOrWhiteSpace(start.ClusterId))
-            return int.MaxValue;
 
-        var visited = new HashSet<Guid> { start.Id };
-        var queue = new Queue<(ForestCell Cell, int Depth)>();
-        queue.Enqueue((start, 0));
-
-        while (queue.Count > 0)
-        {
-            var current = queue.Dequeue();
-
-            if (IsBridgeSupportNode(graph, current.Cell))
-                return current.Depth;
-
-            foreach (var neighbor in graph.GetNeighbors(current.Cell))
-            {
-                if (neighbor.State != CellState.Normal)
-                    continue;
-
-                if (neighbor.ClusterId != start.ClusterId)
-                    continue;
-
-                if (!visited.Add(neighbor.Id))
-                    continue;
-
-                queue.Enqueue((neighbor, current.Depth + 1));
-            }
-        }
-
-        return int.MaxValue;
-    }
-    private bool IsBridgeSupportNode(ForestGraph graph, ForestCell cell)
-    {
-        if (string.IsNullOrWhiteSpace(cell.ClusterId))
-            return false;
-
-        int sameClusterNeighbors = 0;
-        int interClusterNeighbors = 0;
-
-        foreach (var neighbor in graph.GetNeighbors(cell))
-        {
-            if (neighbor.ClusterId == cell.ClusterId)
-                sameClusterNeighbors++;
-            else
-                interClusterNeighbors++;
-        }
-
-        return interClusterNeighbors > 0 && sameClusterNeighbors >= 2;
-    }
     private ForestCell CreateVirtualInitialSource(ForestCell original)
     {
         var source = new ForestCell(

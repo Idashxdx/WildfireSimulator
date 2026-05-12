@@ -199,7 +199,7 @@ public class KafkaStreamsService : BackgroundService
 
     private async Task ConsumeLoop(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("🔄 Запуск цикла потребления сообщений");
+        _logger.LogInformation("  Запуск цикла потребления сообщений");
 
         try
         {
@@ -325,8 +325,13 @@ public class KafkaStreamsService : BackgroundService
                     state.LastForecastSourceStep.HasValue &&
                     state.LastForecastSourceStep.Value == step - 1)
                 {
+                    // Формула (36): e_t = |A_t - A_pred,t|
+                    // Абсолютная ошибка предыдущего прогноза после получения фактической площади текущего шага.
                     var absError = Math.Abs(fireArea - state.LastForecastForNextStep.Value);
                     state.LastForecastAbsoluteError = absError;
+
+                    // Формула (37): MAE = (1 / n) * sum(e_t)
+                    // Потоковый пересчет средней абсолютной ошибки без хранения всех прошлых ошибок.
                     state.ForecastErrorCount++;
 
                     if (state.ForecastErrorCount == 1)
@@ -391,6 +396,9 @@ public class KafkaStreamsService : BackgroundService
         var history = state.AreaHistory.OrderBy(p => p.Step).ToList();
         var count = history.Count;
 
+        // Формула (29): SMA_k(t) = (1 / k) * sum(A_i)
+        // Простое скользящее среднее площади пожара.
+        // Используются окна 3, 5 и 10 шагов для анализа динамики на разных масштабах.
         if (count >= 3)
             state.MovingAverage3 = history.TakeLast(3).Average(p => p.Area);
 
@@ -399,12 +407,15 @@ public class KafkaStreamsService : BackgroundService
 
         if (count >= 10)
             state.MovingAverage10 = history.TakeLast(10).Average(p => p.Area);
-
+        // Формула (30): v_t = A_t - A_(t-1)
+        // Скорость изменения площади пожара как первая разность соседних значений.
         if (count >= 2)
         {
             state.Speed = history[^1].Area - history[^2].Area;
         }
 
+        // Формула (31): a_t = v_t - v_(t-1)
+        // Ускорение изменения площади как вторая разность временного ряда.
         if (count >= 3)
         {
             var speed1 = history[^2].Area - history[^3].Area;
@@ -412,6 +423,9 @@ public class KafkaStreamsService : BackgroundService
             state.Acceleration = speed2 - speed1;
         }
 
+        // Формула (32): A_t > k_a * A_avg или A_t < (1 / k_a) * A_avg
+        // Обнаружение аномалии по сравнению текущей площади со средним предыдущих значений.
+        // В реализации k_a = 2.0, поэтому нижняя граница равна 0.5 * A_avg.
         if (count >= 4)
         {
             var last = history[^1].Area;
@@ -429,6 +443,8 @@ public class KafkaStreamsService : BackgroundService
             recentDiffs.Add(history[i].Area - history[i - 1].Area);
         }
 
+        // Резервный прогноз до накопления точек для формул (33)-(35):
+        // используем среднее изменение площади за последние шаги.
         var avgRecentDelta = recentDiffs.Count > 0 ? recentDiffs.Average() : state.Speed;
         var fallbackForecast = Math.Max(0.0, history[^1].Area + avgRecentDelta);
 
@@ -462,11 +478,16 @@ public class KafkaStreamsService : BackgroundService
             return null;
 
         var ordered = points.OrderBy(p => p.Step).ToList();
+
+        // Формула (35): A_pred(t + 1) = a + b * x_(t+1)
+        // Прогнозируем площадь пожара на следующий шаг.
         double nextStep = ordered[^1].Step + 1;
 
         double xMean = ordered.Average(p => (double)p.Step);
         double yMean = ordered.Average(p => p.Area);
 
+        // Формула (33): b = sum((x_i - x_avg) * (A_i - A_avg)) / sum((x_i - x_avg)^2)
+        // Расчет коэффициента наклона линейной регрессии для прогноза площади пожара.
         double numerator = 0.0;
         double denominator = 0.0;
 
@@ -483,6 +504,9 @@ public class KafkaStreamsService : BackgroundService
             return null;
 
         double slope = numerator / denominator;
+
+        // Формула (34): a = A_avg - b * x_avg
+        // Свободный коэффициент линейной регрессии.
         double intercept = yMean - slope * xMean;
 
         if (double.IsNaN(slope) || double.IsInfinity(slope) ||
@@ -491,6 +515,7 @@ public class KafkaStreamsService : BackgroundService
             return null;
         }
 
+        //Формула (35)
         var predicted = intercept + slope * nextStep;
 
         if (double.IsNaN(predicted) || double.IsInfinity(predicted))

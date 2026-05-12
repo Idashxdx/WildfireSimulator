@@ -468,6 +468,7 @@ public async Task<IActionResult> Create([FromBody] CreateSimulationWithWeatherRe
         var dy = y2 - y1;
         return Math.Sqrt(dx * dx + dy * dy);
     }
+    
     private static void ApplyPreparedSurfaceBarrierEdgeModifiers(ForestGraph graph)
     {
         foreach (var edge in graph.Edges)
@@ -541,38 +542,6 @@ public async Task<IActionResult> Create([FromBody] CreateSimulationWithWeatherRe
         }
     }
 
-    [HttpGet("{id}/weather")]
-    public async Task<IActionResult> GetSimulationWeather(Guid id, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var simulation = await _simulationRepository.GetByIdAsync(id, cancellationToken);
-            if (simulation == null)
-                return NotFound($"Симуляция с ID {id} не найдена");
-
-            var weather = await _context.WeatherConditions
-                .FirstOrDefaultAsync(w => w.Id == simulation.WeatherConditionId, cancellationToken);
-
-            if (weather == null)
-                return NotFound($"Погодные условия для симуляции {id} не найдены");
-
-            return Ok(new
-            {
-                temperature = weather.Temperature,
-                humidity = weather.Humidity,
-                windSpeed = weather.WindSpeedMps,
-                windDirectionDegrees = weather.WindDirectionDegrees,
-                windDirection = weather.WindDirection.ToString(),
-                precipitation = weather.Precipitation,
-                timestamp = weather.Timestamp
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Ошибка при получении погоды для симуляции с ID {Id}", id);
-            return StatusCode(500, "Внутренняя ошибка сервера");
-        }
-    }
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {

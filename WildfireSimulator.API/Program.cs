@@ -118,7 +118,7 @@ using (var scope = app.Services.CreateScope())
        var pendingMigrations = await dbContext.Database.GetPendingMigrationsAsync();
        if (pendingMigrations.Any())
        {
-           logger.LogInformation("📦 Накатываем миграции: {Migrations}", string.Join(", ", pendingMigrations));
+           logger.LogInformation("  Накатываем миграции: {Migrations}", string.Join(", ", pendingMigrations));
            await dbContext.Database.MigrateAsync();
        }
        else

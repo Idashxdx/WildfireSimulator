@@ -336,21 +336,21 @@ public partial class SimulationManager
 
         if (simulation.HasSavedGraph())
         {
-            _logger.LogInformation("📦 Используем сохранённый граф для симуляции {SimulationId}", simulation.Id);
+            _logger.LogInformation("  Используем сохранённый граф для симуляции {SimulationId}", simulation.Id);
 
             graph = simulation.LoadGraph()
                 ?? throw new InvalidOperationException($"Не удалось загрузить граф для симуляции {simulation.Id}");
         }
         else
         {
-            _logger.LogInformation("🆕 Сохранённого графа нет, генерируем новый для симуляции {SimulationId}", simulation.Id);
+            _logger.LogInformation(" Сохранённого графа нет, генерируем новый для симуляции {SimulationId}", simulation.Id);
 
             graph = await CreateBaseGraphAsync(simulation, graphGenerator);
 
             simulation.SaveGraph(graph);
             await simulationRepo.UpdateAsync(simulation);
 
-            _logger.LogInformation("💾 Базовый граф без очагов сохранён для симуляции {SimulationId}", simulation.Id);
+            _logger.LogInformation(" Базовый граф без очагов сохранён для симуляции {SimulationId}", simulation.Id);
         }
 
         graph.StepDurationSeconds = simulation.Parameters.StepDurationSeconds > 0
@@ -384,7 +384,7 @@ public partial class SimulationManager
         {
             ignitionPositions = new List<(int X, int Y)>();
             _logger.LogInformation(
-                "🎲 Запуск со случайной генерацией очагов: requested={Count}",
+                "  Запуск со случайной генерацией очагов: requested={Count}",
                 simulation.Parameters.InitialFireCellsCount);
         }
 
@@ -417,7 +417,7 @@ public partial class SimulationManager
         simulation.SaveGraph(graphWithFire);
 
         _logger.LogInformation(
-            "💾 Сохранены стартовые позиции очагов: {Count} для симуляции {SimulationId}",
+            " Сохранены стартовые позиции очагов: {Count} для симуляции {SimulationId}",
             persistedPositions.Count,
             simulation.Id);
 
@@ -426,9 +426,9 @@ public partial class SimulationManager
 
         var burningCellsCount = burningCells.Count;
 
-        _logger.LogInformation("🔥 Начальный пожар инициализирован на {BurningCells} клетках", burningCellsCount);
+        _logger.LogInformation("  Начальный пожар инициализирован на {BurningCells} клетках", burningCellsCount);
 
-        _logger.LogInformation("📤 Отправка SimulationStart в Kafka для {SimulationId}", simulation.Id);
+        _logger.LogInformation("  Отправка SimulationStart в Kafka для {SimulationId}", simulation.Id);
         await _kafkaFacade.SendSimulationStart(
             simulation.Id,
             simulation.Name,
@@ -481,7 +481,7 @@ public partial class SimulationManager
                 ?? throw new InvalidOperationException($"Не удалось загрузить граф для симуляции {simulationId}");
 
             _logger.LogInformation(
-                "📦 Для симуляции {SimulationId} уже есть сохранённый граф, используем его для предпросмотра",
+                "  Для симуляции {SimulationId} уже есть сохранённый граф, используем его для предпросмотра",
                 simulationId);
         }
         else
@@ -491,7 +491,7 @@ public partial class SimulationManager
             await simulationRepo.UpdateAsync(simulation);
 
             _logger.LogInformation(
-                "💾 Для симуляции {SimulationId} сгенерирован и сохранён граф без очагов",
+                " Для симуляции {SimulationId} сгенерирован и сохранён граф без очагов",
                 simulationId);
         }
 
@@ -600,7 +600,7 @@ public partial class SimulationManager
         activeSimulation.CurrentStep++;
 
         _logger.LogInformation(
-            "📢 Выполнение шага {Step} для симуляции {SimulationId}",
+            " Выполнение шага {Step} для симуляции {SimulationId}",
             activeSimulation.CurrentStep, simulationId);
 
         using var scope = _scopeFactory.CreateScope();
@@ -678,7 +678,7 @@ public partial class SimulationManager
 
     private async Task SendEventsToKafka(SimulationStepResult stepResult, ActiveSimulation activeSimulation)
     {
-        _logger.LogInformation("📤 SendEventsToKafka: отправка метрик для шага {Step}, площадь={Area:F1} га",
+        _logger.LogInformation("  SendEventsToKafka: отправка метрик для шага {Step}, площадь={Area:F1} га",
             stepResult.Step, stepResult.FireArea);
 
         await _kafkaFacade.SendMetrics(
@@ -794,7 +794,7 @@ public partial class SimulationManager
     {
         await EnsureInitializedAsync();
 
-        _logger.LogInformation("🔄 Запрос на перезапуск симуляции {SimulationId}", simulationId);
+        _logger.LogInformation("  Запрос на перезапуск симуляции {SimulationId}", simulationId);
 
         using var scope = _scopeFactory.CreateScope();
         var simulationRepo = scope.ServiceProvider.GetRequiredService<ISimulationRepository>();
@@ -849,12 +849,12 @@ public partial class SimulationManager
         _logger.LogInformation("✅ Статус симуляции сброшен на Created");
 
         await activeRepo.DeleteBySimulationIdAsync(simulationId);
-        _logger.LogInformation("🗑 Active-record удалён");
+        _logger.LogInformation("  Active-record удалён");
 
         if (_activeSimulations.ContainsKey(simulationId))
         {
             _activeSimulations.Remove(simulationId);
-            _logger.LogInformation("🗑 Симуляция удалена из памяти");
+            _logger.LogInformation("  Симуляция удалена из памяти");
         }
 
         _logger.LogInformation(
@@ -925,7 +925,7 @@ public partial class SimulationManager
     {
         await EnsureInitializedAsync();
 
-        _logger.LogInformation("🔁 Обновление стартовых очагов для симуляции {SimulationId}", simulationId);
+        _logger.LogInformation("  Обновление стартовых очагов для симуляции {SimulationId}", simulationId);
 
         using var scope = _scopeFactory.CreateScope();
         var simulationRepo = scope.ServiceProvider.GetRequiredService<ISimulationRepository>();

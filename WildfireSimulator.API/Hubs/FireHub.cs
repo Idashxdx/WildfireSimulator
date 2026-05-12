@@ -79,14 +79,5 @@ public class FireHub : Hub
         await Clients.Caller.SendAsync("Unsubscribed", new { simulationId });
     }
     
-    public async Task BroadcastToSimulation(string simulationId, string eventType, object data)
-    {
-        await Clients.Group($"simulation-{simulationId}").SendAsync(eventType, data);
-    }
-    
-    public async Task GetActiveSimulations()
-    {
-        var activeSims = _simulationSubscriptions.Keys.ToList();
-        await Clients.Caller.SendAsync("ActiveSimulations", activeSims);
-    }
+  
 }

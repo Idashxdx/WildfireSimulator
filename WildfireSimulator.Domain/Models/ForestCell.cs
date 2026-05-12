@@ -191,6 +191,8 @@ public class ForestCell
 
 
 
+    // Формула (27): Q_cell_acc(t + Δt) = Q_cell_acc(t) * retentionFactor
+    // Охлаждает накопленное тепло нормального участка.
     public void CoolDown(double retentionFactor)
     {
         if (State != CellState.Normal)
@@ -226,19 +228,18 @@ public class ForestCell
         FireStage = FireStage.Ignition;
         AccumulatedHeatJ = 0.0;
 
-        var initialElapsed = 0.0;
-        if (ignitionTime.Kind != DateTimeKind.Unspecified)
-        {
-            initialElapsed = Math.Max(0.0, (DateTime.UtcNow - ignitionTime).TotalSeconds);
-        }
-
-        BurningElapsedSeconds = initialElapsed;
+        BurningElapsedSeconds = 0.0;
 
         double initialBurnRateMps = Math.Max(0.001, BurnRate / Math.Max(0.1, _fuelProps.BulkDensity));
         FireIntensity = _fuelProps.HeatOfCombustion * CurrentFuelLoad * initialBurnRateMps / 1000.0;
         FireIntensity = Math.Clamp(FireIntensity, 0.0, 50000.0);
     }
 
+
+    // Формула (26): обновление горящего участка.
+    // t_burn(t + Δt) = t_burn(t) + Δt,
+    // F(t + Δt) = F(t) - ΔF.
+    // Увеличивает время горения и уменьшает текущий запас топлива.
     public void UpdateBurn(TimeSpan elapsedTime, double windEffect, double slopeEffect = 1.0)
     {
         if (State != CellState.Burning || CurrentFuelLoad <= 0.0)
@@ -254,8 +255,12 @@ public class ForestCell
         double progress = BurningElapsedSeconds / totalBurnoutTimeSeconds;
         progress = Math.Clamp(progress, 0.0, 1.2);
 
-        if (BurningElapsedSeconds >= totalBurnoutTimeSeconds)
+        if (
+     BurningElapsedSeconds >= totalBurnoutTimeSeconds
+     || CurrentFuelLoad <= FuelLoad * 0.02
+ )
         {
+            CurrentFuelLoad = 0;
             Extinguish(DateTime.UtcNow);
             return;
         }
@@ -336,6 +341,9 @@ public class ForestCell
         return _modelParameters.BaseBurnDurationSeconds;
     }
 
+    // Формула (13): P_base,i = clamp(k_ign * moistureFactor * fuelFactor, 0.0, 0.95)
+    // Базовый риск воспламенения участка зависит только от собственных параметров:
+    // типа растительности, влажности и оставшегося топлива.
     private double CalculateBaseBurnProbability()
     {
         if (State != CellState.Normal || CurrentFuelLoad <= 0.0)

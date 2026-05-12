@@ -69,7 +69,7 @@ public class SimulationManagerController : ControllerBase
                 simulation.HasSavedGraph())
             {
                 _logger.LogInformation(
-                    "📦 Симуляция {SimulationId} завершена, но имеет сохранённый исходный граф. Выполняем replay от сохранённого состояния.",
+                    "  Симуляция {SimulationId} завершена, но имеет сохранённый исходный граф. Выполняем replay от сохранённого состояния.",
                     simulationId);
 
                 simulation.ResetForRestart();
@@ -79,7 +79,7 @@ public class SimulationManagerController : ControllerBase
             else if (simulation.Status == SimulationStatus.Created && simulation.HasSavedGraph())
             {
                 simulation.CachedGraph = null;
-                _logger.LogInformation("📦 Симуляция {SimulationId} имеет сохранённый граф, используем его.", simulationId);
+                _logger.LogInformation("  Симуляция {SimulationId} имеет сохранённый граф, используем его.", simulationId);
             }
             else if (simulation.Status == SimulationStatus.Running && simulation.HasSavedGraph())
             {
@@ -781,47 +781,7 @@ public class SimulationManagerController : ControllerBase
         }
     }
 
-    [HttpGet("active")]
-    public async Task<IActionResult> GetActiveSimulations()
-    {
-        try
-        {
-            var activeSimulations = await _simulationManager.GetAllSimulations();
-
-            return Ok(new
-            {
-                success = true,
-                count = activeSimulations.Count,
-                simulations = activeSimulations.Select(s => new
-                {
-                    id = s.Simulation.Id,
-                    name = s.Simulation.Name,
-                    currentStep = s.CurrentStep,
-                    isRunning = s.IsRunning,
-                    status = (int)s.Simulation.Status,
-                    graphType = s.Simulation.Parameters.GraphType,
-                    burningCells = s.TotalBurningCells,
-                    burnedCells = s.TotalBurnedCells,
-                    weather = new
-                    {
-                        windSpeed = s.CurrentWeather.WindSpeedMps,
-                        windDirection = s.CurrentWeather.WindDirection.ToString(),
-                        temperature = s.CurrentWeather.Temperature
-                    }
-                })
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Ошибка при получении списка активных симуляций");
-            return StatusCode(500, new
-            {
-                success = false,
-                message = "Ошибка при получении списка активных симуляций",
-                error = ex.Message
-            });
-        }
-    }
+   
 
     [HttpDelete("{simulationId}")]
     public async Task<IActionResult> DeleteSimulation(Guid simulationId)
@@ -886,7 +846,7 @@ public class SimulationManagerController : ControllerBase
                     if (graph != null)
                     {
                         _logger.LogInformation(
-                            "📦 Загружен или сгенерирован граф из БД для симуляции {SimulationId}",
+                            "  Загружен или сгенерирован граф из БД для симуляции {SimulationId}",
                             simulationId);
                     }
                 }
@@ -969,84 +929,20 @@ public class SimulationManagerController : ControllerBase
         await _context.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation(
-            "💾 Для симуляции {SimulationId} граф был сгенерирован и сохранён",
+            " Для симуляции {SimulationId} граф был сгенерирован и сохранён",
             simulation.Id);
 
         return graph;
     }
 
-    [HttpPost("{simulationId}/weather")]
-    public async Task<IActionResult> UpdateWeather(
-        Guid simulationId,
-        [FromBody] UpdateWeatherDto dto,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            _logger.LogInformation("Обновление погоды для симуляции {SimulationId}", simulationId);
-
-            var simulation = await _context.Simulations
-                .FirstOrDefaultAsync(s => s.Id == simulationId, cancellationToken);
-
-            if (simulation == null)
-            {
-                return NotFound(new { message = $"Симуляция {simulationId} не найдена" });
-            }
-
-            var newWeather = new WeatherCondition(
-                DateTime.UtcNow,
-                dto.Temperature,
-                dto.Humidity,
-                dto.WindSpeed,
-                dto.WindDirectionDegrees,
-                dto.Precipitation
-            );
-
-            await _context.WeatherConditions.AddAsync(newWeather, cancellationToken);
-            simulation.SetWeatherCondition(newWeather);
-
-            await _context.SaveChangesAsync(cancellationToken);
-
-            _logger.LogInformation(
-                "Погода обновлена: {Temp}°C, ветер {WindSpeed} м/с, направление {WindDir}°",
-                newWeather.Temperature,
-                newWeather.WindSpeedMps,
-                newWeather.WindDirectionDegrees);
-
-            return Ok(new
-            {
-                success = true,
-                message = "Погода обновлена",
-                weather = new
-                {
-                    temperature = newWeather.Temperature,
-                    humidity = newWeather.Humidity,
-                    windSpeed = newWeather.WindSpeedMps,
-                    windDirectionDegrees = newWeather.WindDirectionDegrees,
-                    windDirection = newWeather.WindDirection.ToString(),
-                    precipitation = newWeather.Precipitation,
-                    timestamp = newWeather.Timestamp
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Ошибка при обновлении погоды для симуляции {SimulationId}", simulationId);
-            return StatusCode(500, new
-            {
-                success = false,
-                message = "Ошибка при обновлении погоды",
-                error = ex.Message
-            });
-        }
-    }
+  
 
     [HttpPost("{simulationId}/reset")]
     public async Task<IActionResult> ResetSimulation(Guid simulationId, CancellationToken cancellationToken)
     {
         try
         {
-            _logger.LogInformation("🔄 Запрос на перезапуск симуляции {SimulationId}", simulationId);
+            _logger.LogInformation("  Запрос на перезапуск симуляции {SimulationId}", simulationId);
 
             var simulation = await _context.Simulations
                 .Include(s => s.Parameters)
@@ -1256,7 +1152,7 @@ public class SimulationManagerController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("🔁 Запрос на обновление стартовых очагов для симуляции {SimulationId}", simulationId);
+            _logger.LogInformation("  Запрос на обновление стартовых очагов для симуляции {SimulationId}", simulationId);
 
             var simulation = await _context.Simulations
                 .Include(s => s.Parameters)

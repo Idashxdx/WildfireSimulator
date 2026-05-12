@@ -1,80 +1,62 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
 
 echo "============================================================"
 echo " ЗАПУСК ВСЕХ ТЕСТОВ WILDFIRE SIMULATOR"
 echo "============================================================"
 echo ""
 
-echo "[1/2] Запуск unit-тестов..."
-dotnet test --filter "FullyQualifiedName~ComprehensivePhysicsTests" --no-build
+echo "[1/2] Unit-тесты формул и физики"
+echo ""
+
+dotnet test WildfireSimulator.Tests/WildfireSimulator.Tests.csproj \
+  --logger "console;verbosity=detailed" \
+  --verbosity normal \
+  --no-restore
+
+echo ""
 echo "✅ Unit-тесты пройдены"
 echo ""
 
-echo "[2/2] Запуск интеграционных тестов..."
+echo "[2/2] Runtime/API integration tests"
 
 TESTS=(
-    "10_step_duration_invariant.sh"
-    "14_absolute_growth_limit.sh"
-    "20_wind_strength_effect.sh"
-    "test_fire_spread_modifier_effect.sh"
-    "test_fire_spread_modifier_probability.sh"
-    "test_metrics_history_api.sh"
-    "test_precipitation_status.sh"
-    "test_slope_physics.sh"
-    "test_water_bare_do_not_ignite.sh"
-    "test_wind_direction_bias.sh"
-    "test_graph_scale_distinction.sh"
-    "test_graph_scale_reproducibility.sh"
-    "test_large_graph_corridor_logic.sh"
-    "test_medium_graph_cluster_cohesion.sh"
-    "test_small_graph_topology_profile.sh"
-    "test_large_graph_macro_corridor_scenario.sh"
-    "test_graph_scenario_distinction.sh"
-    "test_clustered_blueprint_validation.sh"
-    "test_clustered_blueprint_source_of_truth.sh"
-    "test_corridor_runtime_spread.sh"
-    "test_edge_memory_effect.sh"
-    "test_medium_graph_area_bridges.sh"
-    "test_baseline_not_dying_too_fast.sh"
-    "test_humidity_runtime_effect.sh"
-    "test_temperature_runtime_effect.sh"
-    "test_moving_precipitation_front.sh"
-    "test_precipitation_front_locality.sh"
-    "test_precipitation_strength_gradient.sh"
-    "test_precipitation_residual_moisture.sh"
-    "test_precipitation_reduces_burning_time.sh"
-
-
+  "10_grid_time_and_growth.sh"
+  "20_grid_weather_effects.sh"
+  "21_wind_direction_bias.sh"
+  "30_burnout_lifecycle_runtime.sh"
+  "40_water_bare_barrier.sh"
+  "50_precipitation_front_runtime.sh"
+  "60_metrics_history_api.sh"
+  "70_graph_topology_profiles.sh"
+  "80_graph_modifier_memory_runtime.sh"
+  "90_graph_corridor_runtime.sh"
 )
 
-cd tests
-
 FAILED=0
-for test in "${TESTS[@]}"; do
-    if [ -f "$test" ]; then
-        echo ""
-        echo "▶️ Запуск: $test"
-        if bash "$test"; then
-            echo "✅ $test пройден"
-        else
-            echo "❌ $test провален"
-            FAILED=$((FAILED + 1))
-        fi
-    else
-        echo "⚠️ Тест не найден: $test"
-    fi
-done
 
-cd ..
+for test in "${TESTS[@]}"; do
+  echo ""
+  echo "▶️ Запуск: $test"
+
+  if bash "tests/$test"; then
+    echo "✅ $test пройден"
+  else
+    echo "❌ $test провален"
+    FAILED=$((FAILED + 1))
+  fi
+done
 
 echo ""
 echo "============================================================"
-if [ $FAILED -eq 0 ]; then
-    echo "✅ ВСЕ ТЕСТЫ ПРОЙДЕНЫ"
+if [[ "$FAILED" -eq 0 ]]; then
+  echo "✅ ВСЕ ТЕСТЫ ПРОЙДЕНЫ"
 else
-    echo "❌ ПРОВАЛЕНО ТЕСТОВ: $FAILED"
+  echo "❌ ПРОВАЛЕНО ТЕСТОВ: $FAILED"
 fi
 echo "============================================================"
 
-exit $FAILED
+exit "$FAILED"

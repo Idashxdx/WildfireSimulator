@@ -35,7 +35,6 @@ public class SimulationCreationResult
 
     public bool UsePreparedMap => PreparedMap != null;
 
-    // Временно оставляем старые поля, чтобы не ломать остальной клиент (связанный с графом),
     public MapCreationMode SelectedMapCreationMode { get; set; } = MapCreationMode.Random;
     public MapScenarioType? SelectedScenarioType { get; set; }
     public ClusteredScenarioType? SelectedClusteredScenarioType { get; set; }

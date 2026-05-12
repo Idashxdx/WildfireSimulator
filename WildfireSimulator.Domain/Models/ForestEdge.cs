@@ -111,6 +111,7 @@ public class ForestEdge
     public void CoolDownHeat(double retentionFactor)
     {
         retentionFactor = Math.Clamp(retentionFactor, 0.0, 1.0);
+        // Формула (17): применяем экспоненциальное затухание накопленного тепла ребра.
         AccumulatedHeat *= retentionFactor;
 
         if (AccumulatedHeat < 1.0)

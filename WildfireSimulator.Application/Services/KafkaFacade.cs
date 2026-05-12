@@ -43,7 +43,7 @@ public class KafkaFacade
                 WindDirection = "Northeast"
             };
             
-            _logger.LogInformation("📤 Kafka: отправка SimulationStarted для {SimulationId}", simulationId);
+            _logger.LogInformation("  Kafka: отправка SimulationStarted для {SimulationId}", simulationId);
             await _producer.ProduceFireEventAsync(fireEvent);
             
             await SendMetrics(simulationId, 0, burningCells, 0, burningCells * 1.0, 0);
@@ -79,7 +79,7 @@ public class KafkaFacade
                 WindDirection = "Northeast"
             };
             
-            _logger.LogDebug("📤 Kafka: отправка FireEvent для клетки ({X},{Y}) на шаге {Step}", x, y, step);
+            _logger.LogDebug("  Kafka: отправка FireEvent для клетки ({X},{Y}) на шаге {Step}", x, y, step);
             await _producer.ProduceFireEventAsync(fireEvent);
         }
         catch (Exception ex)
@@ -93,7 +93,7 @@ public class KafkaFacade
         try
         {
             _sentCount++;
-            _logger.LogInformation("📤 KafkaFacade.SendMetrics: начало отправки для шага {Step} (#{Count})", step, _sentCount);
+            _logger.LogInformation("  KafkaFacade.SendMetrics: начало отправки для шага {Step} (#{Count})", step, _sentCount);
             
             var metricsData = new
             {
@@ -115,7 +115,7 @@ public class KafkaFacade
                 WriteIndented = false
             });
             
-            _logger.LogInformation("📤 Kafka: отправка метрик в fire-metrics для шага {Step}: {Json}", step, json);
+            _logger.LogInformation("  Kafka: отправка метрик в fire-metrics для шага {Step}: {Json}", step, json);
             
             await _producer.ProduceAsync("fire-metrics", json);
             
@@ -151,7 +151,7 @@ public class KafkaFacade
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             });
             
-            _logger.LogInformation("📤 Kafka: отправка SimulationEnd для {SimulationId}", simulationId);
+            _logger.LogInformation("  Kafka: отправка SimulationEnd для {SimulationId}", simulationId);
             await _producer.ProduceAsync("fire-metrics", json);
             
             _logger.LogInformation("✅ Kafka: SimulationEnd отправлен для {SimulationId}", simulationId);
